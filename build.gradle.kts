@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.3.0"
+    id("application")
 }
 
 group = "me.ryan.interpreter"
@@ -19,4 +20,12 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+application {
+    mainClass.set("me.ryan.interpreter.ReplKt")
+}
+
+tasks.named<JavaExec>("run") {
+    standardInput = System.`in`
 }
