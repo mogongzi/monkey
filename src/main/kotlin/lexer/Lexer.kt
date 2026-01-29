@@ -2,7 +2,7 @@ package me.ryan.interpreter.lexer
 
 import me.ryan.interpreter.token.*
 
-class Lexer (private val input: String) {
+class Lexer(private val input: String) {
     private var position: Int = 0 // current position in input (points to current char)
     private var readPosition: Int = 0 // current reading position in input (after current char)
     private var ch: Char = '\u0000' // current char under examination
@@ -16,8 +16,31 @@ class Lexer (private val input: String) {
         skipWhiteSpace()
 
         val tok = when (ch) {
-            '=' -> newToken(ASSIGN, ch)
+            '=' -> {
+                if (peekChar() == '=') {
+                    val first = ch
+                    readChar()
+                    Token(EQ, "$first$ch")
+                } else {
+                    newToken(ASSIGN, ch)
+                }
+            }
+            '!' -> {
+                if (peekChar() == '=') {
+                    val first = ch
+                    readChar()
+                    Token(NOT_EQ, "$first$ch")
+                } else {
+                    newToken(BANG, ch)
+                }
+            }
+
             '+' -> newToken(PLUS, ch)
+            '-' -> newToken(MINUS, ch)
+            '/' -> newToken(SLASH, ch)
+            '*' -> newToken(ASTERISK, ch)
+            '<' -> newToken(LT, ch)
+            '>' -> newToken(GT, ch)
             '(' -> newToken(LPAREN, ch)
             ')' -> newToken(RPAREN, ch)
             '{' -> newToken(LBRACE, ch)
@@ -49,7 +72,7 @@ class Lexer (private val input: String) {
     }
 
     private fun skipWhiteSpace() {
-        while(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+        while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
             readChar()
         }
     }
@@ -64,7 +87,7 @@ class Lexer (private val input: String) {
 
     private fun readIdentifier(): String {
         val startPosition = position
-        while(isLetter(ch)) {
+        while (isLetter(ch)) {
             readChar()
         }
         return input.substring(startPosition, position)
@@ -72,7 +95,7 @@ class Lexer (private val input: String) {
 
     private fun readNumber(): String {
         val startPosition = position
-        while(isDigit(ch)) {
+        while (isDigit(ch)) {
             readChar()
         }
         return input.substring(startPosition, position)
@@ -88,5 +111,13 @@ class Lexer (private val input: String) {
 
         position = readPosition
         readPosition += 1
+    }
+
+    private fun peekChar(): Char {
+        if (readPosition >= input.length) {
+            return '\u0000'
+        } else {
+            return input[readPosition]
+        }
     }
 }
