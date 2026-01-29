@@ -2,7 +2,18 @@ package me.ryan.interpreter.token
 
 typealias TokenType = String
 
-data class Token(val type: TokenType, val literal: String)
+data class Token(val type: TokenType, val literal: String) {
+    companion object {
+        val keywords = mapOf(
+            "fn" to FUNCTION,
+            "let" to LET
+        )
+
+        fun lookupIdent(ident: String): TokenType {
+            return keywords[ident] ?: IDENT
+        }
+    }
+}
 
 const val ILLEGAL = "ILLEGAL"
 const val EOF = "EOF"
