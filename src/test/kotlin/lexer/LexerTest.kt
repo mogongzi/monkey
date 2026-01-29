@@ -50,6 +50,17 @@ class LexerTest {
             };
             
             let result = add(five, ten);
+            !-/*5;
+            5 < 10 > 5;
+            
+            if (5 < 10) {
+                return true;
+            } else {
+                return false;
+            }
+            
+            10 == 10;
+            10 != 9;
         """.trimIndent()
 
         val tests = listOf(
@@ -88,6 +99,43 @@ class LexerTest {
             TestCase(COMMA, ","),
             TestCase(IDENT, "ten"),
             TestCase(RPAREN, ")"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(BANG, "!"),
+            TestCase(MINUS, "-"),
+            TestCase(SLASH, "/"),
+            TestCase(ASTERISK, "*"),
+            TestCase(INT, "5"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(INT, "5"),
+            TestCase(LT, "<"),
+            TestCase(INT, "10"),
+            TestCase(GT, ">"),
+            TestCase(INT, "5"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(IF, "if"),
+            TestCase(LPAREN, "("),
+            TestCase(INT, "5"),
+            TestCase(LT, "<"),
+            TestCase(INT, "10"),
+            TestCase(RPAREN, ")"),
+            TestCase(LBRACE, "{"),
+            TestCase(RETURN, "return"),
+            TestCase(TRUE, "true"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(RBRACE, "}"),
+            TestCase(ELSE, "else"),
+            TestCase(LBRACE, "{"),
+            TestCase(RETURN, "return"),
+            TestCase(FALSE, "false"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(RBRACE, "}"),
+            TestCase(INT, "10"),
+            TestCase(EQ, "=="),
+            TestCase(INT, "10"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(INT, "10"),
+            TestCase(NOT_EQ, "!="),
+            TestCase(INT, "9"),
             TestCase(SEMICOLON, ";"),
             TestCase(EOF, "")
         )
