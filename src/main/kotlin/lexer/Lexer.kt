@@ -12,6 +12,9 @@ class Lexer (private val input: String) {
     }
 
     fun nextToken(): Token {
+
+        skipWhiteSpace()
+
         val tok = when (ch) {
             '=' -> newToken(ASSIGN, ch)
             '+' -> newToken(PLUS, ch)
@@ -24,7 +27,13 @@ class Lexer (private val input: String) {
             '\u0000' -> Token(EOF, "")
             else -> {
                 if (isLetter(ch)) {
-                    Token(IDENT, readIdentifier())
+                    val literal = readIdentifier()
+                    val type = Token.lookupIdent(literal)
+                    return Token(type, literal)
+                } else if (isDigit(ch)) {
+                    val literal = readNumber()
+                    val type = INT
+                    return Token(type, literal)
                 } else {
                     newToken(ILLEGAL, ch)
                 }
@@ -39,8 +48,18 @@ class Lexer (private val input: String) {
         return Token(tokenType, ch.toString())
     }
 
+    private fun skipWhiteSpace() {
+        while(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+            readChar()
+        }
+    }
+
     private fun isLetter(ch: Char): Boolean {
-        return ch.isLetter() || ch == '_'
+        return ch in 'a'..'z' || ch in 'A'..'Z' || ch == '_'
+    }
+
+    private fun isDigit(ch: Char): Boolean {
+        return ch in '0'..'9'
     }
 
     private fun readIdentifier(): String {
@@ -51,6 +70,13 @@ class Lexer (private val input: String) {
         return input.substring(startPosition, position)
     }
 
+    private fun readNumber(): String {
+        val startPosition = position
+        while(isDigit(ch)) {
+            readChar()
+        }
+        return input.substring(startPosition, position)
+    }
 
     // the purpose of readChar is to give us the next character and advance our position in the input string.
     private fun readChar() {
