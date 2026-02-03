@@ -10,7 +10,7 @@ data class TestCase(val expectedType: TokenType, val expectedLiteral: String)
 class LexerTest {
 
     @Test
-    fun nextToken() {
+    fun testNextToken() {
         val input = "=+(){},;"
 
         val tests = listOf(
@@ -41,7 +41,7 @@ class LexerTest {
     }
 
     @Test
-    fun nextTokenMultipleLines() {
+    fun testNextTokenMultipleLines() {
         val input = """ let five = 5;
             let ten = 10;
             

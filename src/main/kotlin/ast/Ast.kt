@@ -61,3 +61,10 @@ class LetStatement(val token: Token, val name: Identifier, val value: Expression
         return token.literal
     }
 }
+
+class ReturnStatement(val token: Token, val returnValue: Expression? = null) : Statement {
+    override fun tokenLiteral(): String {
+        return token.literal
+    }
+
+}
