@@ -3,6 +3,7 @@ package me.ryan.interpreter.parser
 import me.ryan.interpreter.ast.Identifier
 import me.ryan.interpreter.ast.LetStatement
 import me.ryan.interpreter.ast.Program
+import me.ryan.interpreter.ast.ReturnStatement
 import me.ryan.interpreter.ast.Statement
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.token.ASSIGN
@@ -11,6 +12,7 @@ import me.ryan.interpreter.token.IDENT
 import me.ryan.interpreter.token.Token
 import me.ryan.interpreter.token.ILLEGAL
 import me.ryan.interpreter.token.LET
+import me.ryan.interpreter.token.RETURN
 import me.ryan.interpreter.token.SEMICOLON
 import me.ryan.interpreter.token.TokenType
 
@@ -23,6 +25,7 @@ class Parser(private val lexer: Lexer) {
     // This mirrors the Monkey book's parser design and makes "expectPeek(...)" straightforward.
     private var curToken: Token = Token(ILLEGAL, "")
     private var peekToken: Token = Token(ILLEGAL, "")
+    private val errors = mutableListOf<String>()
 
     init {
         // Read two tokens, so curToken and peekToken are both set.
@@ -48,7 +51,7 @@ class Parser(private val lexer: Lexer) {
         // Each loop iteration tries to parse exactly one statement.
         val program = Program(mutableListOf())
 
-        while (curToken.type != EOF) {
+        while (!curTokenIs(EOF)) {
             val stmt = parseStatement()
             if (stmt !=null) {
                 program.statements.add(stmt)
@@ -62,7 +65,20 @@ class Parser(private val lexer: Lexer) {
     // Statement dispatch based on the current token type.
     private fun parseStatement(): Statement? = when (curToken.type) {
         LET -> parseLetStatement()
+        RETURN -> parseReturnStatement()
         else -> null
+    }
+
+    private fun parseReturnStatement(): Statement? {
+        val token = curToken
+        nextToken()
+
+        // TODO: we're skipping the expressions until we encounter a semicolon
+        while (!curTokenIs(SEMICOLON) && !curTokenIs(EOF)) {
+            nextToken()
+        }
+
+        return ReturnStatement(token, null)
     }
 
     fun parseLetStatement(): LetStatement? {
@@ -108,8 +124,18 @@ class Parser(private val lexer: Lexer) {
             nextToken()
             return true
         } else {
+            peekError(tokenType)
             return false
         }
+    }
+
+    fun peekError(tokenType: TokenType) {
+        val msg = "expected next token to be $tokenType, got ${peekToken.type} instead."
+        errors.add(msg)
+    }
+
+    fun errors(): List<String> {
+        return errors.toList()
     }
 
 
