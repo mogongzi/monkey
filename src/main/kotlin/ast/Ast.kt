@@ -14,6 +14,7 @@ import me.ryan.interpreter.token.Token
  */
 interface Node {
     fun tokenLiteral(): String
+    fun string(): String
 }
 
 sealed interface Statement : Node
@@ -32,6 +33,10 @@ class Program (val statements: MutableList<Statement>) : Node {
             statements[0].tokenLiteral()
         }
     }
+
+    override fun string(): String = buildString {
+        statements.forEach { append(it.string()) }
+    }
 }
 
 /**
@@ -43,10 +48,17 @@ class Program (val statements: MutableList<Statement>) : Node {
  * This keeps the number of node types small (matching the book's approach).
  */
 class Identifier(val token: Token, val value: String) : Expression {
-    override fun tokenLiteral(): String {
-        return token.literal
-    }
+    override fun tokenLiteral(): String = token.literal
 
+    override fun string(): String = value
+    override fun toString(): String = string()
+}
+
+class IntegerLiteral(val token: Token, val value: Long) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = value.toString()
+    override fun toString(): String = string()
 }
 
 /**
@@ -57,14 +69,36 @@ class Identifier(val token: Token, val value: String) : Expression {
  * `parseExpression(...)` is implemented, `value` should be set to a real expression node.
  */
 class LetStatement(val token: Token, val name: Identifier, val value: Expression? = null) : Statement {
-    override fun tokenLiteral(): String {
-        return token.literal
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        append(tokenLiteral())
+        append(" ")
+        append(name.string())
+        append(" = ")
+        value?.let { append(it.string()) }
+        append(";")
     }
 }
 
 class ReturnStatement(val token: Token, val returnValue: Expression? = null) : Statement {
-    override fun tokenLiteral(): String {
-        return token.literal
-    }
+    override fun tokenLiteral(): String = token.literal
 
+    override fun string(): String = buildString {
+       append(tokenLiteral())
+       append(" ")
+       returnValue?.let { append(it.string()) }
+       append(";")
+    }
+}
+
+class ExpressionStatement(val token: Token, var expression: Expression? = null) : Statement {
+    override fun tokenLiteral(): String = token.literal
+    override fun string(): String = expression?.string().orEmpty()
+}
+
+class PrefixExpression(val token: Token, val operator: String, val right: Expression) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = "(${operator}${right?.string() ?: ""})"
 }

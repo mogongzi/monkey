@@ -31,7 +31,7 @@ Once configured, the flow typically looks like:
 
 ### Part 1: Interpreter
 
-- [ ] **Lexer** — Tokenize source code into tokens
+- [x] **Lexer** — Tokenize source code into tokens
 - [ ] **Parser** — Build Abstract Syntax Tree (AST) from tokens
 - [ ] **AST** — Define node types for expressions and statements
 - [ ] **Evaluator** — Execute the AST (tree-walking interpreter)
