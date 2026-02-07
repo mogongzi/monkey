@@ -97,7 +97,7 @@ class ExpressionStatement(val token: Token, var expression: Expression? = null) 
     override fun string(): String = expression?.string().orEmpty()
 }
 
-class PrefixExpression(val token: Token, val operator: String, val right: Expression) : Expression {
+class PrefixExpression(val token: Token, val operator: String, var right: Expression? = null) : Expression {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = "(${operator}${right?.string() ?: ""})"

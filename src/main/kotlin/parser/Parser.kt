@@ -1,25 +1,8 @@
 package me.ryan.interpreter.parser
 
-import me.ryan.interpreter.ast.Expression
-import me.ryan.interpreter.ast.ExpressionStatement
-import me.ryan.interpreter.ast.Identifier
-import me.ryan.interpreter.ast.IntegerLiteral
-import me.ryan.interpreter.ast.LetStatement
-import me.ryan.interpreter.ast.Program
-import me.ryan.interpreter.ast.ReturnStatement
-import me.ryan.interpreter.ast.Statement
+import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.lexer.Lexer
-import me.ryan.interpreter.token.ASSIGN
-import me.ryan.interpreter.token.EOF
-import me.ryan.interpreter.token.IDENT
-import me.ryan.interpreter.token.Token
-import me.ryan.interpreter.token.ILLEGAL
-import me.ryan.interpreter.token.INT
-import me.ryan.interpreter.token.LET
-import me.ryan.interpreter.token.RETURN
-import me.ryan.interpreter.token.SEMICOLON
-import me.ryan.interpreter.token.TokenType
-import java.lang.Integer.parseInt
+import me.ryan.interpreter.token.*
 
 typealias PrefixParseFn = () -> Expression?
 typealias InfixParseFn = (Expression) -> Expression?
@@ -58,6 +41,8 @@ class Parser(private val lexer: Lexer) {
 
         registerPrefix(IDENT, ::parseIdentifier)
         registerPrefix(INT, ::parseIntegerLiteral)
+        registerPrefix(BANG, ::parsePrefixExpression)
+        registerPrefix(MINUS, ::parsePrefixExpression)
     }
 
     fun registerPrefix(tokenType: TokenType, prefixParseFn: PrefixParseFn) {
@@ -198,9 +183,26 @@ class Parser(private val lexer: Lexer) {
 
 
     fun parseExpression(precedence: Precedence): Expression? {
-        val prefix = prefixParseFns[curToken.type] ?: return null
-        return prefix()
+        val prefix = prefixParseFns[curToken.type]
+        if (prefix == null) {
+            noPrefixParseFnError(curToken.type)
+            return null
+        }
+        val leftExp = prefix()
+        return leftExp
+    }
+
+    fun parsePrefixExpression(): Expression? {
+        val exp = PrefixExpression(curToken, curToken.literal)
+        nextToken()
+        exp.right = parseExpression(Precedence.PREFIX)
+        return exp
     }
 
     fun parseOperatorExpression() {}
+
+    fun noPrefixParseFnError(tokenType: TokenType) {
+        val msg = "no prefix parse function for ${curToken.type} found"
+        errors.add(msg)
+    }
 }
