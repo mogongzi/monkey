@@ -1,18 +1,11 @@
 package parser
 
-import me.ryan.interpreter.ast.Expression
-import me.ryan.interpreter.ast.ExpressionStatement
-import me.ryan.interpreter.ast.Identifier
-import me.ryan.interpreter.ast.IntegerLiteral
-import me.ryan.interpreter.ast.LetStatement
-import me.ryan.interpreter.ast.PrefixExpression
-import me.ryan.interpreter.ast.ReturnStatement
-import me.ryan.interpreter.ast.Statement
+import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
-import kotlin.jvm.java
 import kotlin.test.fail
 
 class ParserTest {
@@ -35,7 +28,6 @@ class ParserTest {
 
         val lexer = Lexer(input)
         val parser = Parser(lexer)
-
         val program = parser.parseProgram()
         checkParserErrors(parser)
 
@@ -69,7 +61,6 @@ class ParserTest {
 
         val lexer = Lexer(input)
         val parser = Parser(lexer)
-
         val program = parser.parseProgram()
         checkParserErrors(parser)
 
@@ -104,7 +95,6 @@ class ParserTest {
         val input = "foobar;"
         val lexer = Lexer(input)
         val parser = Parser(lexer)
-
         val program = parser.parseProgram()
         checkParserErrors(parser)
 
@@ -133,7 +123,6 @@ class ParserTest {
         val input = "5;"
         val lexer = Lexer(input)
         val parser = Parser(lexer)
-
         val program = parser.parseProgram()
         checkParserErrors(parser)
 
@@ -167,7 +156,6 @@ class ParserTest {
         for ((input, operator, integerValue) in prefixTests) {
             val lexer = Lexer(input)
             val parser = Parser(lexer)
-
             val program = parser.parseProgram()
             checkParserErrors(parser)
 
@@ -192,6 +180,53 @@ class ParserTest {
             }
 
             if (!testIntegerLiteral(exp.right, integerValue)) return
+        }
+    }
+
+    data class InfixTestCase(val input: String, val leftValuee: Long, val operator: String, val rightValue: Long)
+
+    @Test
+    fun testParsingInfixExpressions() {
+        val infixTests = listOf(
+            InfixTestCase("5 + 5;", 5L, "+", 5L),
+            InfixTestCase("5 - 5;", 5L, "-", 5L),
+            InfixTestCase("5 * 5;", 5L, "*", 5L),
+            InfixTestCase("5 / 5;", 5L, "/", 5L),
+            InfixTestCase("5 > 5;", 5L, ">", 5L),
+            InfixTestCase("5 < 5;", 5L, "<", 5L),
+            InfixTestCase("5 == 5;", 5L, "==", 5L),
+            InfixTestCase("5 != 5;", 5L, "!=", 5L),
+        )
+
+        for (infixTest in infixTests) {
+            val lexer = Lexer(infixTest.input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            if (program.statements.size != 1) {
+                fail("program has not enough statements. got ${program.statements.size}")
+            }
+
+            val stmt = assertInstanceOf(
+                ExpressionStatement::class.java,
+                program.statements[0],
+                "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+            )
+
+            val exp = assertInstanceOf(
+                InfixExpression::class.java,
+                stmt.expression!!,
+                "exp not InfixExpression. got=${stmt.expression!!::class}"
+            )
+
+            if (!testIntegerLiteral(exp.left, infixTest.leftValuee)) return
+
+            if (exp.operator != infixTest.operator) {
+                fail("exp.Operator is not ${infixTest.operator}. got=${exp.operator}")
+            }
+
+            if (!testIntegerLiteral(exp.right, infixTest.rightValue)) return
         }
     }
 

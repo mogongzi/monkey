@@ -24,7 +24,7 @@ sealed interface Expression : Node
  * The root node of the AST.
  * The parser appends each parsed statement into [statements] until it reaches EOF.
  */
-class Program (val statements: MutableList<Statement>) : Node {
+class Program(val statements: MutableList<Statement>) : Node {
 
     override fun tokenLiteral(): String {
         return if (statements.isEmpty()) {
@@ -85,10 +85,10 @@ class ReturnStatement(val token: Token, val returnValue: Expression? = null) : S
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
-       append(tokenLiteral())
-       append(" ")
-       returnValue?.let { append(it.string()) }
-       append(";")
+        append(tokenLiteral())
+        append(" ")
+        returnValue?.let { append(it.string()) }
+        append(";")
     }
 }
 
@@ -100,5 +100,12 @@ class ExpressionStatement(val token: Token, var expression: Expression? = null) 
 class PrefixExpression(val token: Token, val operator: String, var right: Expression? = null) : Expression {
     override fun tokenLiteral(): String = token.literal
 
-    override fun string(): String = "(${operator}${right?.string() ?: ""})"
+    override fun string(): String = "(${operator} ${right?.string() ?: ""})"
+}
+
+class InfixExpression(val token: Token, val operator: String, var left: Expression?, var right: Expression? = null) :
+    Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = "(${left?.string()} ${operator} ${right?.string() ?: ""})"
 }

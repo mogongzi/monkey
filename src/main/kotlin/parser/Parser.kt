@@ -31,6 +31,17 @@ class Parser(private val lexer: Lexer) {
     private val prefixParseFns: MutableMap<TokenType, PrefixParseFn> = mutableMapOf()
     private val infixParseFns: MutableMap<TokenType, InfixParseFn> = mutableMapOf()
 
+    private val precedences: Map<TokenType, Precedence> = mapOf(
+        EQ to Precedence.EQUALS,
+        NOT_EQ to Precedence.EQUALS,
+        LT to Precedence.LESS_GREATER,
+        GT to Precedence.LESS_GREATER,
+        PLUS to Precedence.SUM,
+        MINUS to Precedence.SUM,
+        SLASH to Precedence.PRODUCT,
+        ASTERISK to Precedence.PRODUCT,
+    )
+
     init {
         // Read two tokens, so curToken and peekToken are both set.
         // This is the Kotlin equivalent of the book's Go constructor:
@@ -43,6 +54,15 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(INT, ::parseIntegerLiteral)
         registerPrefix(BANG, ::parsePrefixExpression)
         registerPrefix(MINUS, ::parsePrefixExpression)
+
+        registerInfix(PLUS, ::parseInfixExpression)
+        registerInfix(MINUS, ::parseInfixExpression)
+        registerInfix(SLASH, ::parseInfixExpression)
+        registerInfix(ASTERISK, ::parseInfixExpression)
+        registerInfix(EQ, ::parseInfixExpression)
+        registerInfix(NOT_EQ, ::parseInfixExpression)
+        registerInfix(LT, ::parseInfixExpression)
+        registerInfix(GT, ::parseInfixExpression)
     }
 
     fun registerPrefix(tokenType: TokenType, prefixParseFn: PrefixParseFn) {
@@ -52,7 +72,6 @@ class Parser(private val lexer: Lexer) {
     fun registerInfix(tokenType: TokenType, infixParseFn: InfixParseFn) {
        infixParseFns[tokenType] = infixParseFn
     }
-
 
     /**
      * Advance the token window by one:
@@ -188,7 +207,14 @@ class Parser(private val lexer: Lexer) {
             noPrefixParseFnError(curToken.type)
             return null
         }
-        val leftExp = prefix()
+        var leftExp: Expression = prefix() ?: return null
+
+        while (!peekTokenIs(SEMICOLON) && precedence < peekPrecedence()) {
+            val infix = infixParseFns[peekToken.type] ?: return leftExp
+            nextToken()
+            leftExp = infix(leftExp) ?: return null
+        }
+
         return leftExp
     }
 
@@ -196,6 +222,23 @@ class Parser(private val lexer: Lexer) {
         val exp = PrefixExpression(curToken, curToken.literal)
         nextToken()
         exp.right = parseExpression(Precedence.PREFIX)
+        return exp
+    }
+
+    fun peekPrecedence(): Precedence {
+        return precedences[peekToken.type] ?: Precedence.LOWEST
+    }
+
+    fun currPrecedence(): Precedence {
+        return precedences[curToken.type] ?: Precedence.LOWEST
+    }
+
+    fun parseInfixExpression(left: Expression): Expression? {
+        val exp = InfixExpression(curToken, curToken.literal, left)
+        val precedence = currPrecedence()
+        nextToken()
+        exp.right = parseExpression(precedence)
+
         return exp
     }
 
