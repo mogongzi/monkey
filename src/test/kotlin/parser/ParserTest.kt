@@ -230,21 +230,49 @@ class ParserTest {
         }
     }
 
+    @Test
+    fun testOperatorPrecedenceParsing() {
+        data class Test(val input: String, val expected: String)
+
+        val tests = listOf(
+            Test("-a * b", "((-a) * b)"),
+            Test("!-a", "(!(-a))"),
+            Test("a + b + c", "((a + b) + c)"),
+            Test("a + b - c", "((a + b) - c)"),
+            Test("a * b * c", "((a * b) * c)"),
+            Test("a * b / c", "((a * b) / c)"),
+            Test("a + b / c", "(a + (b / c))"),
+            Test("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            Test("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+            Test("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            Test("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            Test("3 + 4 * 5 == 3 * 1 + 4 * 5","((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+        )
+
+        for (test in tests) {
+            val lexer = Lexer(test.input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            val actual = program.string()
+            assertEquals(test.expected, actual)
+        }
+    }
+
+
     private fun testIntegerLiteral(exp: Expression?, value: Long): Boolean {
         val integ = exp as? IntegerLiteral
         if (integ == null) {
             fail("exp not IntegerLiteral. got=${exp?.let { it::class }}")
-            return false
         }
 
         if (integ.value != value) {
             fail("integ.value not ${value}. got=${integ.value}")
-            return false
         }
 
         if (integ.tokenLiteral() != value.toString()) {
             fail("integ.tokenLiteral() not ${value}. got=${integ.tokenLiteral()}")
-            return false
         }
 
         return true
