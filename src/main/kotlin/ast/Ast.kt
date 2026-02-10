@@ -100,12 +100,12 @@ class ExpressionStatement(val token: Token, var expression: Expression? = null) 
 class PrefixExpression(val token: Token, val operator: String, var right: Expression? = null) : Expression {
     override fun tokenLiteral(): String = token.literal
 
-    override fun string(): String = "(${operator} ${right?.string() ?: ""})"
+    override fun string(): String = "(${operator}${right?.string() ?: ""})"
 }
 
 class InfixExpression(val token: Token, val operator: String, var left: Expression?, var right: Expression? = null) :
     Expression {
     override fun tokenLiteral(): String = token.literal
 
-    override fun string(): String = "(${left?.string()} ${operator} ${right?.string() ?: ""})"
+    override fun string(): String = "(${left?.string()} $operator ${right?.string() ?: ""})"
 }
