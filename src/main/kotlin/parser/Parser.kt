@@ -201,6 +201,55 @@ class Parser(private val lexer: Lexer) {
     }
 
 
+//     Parse the first token as a "prefix" — could be a literal (1), identifier (x),
+//     or a prefix operator (-x, !x) which itself recurses into parseExpression.
+//
+//     Then, repeatedly try to combine leftExp with the next infix operator.
+//
+//	 precedence = "how tightly my caller holds onto me"
+//	   - LOWEST: anyone can take me (top-level call from parseExpressionStatement)
+//	   - SUM: only operators with higher precedence than SUM can take me
+//	   - PREFIX: almost nobody can take me (prefix binds tighter than infix ops;
+//	             CALL would bind even tighter once implemented)
+//
+//	 The loop STOPS when precedence >= peekPrecedence():
+//	   → leftExp is returned to the caller, becoming THEIR operand.
+//	 The loop CONTINUES when precedence < peekPrecedence():
+//	   → the next operator grabs leftExp as its left child.
+//
+//     Example: "1 + 2 + 3" (left associativity via loop iteration)
+//       parseExpression(LOWEST):
+//         leftExp = 1
+//         iteration 1: peek=+, LOWEST < SUM → true
+//           infix(1) → parseInfixExpression calls parseExpression(SUM)
+//             leftExp = 2, peek=+, SUM < SUM → false → returns 2
+//           → returns InfixExpression(1 + 2)
+//           leftExp = (1 + 2)
+//         iteration 2: peek=+, LOWEST < SUM → true
+//           infix((1+2)) → parseInfixExpression calls parseExpression(SUM)
+//             leftExp = 3, peek=EOF → stops → returns 3
+//           → returns InfixExpression((1+2) + 3)
+//           leftExp = ((1+2) + 3)
+//         loop ends → returns ((1+2) + 3)
+//
+//     Example: "1 + 2 * 3" (higher precedence recurses deeper)
+//       parseExpression(LOWEST):
+//         leftExp = 1
+//         iteration 1: peek=+, LOWEST < SUM → true
+//           infix(1) → parseInfixExpression calls parseExpression(SUM)
+//             leftExp = 2, peek=*, SUM < PRODUCT → true
+//               infix(2) → parseInfixExpression calls parseExpression(PRODUCT)
+//                 leftExp = 3, peek=EOF → stops → returns 3
+//               → returns InfixExpression(2 * 3)
+//               leftExp = (2 * 3), loop ends → returns (2 * 3)
+//           → returns InfixExpression(1 + (2 * 3))
+//           leftExp = (1 + (2 * 3))
+//         loop ends → returns (1 + (2 * 3))
+//
+//     Example: "-1 + 2" (PREFIX precedence prevents stealing)
+//       parsePrefixExpression calls parseExpression(PREFIX):
+//         leftExp = 1, peek=+, PREFIX < SUM → false → returns 1 immediately
+//       So "-" grabs only 1, result is ((-1) + 2), not (-(1 + 2))
     fun parseExpression(precedence: Precedence): Expression? {
         val prefix = prefixParseFns[curToken.type]
         if (prefix == null) {
