@@ -3,6 +3,8 @@ package me.ryan.interpreter.token
 typealias TokenType = String
 
 data class Token(val type: TokenType, val literal: String) {
+    override fun toString(): String = "Token(type=>$type, literal=>$literal)"
+
     companion object {
         val keywords = mapOf(
             "fn" to FUNCTION,
@@ -58,5 +60,4 @@ const val ELSE = "ELSE"
 const val RETURN = "RETURN"
 const val TRUE = "TRUE"
 const val FALSE = "FALSE"
-
 

@@ -260,6 +260,13 @@ class ParserTest {
         }
     }
 
+    @Test
+    fun testDebug() {
+        val lexer = Lexer("1 + 2 + 3")
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        println(program.string())
+    }
 
     private fun testIntegerLiteral(exp: Expression?, value: Long): Boolean {
         val integ = exp as? IntegerLiteral
