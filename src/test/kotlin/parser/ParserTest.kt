@@ -6,6 +6,7 @@ import me.ryan.interpreter.parser.Parser
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertAll
 import kotlin.test.fail
 
 class ParserTest {
@@ -249,16 +250,20 @@ class ParserTest {
             Test("3 + 4 * 5 == 3 * 1 + 4 * 5","((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
         )
 
-        for (test in tests) {
-            val lexer = Lexer(test.input)
-            val parser = Parser(lexer)
-            val program = parser.parseProgram()
-            checkParserErrors(parser)
-
-            val actual = program.string()
-            assertEquals(test.expected, actual)
-        }
+        assertAll(
+            tests.map { test ->
+                {
+                    val lexer = Lexer(test.input)
+                    val parser = Parser(lexer)
+                    val program = parser.parseProgram()
+                    checkParserErrors(parser)
+                    assertEquals(test.expected, program.string(), "input: ${test.input}")
+                }
+            }
+        )
     }
+
+
 
     @Test
     fun testDebug() {
@@ -266,20 +271,56 @@ class ParserTest {
         val parser = Parser(lexer)
         val program = parser.parseProgram()
         println(program.string())
+
+
     }
 
     private fun testIntegerLiteral(exp: Expression?, value: Long): Boolean {
-        val integ = exp as? IntegerLiteral
-        if (integ == null) {
-            fail("exp not IntegerLiteral. got=${exp?.let { it::class }}")
-        }
-
+        val integ = exp as? IntegerLiteral ?: fail("exp not IntegerLiteral. got=${exp?.let { it::class }}")
         if (integ.value != value) {
             fail("integ.value not ${value}. got=${integ.value}")
         }
-
         if (integ.tokenLiteral() != value.toString()) {
             fail("integ.tokenLiteral() not ${value}. got=${integ.tokenLiteral()}")
+        }
+        return true
+    }
+
+    private fun testIdentifier(exp: Expression?, value: String): Boolean {
+        val ident = exp as? Identifier ?: fail("exp not Identifier. got=${exp?.let { it::class }}")
+        if (ident.value != value) {
+            fail("ident.ident() not ${value}. got=${ident.value}")
+        }
+        if (ident.tokenLiteral() != value) {
+            fail("ident.tokenLiteral() not ${value}. got=${ident.tokenLiteral()}")
+        }
+        return false
+    }
+
+    private fun testLiteralExpression(exp: Expression?, expected: Any): Boolean {
+        return when (expected) {
+            is Int -> testIntegerLiteral(exp, expected.toLong())
+            is Long -> testIntegerLiteral(exp, expected)
+            is String -> testIdentifier(exp, expected)
+            else -> {
+                fail("type of exp not handled. got ${exp?.let { it::class }}")
+            }
+        }
+    }
+
+    private fun testInfixExpression(exp: Expression?, left: Any, operator: String, right: Any): Boolean {
+        val opExp = exp as? InfixExpression ?: fail("exp is not InfixExpression. got=${exp?.let { it::class }}")
+
+        if (!testLiteralExpression(opExp.left, left)) {
+            return false
+        }
+
+        if (opExp.operator != operator) {
+            fail("exp.operator is not ${operator}. got=${opExp.operator}")
+        }
+
+        if (!testLiteralExpression(opExp.right, right)) {
+            return false
         }
 
         return true
