@@ -14,7 +14,11 @@ enum class Precedence {
     SUM, // +
     PRODUCT, // *
     PREFIX, // -X or !X
-    CALL // myFunction(X)
+    CALL; // myFunction(X)
+
+    operator fun minus(n: Int): Precedence {
+        return entries[(ordinal - n).coerceAtLeast(0)]
+    }
 }
 
 class Parser(private val lexer: Lexer) {
@@ -287,7 +291,6 @@ class Parser(private val lexer: Lexer) {
         val precedence = currPrecedence()
         nextToken()
         exp.right = parseExpression(precedence)
-
         return exp
     }
 
