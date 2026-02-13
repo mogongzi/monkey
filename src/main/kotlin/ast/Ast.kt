@@ -109,3 +109,10 @@ class InfixExpression(val token: Token, val operator: String, var left: Expressi
 
     override fun string(): String = "(${left?.string()} $operator ${right?.string() ?: ""})"
 }
+
+class BooleanLiteral(val token: Token, val value: Boolean) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = token.literal
+    override fun toString(): String = string()
+}
