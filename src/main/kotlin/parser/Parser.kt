@@ -3,6 +3,7 @@ package me.ryan.interpreter.parser
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.token.*
+import java.lang.Boolean.parseBoolean
 
 typealias PrefixParseFn = () -> Expression?
 typealias InfixParseFn = (Expression) -> Expression?
@@ -58,6 +59,8 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(INT, ::parseIntegerLiteral)
         registerPrefix(BANG, ::parsePrefixExpression)
         registerPrefix(MINUS, ::parsePrefixExpression)
+        registerPrefix(TRUE, ::parseBoolean)
+        registerPrefix(FALSE, ::parseBoolean)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -202,6 +205,10 @@ class Parser(private val lexer: Lexer) {
             return null
         }
         return IntegerLiteral(token, value)
+    }
+
+    fun parseBoolean(): Expression? {
+        return BooleanLiteral(curToken, curTokenIs(TRUE))
     }
 
 

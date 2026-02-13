@@ -151,10 +151,12 @@ class ParserTest {
     fun testParsingPrefixExpressions() {
         val prefixTests = listOf(
             Triple("!5;", "!", 5L),
-            Triple("-15;", "-", 15L)
+            Triple("-15;", "-", 15L),
+            Triple("!true;", "!", true),
+            Triple("!false;", "!", false),
         )
 
-        for ((input, operator, integerValue) in prefixTests) {
+        for ((input, operator, literalValue) in prefixTests) {
             val lexer = Lexer(input)
             val parser = Parser(lexer)
             val program = parser.parseProgram()
@@ -180,11 +182,11 @@ class ParserTest {
                 fail("exp.Operator is not ${operator}. got=${exp.operator}")
             }
 
-            if (!testIntegerLiteral(exp.right, integerValue)) return
+            if (!testLiteralExpression(exp.right, literalValue)) return
         }
     }
 
-    data class InfixTestCase(val input: String, val leftValuee: Long, val operator: String, val rightValue: Long)
+    data class InfixTestCase(val input: String, val leftValue: Any, val operator: String, val rightValue: Any)
 
     @Test
     fun testParsingInfixExpressions() {
@@ -197,6 +199,9 @@ class ParserTest {
             InfixTestCase("5 < 5;", 5L, "<", 5L),
             InfixTestCase("5 == 5;", 5L, "==", 5L),
             InfixTestCase("5 != 5;", 5L, "!=", 5L),
+            InfixTestCase("true == true;", true, "==", true),
+            InfixTestCase("true != false;", true, "!=", false),
+            InfixTestCase("false == false;", false, "==", false),
         )
 
         for (infixTest in infixTests) {
@@ -215,19 +220,13 @@ class ParserTest {
                 "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
             )
 
-            val exp = assertInstanceOf(
-                InfixExpression::class.java,
-                stmt.expression!!,
-                "exp not InfixExpression. got=${stmt.expression!!::class}"
-            )
-
-            if (!testIntegerLiteral(exp.left, infixTest.leftValuee)) return
-
-            if (exp.operator != infixTest.operator) {
-                fail("exp.Operator is not ${infixTest.operator}. got=${exp.operator}")
-            }
-
-            if (!testIntegerLiteral(exp.right, infixTest.rightValue)) return
+            if (!testInfixExpression(
+                    stmt.expression,
+                    infixTest.leftValue,
+                    infixTest.operator,
+                    infixTest.rightValue
+                )
+            ) return
         }
     }
 
@@ -247,7 +246,11 @@ class ParserTest {
             Test("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
             Test("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
             Test("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
-            Test("3 + 4 * 5 == 3 * 1 + 4 * 5","((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+            Test("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+            Test("true", "true"),
+            Test("false", "false"),
+            Test("3 > 5 == false", "((3 > 5) == false)"),
+            Test("3 < 5 == true", "((3 < 5) == true)"),
         )
 
         assertAll(
@@ -263,6 +266,33 @@ class ParserTest {
         )
     }
 
+    @Test
+    fun testBooleanExpressions() {
+        val input = "true;"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        if (program.statements.size != 1) {
+            fail("program has not enough statements. got ${program.statements.size}")
+        }
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val literal = assertInstanceOf(
+            BooleanLiteral::class.java,
+            stmt.expression!!,
+            "exp not IntegerLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(true, literal.value, "Boolean.value not true. got=${literal.value}")
+        assertEquals("true", literal.tokenLiteral(), "Boolean.tokenLiteral not 5. got=${literal.tokenLiteral()}")
+    }
 
 
     @Test
@@ -286,6 +316,18 @@ class ParserTest {
         return true
     }
 
+    private fun testBooleanLiteral(exp: Expression?, value: Boolean): Boolean {
+        val bool = exp as? BooleanLiteral ?: fail("exp not BooleanLiteral. got=${exp?.let { it::class }}")
+        if (bool.value != value) {
+            fail("bool.value not ${value}. got=${bool.value}")
+        }
+        if (bool.tokenLiteral() != value.toString()) {
+            fail("bool.tokenLiteral() not ${value}. got=${bool.tokenLiteral()}")
+        }
+
+        return true
+    }
+
     private fun testIdentifier(exp: Expression?, value: String): Boolean {
         val ident = exp as? Identifier ?: fail("exp not Identifier. got=${exp?.let { it::class }}")
         if (ident.value != value) {
@@ -302,6 +344,7 @@ class ParserTest {
             is Int -> testIntegerLiteral(exp, expected.toLong())
             is Long -> testIntegerLiteral(exp, expected)
             is String -> testIdentifier(exp, expected)
+            is Boolean -> testBooleanLiteral(exp, expected)
             else -> {
                 fail("type of exp not handled. got ${exp?.let { it::class }}")
             }
