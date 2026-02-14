@@ -116,3 +116,34 @@ class BooleanLiteral(val token: Token, val value: Boolean) : Expression {
     override fun string(): String = token.literal
     override fun toString(): String = string()
 }
+
+class BlockStatement(val token: Token, val statements: MutableList<Statement>) : Statement {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        for (statement in statements) {
+            append(statement.string())
+        }
+    }
+
+}
+
+class IfExpression(
+    val token: Token,
+    var condition: Expression? = null,
+    var consequence: BlockStatement? = null,
+    var alternative: BlockStatement? = null
+) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        append("if")
+        append(condition?.string())
+        append(" ")
+        append(consequence?.string())
+        alternative?.let {
+            append("else ")
+            append(it.string())
+        }
+    }
+}
