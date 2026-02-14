@@ -3,7 +3,6 @@ package me.ryan.interpreter.parser
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.token.*
-import java.lang.Boolean.parseBoolean
 
 typealias PrefixParseFn = () -> Expression?
 typealias InfixParseFn = (Expression) -> Expression?
@@ -61,6 +60,8 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(MINUS, ::parsePrefixExpression)
         registerPrefix(TRUE, ::parseBoolean)
         registerPrefix(FALSE, ::parseBoolean)
+        registerPrefix(LPAREN, ::parseGroupedExpression)
+        registerPrefix(IF, ::parseIfExpression)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -298,6 +299,46 @@ class Parser(private val lexer: Lexer) {
         val precedence = currPrecedence()
         nextToken()
         exp.right = parseExpression(precedence)
+        return exp
+    }
+
+    fun parseGroupedExpression() : Expression? {
+        nextToken()
+
+        val exp = parseExpression(Precedence.LOWEST)
+        if (!expectPeek(RPAREN)) {
+            return null
+        }
+        return exp
+    }
+
+    fun parseBlockStatment(): BlockStatement? {
+        val block = BlockStatement(curToken, mutableListOf())
+        nextToken()
+        while (!curTokenIs(RBRACE) && !curTokenIs(EOF)) {
+            val stmt = parseStatement()
+            stmt?.let { block.statements.add(it) }
+            nextToken()
+        }
+
+        return block
+    }
+
+    fun parseIfExpression() : Expression? {
+        val exp = IfExpression(curToken)
+        if (!expectPeek(LPAREN)) return null
+        nextToken()
+        exp.condition = parseExpression(Precedence.LOWEST)
+        if (!expectPeek(RPAREN)) return null
+        if (!expectPeek(LBRACE)) return null
+        exp.consequence = parseBlockStatment()
+
+        if(peekTokenIs(ELSE)) {
+            nextToken()
+            if(!expectPeek(LBRACE)) return null
+            exp.alternative = parseBlockStatment()
+        }
+
         return exp
     }
 

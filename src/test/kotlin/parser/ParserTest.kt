@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
+import kotlin.test.assertNull
 import kotlin.test.fail
 
 class ParserTest {
@@ -182,7 +183,7 @@ class ParserTest {
                 fail("exp.Operator is not ${operator}. got=${exp.operator}")
             }
 
-            if (!testLiteralExpression(exp.right, literalValue)) return
+            testLiteralExpression(exp.right, literalValue)
         }
     }
 
@@ -220,13 +221,12 @@ class ParserTest {
                 "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
             )
 
-            if (!testInfixExpression(
-                    stmt.expression,
-                    infixTest.leftValue,
-                    infixTest.operator,
-                    infixTest.rightValue
-                )
-            ) return
+            testInfixExpression(
+                stmt.expression,
+                infixTest.leftValue,
+                infixTest.operator,
+                infixTest.rightValue
+            )
         }
     }
 
@@ -251,6 +251,11 @@ class ParserTest {
             Test("false", "false"),
             Test("3 > 5 == false", "((3 > 5) == false)"),
             Test("3 < 5 == true", "((3 < 5) == true)"),
+            Test("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            Test("(5 + 5) * 2", "((5 + 5) * 2)"),
+            Test("2 / (5 + 5)", "(2 / (5 + 5))"),
+            Test("-(5 + 5)", "(-(5 + 5))"),
+            Test("!(true == true)", "(!(true == true))"),
         )
 
         assertAll(
@@ -294,6 +299,83 @@ class ParserTest {
         assertEquals("true", literal.tokenLiteral(), "Boolean.tokenLiteral not 5. got=${literal.tokenLiteral()}")
     }
 
+    @Test
+    fun testIfExpression() {
+        val input = "if (x < y) {x}"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        if (program.statements.size != 1) {
+            fail("program has not enough statements. got ${program.statements.size}")
+        }
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+        val exp = assertInstanceOf(
+            IfExpression::class.java,
+            stmt.expression!!,
+            "exp not IfExpression. got=${stmt.expression!!::class}"
+        )
+        testInfixExpression(exp.condition, "x", "<", "y")
+        if (exp.consequence?.statements?.size != 1) {
+            fail("consequence is not 1 statements. got ${exp.consequence?.statements?.size}")
+        }
+        val consequence = assertInstanceOf(
+            ExpressionStatement::class.java,
+            exp.consequence!!.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.consequence!!.statements[0]::class}"
+        )
+        testIdentifier(consequence.expression, "x")
+        assertNull(exp.alternative, "exp.alternative was not null. got=${exp.alternative}")
+    }
+
+    @Test
+    fun testIfElseExpression() {
+        val input = "if (x < y) { x } else { y }"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        if (program.statements.size != 1) {
+            fail("program has not enough statements. got ${program.statements.size}")
+        }
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+        val exp = assertInstanceOf(
+            IfExpression::class.java,
+            stmt.expression!!,
+            "exp not IfExpression. got=${stmt.expression!!::class}"
+        )
+        testInfixExpression(exp.condition, "x", "<", "y")
+        if (exp.consequence?.statements?.size != 1) {
+            fail("consequence is not 1 statements. got ${exp.consequence?.statements?.size}")
+        }
+        val consequence = assertInstanceOf(
+            ExpressionStatement::class.java,
+            exp.consequence!!.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.consequence!!.statements[0]::class}"
+        )
+        testIdentifier(consequence.expression, "x")
+
+        if (exp.alternative?.statements?.size != 1) {
+            fail("exp.Alternative.Statements does not contain 1 statements. got=${exp.alternative?.statements?.size}")
+        }
+
+        val alternative = assertInstanceOf(
+            ExpressionStatement::class.java,
+            exp.alternative!!.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.alternative!!.statements[0]::class}"
+        )
+        testIdentifier(alternative.expression, "y")
+    }
 
     @Test
     fun testDebug() {
@@ -301,11 +383,9 @@ class ParserTest {
         val parser = Parser(lexer)
         val program = parser.parseProgram()
         println(program.string())
-
-
     }
 
-    private fun testIntegerLiteral(exp: Expression?, value: Long): Boolean {
+    private fun testIntegerLiteral(exp: Expression?, value: Long) {
         val integ = exp as? IntegerLiteral ?: fail("exp not IntegerLiteral. got=${exp?.let { it::class }}")
         if (integ.value != value) {
             fail("integ.value not ${value}. got=${integ.value}")
@@ -313,10 +393,9 @@ class ParserTest {
         if (integ.tokenLiteral() != value.toString()) {
             fail("integ.tokenLiteral() not ${value}. got=${integ.tokenLiteral()}")
         }
-        return true
     }
 
-    private fun testBooleanLiteral(exp: Expression?, value: Boolean): Boolean {
+    private fun testBooleanLiteral(exp: Expression?, value: Boolean) {
         val bool = exp as? BooleanLiteral ?: fail("exp not BooleanLiteral. got=${exp?.let { it::class }}")
         if (bool.value != value) {
             fail("bool.value not ${value}. got=${bool.value}")
@@ -324,11 +403,9 @@ class ParserTest {
         if (bool.tokenLiteral() != value.toString()) {
             fail("bool.tokenLiteral() not ${value}. got=${bool.tokenLiteral()}")
         }
-
-        return true
     }
 
-    private fun testIdentifier(exp: Expression?, value: String): Boolean {
+    private fun testIdentifier(exp: Expression?, value: String) {
         val ident = exp as? Identifier ?: fail("exp not Identifier. got=${exp?.let { it::class }}")
         if (ident.value != value) {
             fail("ident.ident() not ${value}. got=${ident.value}")
@@ -336,11 +413,10 @@ class ParserTest {
         if (ident.tokenLiteral() != value) {
             fail("ident.tokenLiteral() not ${value}. got=${ident.tokenLiteral()}")
         }
-        return false
     }
 
-    private fun testLiteralExpression(exp: Expression?, expected: Any): Boolean {
-        return when (expected) {
+    private fun testLiteralExpression(exp: Expression?, expected: Any) {
+        when (expected) {
             is Int -> testIntegerLiteral(exp, expected.toLong())
             is Long -> testIntegerLiteral(exp, expected)
             is String -> testIdentifier(exp, expected)
@@ -351,22 +427,11 @@ class ParserTest {
         }
     }
 
-    private fun testInfixExpression(exp: Expression?, left: Any, operator: String, right: Any): Boolean {
+    private fun testInfixExpression(exp: Expression?, left: Any, operator: String, right: Any) {
         val opExp = exp as? InfixExpression ?: fail("exp is not InfixExpression. got=${exp?.let { it::class }}")
-
-        if (!testLiteralExpression(opExp.left, left)) {
-            return false
-        }
-
-        if (opExp.operator != operator) {
-            fail("exp.operator is not ${operator}. got=${opExp.operator}")
-        }
-
-        if (!testLiteralExpression(opExp.right, right)) {
-            return false
-        }
-
-        return true
+        testLiteralExpression(opExp.left, left)
+        assertEquals(operator, opExp.operator, "exp.operator is not ${operator}. got=${opExp.operator}")
+        testLiteralExpression(opExp.right, right)
     }
 
     private fun checkParserErrors(parser: Parser) {
