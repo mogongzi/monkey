@@ -3,14 +3,13 @@ package parser
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
-import kotlin.test.assertNull
-import kotlin.test.fail
 
 class ParserTest {
+    private fun fail(message: String): Nothing = org.junit.jupiter.api.Assertions.fail(message)
+
     @Test
     fun testLetStatement() {
         val input = """
@@ -375,6 +374,92 @@ class ParserTest {
             "Statements[0] is not ExpressionStatement. got=${exp.alternative!!.statements[0]::class}"
         )
         testIdentifier(alternative.expression, "y")
+    }
+
+    @Test
+    fun testFunctionLiteralParsing() {
+        val input = "fn(x, y) { x + y; }"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        if (program.statements.size != 1) {
+            fail("program has not enough statements. got ${program.statements.size}")
+        }
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val function = assertInstanceOf(
+            FunctionLiteral::class.java,
+            stmt.expression!!,
+            "stmt.expression is not FunctionLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(
+            2,
+            function.parameters?.size,
+            "function literal parameters wrong. want 2, got=${function.parameters?.size}"
+        )
+
+        testLiteralExpression(function.parameters?.get(0), "x")
+        testLiteralExpression(function.parameters?.get(1), "y")
+
+        assertEquals(
+            1,
+            function.body?.statements?.size,
+            "function.body.statements has not 1 statements. got=${function.body?.statements?.size}"
+        )
+
+        val bodyStmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            function.body?.statements[0],
+            "function body stmt is not ExpressionStatement. got=${function.body?.statements?.get(0)!!::class}"
+        )
+
+        testInfixExpression(bodyStmt.expression, "x", "+", "y")
+    }
+
+    @Test
+    fun testFunctionParameterParsing() {
+        val tests = listOf(
+            Pair("fn() {};", emptyList()),
+            Pair("fn(x) {};", listOf("x")),
+            Pair("fn(x, y, z) {};", listOf("x", "y", "z")),
+        )
+
+        for ((input, expectedParams) in tests) {
+            val lexer = Lexer(input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            val stmt = assertInstanceOf(
+                ExpressionStatement::class.java,
+                program.statements[0],
+                "statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+            )
+
+            val function = assertInstanceOf(
+                FunctionLiteral::class.java,
+                stmt.expression!!,
+                "stmt.expression is not FunctionLiteral. got=${stmt.expression!!::class}"
+            )
+
+            assertEquals(
+                expectedParams.size,
+                function.parameters?.size,
+                "length parameters wrong. want ${expectedParams?.size}, got=${function.parameters?.size}"
+            )
+
+            expectedParams.forEachIndexed { i, ident ->
+                testLiteralExpression(function.parameters?.get(i), ident)
+            }
+        }
     }
 
     @Test

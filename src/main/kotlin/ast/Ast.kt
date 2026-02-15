@@ -147,3 +147,16 @@ class IfExpression(
         }
     }
 }
+
+class FunctionLiteral(val token: Token, var parameters: List<Identifier>? = null, var body: BlockStatement? = null) :
+    Expression {
+    override fun tokenLiteral(): String = token.literal
+    override fun string(): String = buildString {
+        append(tokenLiteral())
+        append("(")
+        append(parameters?.joinToString(",") { it.string() })
+        append(")")
+        append(body?.string())
+    }
+
+}
