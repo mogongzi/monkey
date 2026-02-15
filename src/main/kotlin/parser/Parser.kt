@@ -62,6 +62,7 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(FALSE, ::parseBoolean)
         registerPrefix(LPAREN, ::parseGroupedExpression)
         registerPrefix(IF, ::parseIfExpression)
+        registerPrefix(FUNCTION, ::parseFunctionLiteral)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -340,6 +341,37 @@ class Parser(private val lexer: Lexer) {
         }
 
         return exp
+    }
+
+    fun parseFunctionLiteral(): Expression? {
+        val lit = FunctionLiteral(curToken)
+
+        if (!expectPeek(LPAREN)) return null
+        lit.parameters = parseFunctionParameters()
+        if (!expectPeek(LBRACE)) return null
+        lit.body = parseBlockStatment()
+        return lit
+    }
+
+    fun parseFunctionParameters(): List<Identifier>? {
+        val identifiers = mutableListOf<Identifier>()
+
+        if(peekTokenIs(RPAREN)) {
+            nextToken()
+            return identifiers
+        }
+        nextToken()
+        var ident = Identifier(curToken, curToken.literal)
+        identifiers.add(ident)
+        while (peekTokenIs(COMMA)) {
+            nextToken()
+            nextToken()
+            ident = Identifier(curToken, curToken.literal)
+            identifiers.add(ident)
+        }
+
+        if (!expectPeek(RPAREN)) return null
+        return identifiers
     }
 
     fun parseOperatorExpression() {}
