@@ -80,6 +80,55 @@ class ParserTest {
         }
     }
 
+    @Test
+    fun testReturnStatements() {
+        val tests = listOf(
+            Pair("return 5;", 5),
+            Pair("return true;", true),
+            Pair("return foobar;", "foobar"),
+        )
+
+        for ((input, expectedValue) in tests) {
+            val lexer = Lexer(input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            assertEquals(1, program.statements.size)
+
+            val returnStmt = assertInstanceOf(ReturnStatement::class.java, program.statements[0])
+            assertEquals("return", returnStmt.tokenLiteral())
+            testLiteralExpression(returnStmt.returnValue, expectedValue)
+        }
+    }
+
+    @Test
+    fun testLetStatements() {
+        val tests = listOf(
+            Triple("let x = 5;", "x", 5),
+            Triple("let y = true;", "y", true),
+            Triple("let foobar = y;", "foobar", "y"),
+        )
+
+        for ((input, expectedIdentifier, expectedValue) in tests) {
+            val lexer = Lexer(input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            assertEquals(
+                1,
+                program.statements.size,
+                "program.Statements does not contain 1 statements. got=${program.statements.size}"
+            )
+
+            val stmt = program.statements[0]
+            testLetStatement(stmt, expectedIdentifier)
+            val letStmt = assertInstanceOf(LetStatement::class.java, stmt, "let.stmt not LetStatement")
+            testLiteralExpression(letStmt.value, expectedValue)
+        }
+    }
+
     private fun testLetStatement(stmt: Statement, expectedName: String) {
         val letStmt = stmt as? LetStatement ?: fail("stmt not LetStatement. got=${stmt::class}")
         assertEquals("let", letStmt.tokenLiteral())
@@ -255,6 +304,9 @@ class ParserTest {
             Test("2 / (5 + 5)", "(2 / (5 + 5))"),
             Test("-(5 + 5)", "(-(5 + 5))"),
             Test("!(true == true)", "(!(true == true))"),
+            Test("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            Test("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"),
+            Test("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"),
         )
 
         assertAll(
@@ -458,6 +510,77 @@ class ParserTest {
 
             expectedParams.forEachIndexed { i, ident ->
                 testLiteralExpression(function.parameters?.get(i), ident)
+            }
+        }
+    }
+
+    @Test
+    fun testCallExpressionParsing() {
+        val input = "add(1, 2 * 3, 4 + 5)"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        assertEquals(
+            1,
+            program.statements.size,
+            "program.Statements does not contain 1 statement. got=${program.statements.size}"
+        )
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val exp = assertInstanceOf(
+            CallExpression::class.java,
+            stmt.expression!!,
+            "stmt.expression is not CallExpression. got=${stmt.expression!!::class}"
+        )
+
+        testIdentifier(exp.function, "add")
+        assertEquals(3, exp.arguments?.size, "wrong length of arguments. got=${exp.arguments?.size}")
+        testLiteralExpression(exp.arguments!![0], 1)
+        testInfixExpression(exp.arguments!![1], 2, "*", 3)
+        testInfixExpression(exp.arguments!![2], 4, "+", 5)
+    }
+
+    @Test
+    fun testCallExpressionParameterParsing() {
+        val tests = listOf(
+            Triple("add();", "add", emptyList()),
+            Triple("add(1);", "add", listOf("1")),
+            Triple("add(1, 2 * 3, 4 + 5);", "add", listOf("1", "(2 * 3)", "(4 + 5)")),
+        )
+        for ((input, expectedIdent, expectedArgs) in tests) {
+            val lexer = Lexer(input)
+            val parser = Parser(lexer)
+            val program = parser.parseProgram()
+            checkParserErrors(parser)
+
+            val stmt = assertInstanceOf(
+                ExpressionStatement::class.java,
+                program.statements[0],
+                "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+            )
+
+            val exp = assertInstanceOf(
+                CallExpression::class.java,
+                stmt.expression!!,
+                "stmt.expression is not CallExpression. got=${stmt.expression!!::class}"
+            )
+
+            testIdentifier(exp.function, expectedIdent)
+            assertEquals(
+                expectedArgs.size,
+                exp.arguments?.size,
+                "wrong number of arguments. Expected ${expectedArgs.size}, got=${exp.arguments?.size}"
+            )
+
+            expectedArgs.forEachIndexed { i, arg ->
+                assertEquals(arg, exp.arguments!![i].string(), "Argument $i wrong.")
             }
         }
     }
