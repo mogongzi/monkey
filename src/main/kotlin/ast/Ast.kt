@@ -68,7 +68,7 @@ class IntegerLiteral(val token: Token, val value: Long) : Expression {
  * until the semicolon (like the book), so there may be no parsed RHS yet. Later, when
  * `parseExpression(...)` is implemented, `value` should be set to a real expression node.
  */
-class LetStatement(val token: Token, val name: Identifier, val value: Expression? = null) : Statement {
+class LetStatement(val token: Token, var name: Identifier, var value: Expression? = null) : Statement {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
@@ -81,7 +81,7 @@ class LetStatement(val token: Token, val name: Identifier, val value: Expression
     }
 }
 
-class ReturnStatement(val token: Token, val returnValue: Expression? = null) : Statement {
+class ReturnStatement(val token: Token, var returnValue: Expression? = null) : Statement {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
@@ -148,8 +148,7 @@ class IfExpression(
     }
 }
 
-class FunctionLiteral(val token: Token, var parameters: List<Identifier>? = null, var body: BlockStatement? = null) :
-    Expression {
+class FunctionLiteral(val token: Token, var parameters: List<Identifier>? = null, var body: BlockStatement? = null) : Expression {
     override fun tokenLiteral(): String = token.literal
     override fun string(): String = buildString {
         append(tokenLiteral())
@@ -157,6 +156,17 @@ class FunctionLiteral(val token: Token, var parameters: List<Identifier>? = null
         append(parameters?.joinToString(",") { it.string() })
         append(")")
         append(body?.string())
+    }
+}
+
+class CallExpression(val token: Token, var function: Expression? = null, var arguments: List<Expression>? = null) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        append(function?.string())
+        append("(")
+        append(arguments?.joinToString(", ") { it.string() })
+        append(")")
     }
 
 }

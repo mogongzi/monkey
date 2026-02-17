@@ -44,6 +44,7 @@ class Parser(private val lexer: Lexer) {
         MINUS to Precedence.SUM,
         SLASH to Precedence.PRODUCT,
         ASTERISK to Precedence.PRODUCT,
+        LPAREN to Precedence.CALL,
     )
 
     init {
@@ -72,6 +73,7 @@ class Parser(private val lexer: Lexer) {
         registerInfix(NOT_EQ, ::parseInfixExpression)
         registerInfix(LT, ::parseInfixExpression)
         registerInfix(GT, ::parseInfixExpression)
+        registerInfix(LPAREN, ::parseCallExpression)
     }
 
     fun registerPrefix(tokenType: TokenType, prefixParseFn: PrefixParseFn) {
@@ -116,38 +118,28 @@ class Parser(private val lexer: Lexer) {
     }
 
     private fun parseReturnStatement(): Statement? {
-        val token = curToken
+        val stmt = ReturnStatement(curToken, null)
         nextToken()
-
-        // TODO: we're skipping the expressions until we encounter a semicolon
-        while (!curTokenIs(SEMICOLON) && !curTokenIs(EOF)) {
+        stmt.returnValue = parseExpression(Precedence.LOWEST)
+        if(peekTokenIs(SEMICOLON)) {
             nextToken()
         }
-
-        return ReturnStatement(token, null)
+        return stmt
     }
 
     fun parseLetStatement(): LetStatement? {
         // Grammar (simplified): let <ident> = <expression> ;
-        //
-        // At this stage we don't implement full expression parsing yet, so after seeing '=' we
-        // skip tokens until we hit ';' (the book does the same). Later this becomes:
-        //   nextToken()
-        //   val value = parseExpression(LOWEST)
-        //   optionally consume SEMICOLON
         val token = curToken
-
         if (!expectPeek(IDENT)) return null
         val name = Identifier(curToken, curToken.literal)
+        val stmt = LetStatement(token, name, null)
         if (!expectPeek(ASSIGN)) return null
         nextToken()
-
-        while (!curTokenIs(SEMICOLON) && curToken.type != EOF) {
+        stmt.value = parseExpression(Precedence.LOWEST)
+        if (peekTokenIs(SEMICOLON)) {
             nextToken()
         }
-
-        // RHS value is unknown for now (Expression parsing comes later), so we leave it null.
-        return LetStatement(token, name)
+        return stmt
     }
 
     // Convenience predicates to make parser code read like English:
@@ -374,7 +366,28 @@ class Parser(private val lexer: Lexer) {
         return identifiers
     }
 
-    fun parseOperatorExpression() {}
+    fun parseCallExpression(function: Expression): Expression {
+        val exp = CallExpression(curToken, function)
+        exp.arguments = parseCallArguments()
+        return exp
+    }
+
+    fun parseCallArguments(): List<Expression>? {
+        val args = mutableListOf<Expression>()
+        if (peekTokenIs(RPAREN)) {
+            nextToken()
+            return args
+        }
+        nextToken()
+        args.add(parseExpression(Precedence.LOWEST) ?: return null)
+        while (peekTokenIs(COMMA)) {
+            nextToken()
+            nextToken()
+            args.add(parseExpression(Precedence.LOWEST) ?: return null)
+        }
+        if (!expectPeek(RPAREN)) return null
+        return args
+    }
 
     fun noPrefixParseFnError(tokenType: TokenType) {
         val msg = "no prefix parse function for ${curToken.type} found"
