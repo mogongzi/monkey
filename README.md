@@ -1,4 +1,4 @@
-# Writing an Interpreter & Compiler in Kotlin from scratch
+# Writing an Interpreter & Compiler in Kotlin from scratch (Handcrafted)
 
 ## Build and Run
 
@@ -7,6 +7,7 @@ Option 1: Gradle (dev loop)
 ```bash
 ./gradlew build
 ./gradlew run --console=plain
+./gradlew run --console=plain --args="--lexer"  # Start REPL in lexer-only mode
 ```
 
 Option 2: Installable app distribution (zip/tar + launch script)
@@ -27,15 +28,21 @@ Once configured, the flow typically looks like:
 ./build/native/nativeCompile/monkey
 ```
 
+## Test
+
+```bash
+./gradlew test
+```
+
 ## Phases
 
 ### Part 1: Interpreter
 
 - [x] **Lexer** — Tokenize source code into tokens
-- [ ] **Parser** — Build Abstract Syntax Tree (AST) from tokens
-- [ ] **AST** — Define node types for expressions and statements
+- [x] **Parser** — Build Abstract Syntax Tree (AST) from tokens
+- [x] **AST** — Define node types for expressions and statements
 - [ ] **Evaluator** — Execute the AST (tree-walking interpreter)
-- [ ] **REPL** — Interactive read-eval-print loop
+- [x] **REPL** — Interactive read-eval-print loop
 
 ### Part 2: Compiler (future)
 
@@ -44,9 +51,11 @@ Once configured, the flow typically looks like:
 
 ## Language Features (Monkey)
 
-- Variable bindings (`let`)
-- Integers and booleans
-- Arithmetic expressions
-- Built-in functions
-- First-class functions and closures
-- Arrays and hash maps
+- [x] Variable bindings (`let x = 5;`, `let name = "hello";`)
+- [x] Integers and booleans (`42`, `true`)
+- [x] Arithmetic expressions (`1 + 2 * 3`, `-5 + 10`)
+- [x] If/else expressions (`if (x > 5) { 1 }`, `if (x) { x } else { 0 }`)
+- [x] Return statements (`return 10;`, `return add(1, 2);`)
+- [ ] Built-in functions (`len("hello")`, `puts("hi")`)
+- [ ] First-class functions and closures (`let add = fn(x, y) { x + y };`, `fn(x) { fn(y) { x + y } }`)
+- [ ] Arrays and hash maps (`[1, 2, 3]`, `{"key": "value"}`)
