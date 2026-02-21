@@ -22,6 +22,17 @@ class EvaluatorTest {
             Pair("10", 10L),
             Pair("-5", -5L),
             Pair("-10", -10L),
+            Pair("5 + 5 + 5 + 5 - 10", 10L),
+            Pair("2 * 2 * 2 * 2 * 2", 32L),
+            Pair("-50 + 100 + -50", 0L),
+            Pair("5 * 2 + 10", 20L),
+            Pair("5 + 2 * 10", 25L),
+            Pair("20 + 2 * -10", 0L),
+            Pair("50 / 2 * 2 + 10", 60L),
+            Pair("2 * (5 + 10)", 30L),
+            Pair("3 * 3 * 3 + 10", 37L),
+            Pair("3 * (3 * 3) + 10", 37L),
+            Pair("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50L),
         )
 
         for ((input, expected) in tests) {
@@ -35,6 +46,23 @@ class EvaluatorTest {
         val tests = listOf(
             "true" to true,
             "false" to false,
+            "1 < 2" to true,
+            "1 > 2" to false,
+            "1 < 1" to false,
+            "1 > 1" to false,
+            "1 == 1" to true,
+            "1 != 1" to false,
+            "1 == 2" to false,
+            "1 != 2" to true,
+            "true == true" to true,
+            "false == false" to true,
+            "true == false" to false,
+            "true != false" to true,
+            "false != true" to true,
+            "(1 < 2) == true" to true,
+            "(1 < 2) == false" to false,
+            "(1 > 2) == true" to false,
+            "(1 > 2) == false" to true,
         )
 
         for ((input, expected) in tests) {
