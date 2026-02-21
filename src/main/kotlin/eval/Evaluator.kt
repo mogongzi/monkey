@@ -17,7 +17,12 @@ class Evaluator {
             is BooleanLiteral -> hostBoolToMBoolean(node.value)
             is PrefixExpression -> {
                 val right = eval(node.right!!)
-                return evalPrefixExpression(node.operator, right)
+                evalPrefixExpression(node.operator, right)
+            }
+            is InfixExpression -> {
+                val left = eval(node.left!!)
+                val right = eval(node.right!!)
+                evalInfixExpression(node.operator, left!!, right!!)
             }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
@@ -51,7 +56,32 @@ class Evaluator {
 
     private fun evalMinusPrefixOperatorExpression(right: MObject) : MObject {
         if (right !is MInteger) return NULL
-        return MInteger(-(right.value))
+        return MInteger(value = (right.value).unaryMinus())
+    }
+
+    private fun evalInfixExpression(operator: String, left: MObject, right: MObject) : MObject {
+        return when {
+            left is MInteger && right is MInteger -> evalIntegerInfixExpression(operator, left, right)
+            operator == "==" -> hostBoolToMBoolean(left == right)
+            operator == "!=" -> hostBoolToMBoolean(left != right)
+            else -> NULL
+        }
+    }
+
+    private fun evalIntegerInfixExpression(operator: String, left: MInteger, right: MInteger) : MObject {
+        val leftValue = left.value
+        val rightValue = right.value
+        return when (operator) {
+            "+" -> MInteger(leftValue + rightValue)
+            "-" -> MInteger(leftValue - rightValue)
+            "*" -> MInteger(leftValue * rightValue)
+            "/" -> MInteger(leftValue / rightValue)
+            "<" -> hostBoolToMBoolean(leftValue < rightValue)
+            ">" -> hostBoolToMBoolean(leftValue > rightValue)
+            "==" -> hostBoolToMBoolean(leftValue == rightValue)
+            "!=" -> hostBoolToMBoolean(leftValue != rightValue)
+            else -> NULL
+        }
     }
 
     private fun hostBoolToMBoolean(input: Boolean) : MBoolean = if (input) TRUE else FALSE
