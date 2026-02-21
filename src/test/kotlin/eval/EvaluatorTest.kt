@@ -1,12 +1,14 @@
 package eval
 
 import me.ryan.interpreter.eval.Evaluator
+import me.ryan.interpreter.eval.MBoolean
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
 
 class EvaluatorTest {
@@ -18,11 +20,43 @@ class EvaluatorTest {
         val tests = listOf(
             Pair("5", 5L),
             Pair("10", 10L),
+            Pair("-5", -5L),
+            Pair("-10", -10L),
         )
 
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
             testMIntegerObject(evaluated!!, expected)
+        }
+    }
+
+    @Test
+    fun testEvalBooleanExpression() {
+        val tests = listOf(
+            "true" to true,
+            "false" to false,
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            testMBooleanObject(evaluated!!, expected)
+        }
+    }
+
+    @Test
+    fun testBangOperator() {
+        val tests = listOf(
+            "!true" to false,
+            "!false" to true,
+            "!5" to false,
+            "!!true" to true,
+            "!!false" to false,
+            "!!5" to true
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            testMBooleanObject(evaluated!!, expected)
         }
     }
 
@@ -37,6 +71,11 @@ class EvaluatorTest {
     private fun testMIntegerObject(obj: MObject, expected: Long) {
         assertInstanceOf(MInteger::class.java, obj)
         val result = obj as MInteger
+        assertEquals(expected, result.value)
+    }
+
+    private fun testMBooleanObject(obj: MObject, expected: Boolean) {
+        val result = obj as? MBoolean ?: fail("object is not MBoolean. got=${obj::class}")
         assertEquals(expected, result.value)
     }
 }
