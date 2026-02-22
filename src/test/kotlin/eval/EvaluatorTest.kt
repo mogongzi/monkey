@@ -3,12 +3,11 @@ package eval
 import me.ryan.interpreter.eval.Evaluator
 import me.ryan.interpreter.eval.MBoolean
 import me.ryan.interpreter.eval.MInteger
+import me.ryan.interpreter.eval.MNULL
 import me.ryan.interpreter.eval.MObject
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertInstanceOf
-import org.junit.jupiter.api.Assertions.fail
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class EvaluatorTest {
@@ -86,6 +85,32 @@ class EvaluatorTest {
             val evaluated = testEval(input)
             testMBooleanObject(evaluated!!, expected)
         }
+    }
+
+    @Test
+    fun testIfElseExpressions() {
+        val tests = listOf(
+            "if (true) { 10 }" to 10L,
+            "if (false) { 10 }" to null,
+            "if (1) { 10 }" to 10L,
+            "if (1 < 2) { 10 }" to 10L,
+            "if (1 > 2) { 10 }" to null,
+            "if (1 > 2) { 10 } else { 20 }" to 20L,
+            "if (1 < 2) { 10 } else { 20 }" to 10L,
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            if (expected != null) {
+                testMIntegerObject(evaluated!!, expected)
+            } else {
+                testMNULLObject(evaluated!!)
+            }
+        }
+    }
+
+    private fun testMNULLObject(obj: MObject) {
+        assertEquals(MNULL, obj, "object is not NULL. got=${obj::class} ($obj)")
     }
 
     private fun testEval(input: String): MObject? {

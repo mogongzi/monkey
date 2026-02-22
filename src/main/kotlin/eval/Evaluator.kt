@@ -5,7 +5,6 @@ import me.ryan.interpreter.token.MINUS
 
 val TRUE = MBoolean(true)
 val FALSE = MBoolean(false)
-val NULL = MNULL()
 
 class Evaluator {
 
@@ -24,6 +23,8 @@ class Evaluator {
                 val right = eval(node.right!!)
                 evalInfixExpression(node.operator, left!!, right!!)
             }
+            is BlockStatement -> evalStatements(node.statements)
+            is IfExpression -> evalIfExpression(node)
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
         }
@@ -49,13 +50,13 @@ class Evaluator {
         return when(right) {
             TRUE -> FALSE
             FALSE -> TRUE
-            NULL -> TRUE
+            MNULL -> TRUE
             else -> FALSE
         }
     }
 
     private fun evalMinusPrefixOperatorExpression(right: MObject) : MObject {
-        if (right !is MInteger) return NULL
+        if (right !is MInteger) return MNULL
         return MInteger(value = (right.value).unaryMinus())
     }
 
@@ -64,7 +65,7 @@ class Evaluator {
             left is MInteger && right is MInteger -> evalIntegerInfixExpression(operator, left, right)
             operator == "==" -> hostBoolToMBoolean(left == right)
             operator == "!=" -> hostBoolToMBoolean(left != right)
-            else -> NULL
+            else -> MNULL
         }
     }
 
@@ -80,7 +81,27 @@ class Evaluator {
             ">" -> hostBoolToMBoolean(leftValue > rightValue)
             "==" -> hostBoolToMBoolean(leftValue == rightValue)
             "!=" -> hostBoolToMBoolean(leftValue != rightValue)
-            else -> NULL
+            else -> MNULL
+        }
+    }
+
+    private fun evalIfExpression(ie: IfExpression): MObject? {
+        val condition = eval(ie.condition!!)
+        if (isTruthy(condition!!)) {
+            return eval(ie.consequence!!)
+        } else if (ie.alternative != null) {
+            return eval(ie.alternative!!)
+        } else {
+            return MNULL
+        }
+    }
+
+    private fun isTruthy(obj: MObject): Boolean {
+        return when (obj) {
+            MNULL -> false
+            TRUE -> true
+            FALSE -> false
+            else -> true
         }
     }
 

@@ -35,7 +35,7 @@ class MBoolean(val value: Boolean) : MObject {
     override fun inspect(): String = value.toString()
 }
 
-class MNULL() : MObject {
+object MNULL : MObject {
     override fun type(): MObjectType = NULL_OBJ
 
     override fun inspect(): String = "null"
