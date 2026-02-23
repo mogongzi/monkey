@@ -1,5 +1,6 @@
 package me.ryan.interpreter
 
+import me.ryan.interpreter.eval.Environment
 import me.ryan.interpreter.eval.Evaluator
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
@@ -10,6 +11,7 @@ private const val PROMPT = ">> "
 fun main(args: Array<String>) {
     val lexerMode = args.contains("--lexer")
     val parserMode = args.contains("--parser")
+    val env = Environment()
     println("🐒 Monkey REPL")
     while (true) {
         print(PROMPT)
@@ -41,7 +43,7 @@ fun main(args: Array<String>) {
         }
 
         println("--- Evaluator ---")
-        val evaluated = Evaluator().eval(program)
+        val evaluated = Evaluator().eval(program, env)
         if (evaluated != null) {
             println(evaluated.inspect())
         }

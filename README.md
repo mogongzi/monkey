@@ -51,11 +51,13 @@ Once configured, the flow typically looks like:
 
 ## Language Features (Monkey)
 
-- [x] Variable bindings (`let x = 5;`, `let name = "hello";`)
+- [ ] Variable bindings (`let x = 5;`, `let name = "hello";`)
 - [x] Integers and booleans (`42`, `true`)
 - [x] Arithmetic expressions (`1 + 2 * 3`, `-5 + 10`)
 - [x] If/else expressions (`if (x > 5) { 1 }`, `if (x) { x } else { 0 }`)
 - [x] Return statements (`return 10;`, `return add(1, 2);`)
+- [x] Error handling (type mismatches, unknown operators)
+- [ ] Strings (`"hello world"`, `"hello" + " " + "world"`)
 - [ ] Built-in functions (`len("hello")`, `puts("hi")`)
 - [ ] First-class functions and closures (`let add = fn(x, y) { x + y };`, `fn(x) { fn(y) { x + y } }`)
 - [ ] Arrays and hash maps (`[1, 2, 3]`, `{"key": "value"}`)
