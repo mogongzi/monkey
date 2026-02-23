@@ -1,5 +1,8 @@
 package me.ryan.interpreter.eval
 
+import me.ryan.interpreter.ast.BlockStatement
+import me.ryan.interpreter.ast.Identifier
+
 // MObject (Monkey Object) is the internal representation of values
 // produced during evaluation of Monkey programs.
 // Every value the evaluator produces (integers, booleans, null, etc.) implements this interface.
@@ -11,6 +14,7 @@ const val BOOLEAN_OBJ: MObjectType = "BOOLEAN"
 const val NULL_OBJ: MObjectType = "NULL"
 const val RETURN_VALUE_OBJ: MObjectType = "RETURN_VALUE"
 const val ERROR_OBJ: MObjectType = "ERROR"
+const val FUNCTION_OBJ: MObjectType = "FUNCTION"
 
 /**
  * The base interface for all Monkey object types.
@@ -63,6 +67,16 @@ class Environment {
     fun set(name: String, value: MObject): MObject {
         store[name] = value
         return value
+    }
+}
+
+class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val env: Environment) : MObject {
+    override fun type(): MObjectType = FUNCTION_OBJ
+
+    override fun inspect(): String = buildString {
+        append("fn(${parameters.joinToString(", ") {it.string()}}) {\n")
+        append(body.string())
+        append("\n}")
     }
 
 }

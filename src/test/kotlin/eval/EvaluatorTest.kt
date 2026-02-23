@@ -148,7 +148,7 @@ class EvaluatorTest {
             }
             """.trimIndent() to "unknown operator: BOOLEAN + BOOLEAN",
             "foobar" to "identifier not found: foobar"
-            )
+        )
 
         assertAll(tests.map { (input, expectedMsg) ->
             Executable {
@@ -169,6 +169,36 @@ class EvaluatorTest {
             "let a = 5 * 5; a;" to 25L,
             "let a = 5; let b = a; b;" to 5L,
             "let a = 5; let b = a; let c = a + b + 5; c;" to 15L,
+        )
+
+        for ((input, expected) in tests) {
+            testMIntegerObject(testEval(input)!!, expected)
+        }
+    }
+
+    @Test
+    fun testFunctionObject() {
+        val input = "fn(x) { x + 2; };"
+
+        val evaluated = testEval(input)
+        assertInstanceOf(
+            MFunction::class.java, evaluated, "object is not Function. got=${evaluated!!::class.java}"
+        )
+        val fn = evaluated as MFunction
+        assertEquals(1, fn.parameters.size, "function has wrong parameters. Parameters=${fn.parameters.size}")
+        assertEquals("x", fn.parameters.first().string(), "parameter is not 'x'. got=${fn.parameters.first().string()}")
+        assertEquals("(x + 2)", fn.body.string(), "body is not (x + 2). got=${fn.body.string()}")
+    }
+
+    @Test
+    fun testFunctionApplication() {
+        val tests = listOf(
+            "let identity = fn(x) { x; }; identity(5);" to 5L,
+            "let identity = fn(x) { return x; }; identity(5);" to 5L,
+            "let double = fn(x) { x * 2; }; identity(5);" to 10L,
+            "let add = fn(x, y) { x + y; }; add(5, 5);" to 10L,
+            "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));" to 20L,
+            "fn(x) { x; }(5)" to 5L,
         )
 
         for ((input, expected) in tests) {

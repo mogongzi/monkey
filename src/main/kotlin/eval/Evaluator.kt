@@ -40,6 +40,13 @@ class Evaluator {
             is Identifier -> {
                 evalIdentifier(node, env)
             }
+            is FunctionLiteral -> {
+                MFunction(node.parameters!!, node.body!!, env)
+            }
+            is CallExpression -> {
+                val function = eval(node.function!!, env)
+                if (isMERROR(function!!)) function
+            }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
         }
