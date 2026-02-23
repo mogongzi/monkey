@@ -1,14 +1,11 @@
 package eval
 
-import me.ryan.interpreter.eval.Evaluator
-import me.ryan.interpreter.eval.MBoolean
-import me.ryan.interpreter.eval.MInteger
-import me.ryan.interpreter.eval.MNULL
-import me.ryan.interpreter.eval.MObject
+import me.ryan.interpreter.eval.*
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.function.Executable
 
 class EvaluatorTest {
 
@@ -107,6 +104,61 @@ class EvaluatorTest {
                 testMNULLObject(evaluated!!)
             }
         }
+    }
+
+    @Test
+    fun testReturnStatements() {
+        val tests = listOf(
+            "return 10;" to 10L,
+            "return 10; 9;" to 10L,
+            "return 2 * 5; 9;" to 10L,
+            "9; return 2 * 5; 9;" to 10L,
+            """
+            if (10 > 1) {
+              if (10 > 1) {
+                return 10;
+              }
+                  
+              return 1;
+            }
+            """.trimIndent() to 10L,
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            testMIntegerObject(evaluated!!, expected)
+        }
+    }
+
+    @Test
+    fun testErrorHandling() {
+        val tests = listOf(
+            "5 + true;" to "type mismatch: INTEGER + BOOLEAN",
+            "5 + true; 5;" to "type mismatch: INTEGER + BOOLEAN",
+            "-true" to "unknown operator: -BOOLEAN",
+            "true + false;" to "unknown operator: BOOLEAN + BOOLEAN",
+            "5; true + false; 5" to "unknown operator: BOOLEAN + BOOLEAN",
+            "if (10 > 1) { true + false; }" to "unknown operator: BOOLEAN + BOOLEAN",
+            """
+            if (10 > 1) {
+              if (10 > 1) {
+                return true + false;
+              }
+              return 1;
+            }
+            """.trimIndent() to "unknown operator: BOOLEAN + BOOLEAN",
+            )
+
+        assertAll(tests.map { (input, expectedMsg) ->
+            Executable {
+                val evaluated = testEval(input)
+                assertInstanceOf(
+                    MERROR::class.java, evaluated,
+                    "No error object returned for '$input'. got=${evaluated?.let { it::class.java }}($evaluated)"
+                )
+                assertEquals(expectedMsg, (evaluated as MERROR).message)
+            }
+        })
     }
 
     private fun testMNULLObject(obj: MObject) {

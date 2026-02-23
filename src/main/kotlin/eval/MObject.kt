@@ -9,6 +9,8 @@ typealias MObjectType = String
 const val INTEGER_OBJ: MObjectType = "INTEGER"
 const val BOOLEAN_OBJ: MObjectType = "BOOLEAN"
 const val NULL_OBJ: MObjectType = "NULL"
+const val RETURN_VALUE_OBJ: MObjectType = "RETURN_VALUE"
+const val ERROR_OBJ: MObjectType = "ERROR"
 
 /**
  * The base interface for all Monkey object types.
@@ -41,4 +43,14 @@ object MNULL : MObject {
     override fun inspect(): String = "null"
 }
 
+class MReturnValue(val value: MObject) : MObject {
+    override fun type(): MObjectType = RETURN_VALUE_OBJ
 
+    override fun inspect(): String = value.inspect()
+}
+
+class MERROR(val message: String) : MObject {
+    override fun type(): MObjectType = ERROR_OBJ
+
+    override fun inspect(): String = "ERROR: $message"
+}
