@@ -147,6 +147,7 @@ class EvaluatorTest {
               return 1;
             }
             """.trimIndent() to "unknown operator: BOOLEAN + BOOLEAN",
+            "foobar" to "identifier not found: foobar"
             )
 
         assertAll(tests.map { (input, expectedMsg) ->
@@ -161,6 +162,20 @@ class EvaluatorTest {
         })
     }
 
+    @Test
+    fun testLetStatements() {
+        val tests = listOf(
+            "let a = 5; a;" to 5L,
+            "let a = 5 * 5; a;" to 25L,
+            "let a = 5; let b = a; b;" to 5L,
+            "let a = 5; let b = a; let c = a + b + 5; c;" to 15L,
+        )
+
+        for ((input, expected) in tests) {
+            testMIntegerObject(testEval(input)!!, expected)
+        }
+    }
+
     private fun testMNULLObject(obj: MObject) {
         assertEquals(MNULL, obj, "object is not NULL. got=${obj::class} ($obj)")
     }
@@ -169,8 +184,9 @@ class EvaluatorTest {
         val lexer = Lexer(input)
         val parser = Parser(lexer)
         val program = parser.parseProgram()
+        val env = Environment()
 
-        return evaluator.eval(program)
+        return evaluator.eval(program, env)
     }
 
     private fun testMIntegerObject(obj: MObject, expected: Long) {
