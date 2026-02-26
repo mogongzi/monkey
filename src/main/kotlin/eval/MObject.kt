@@ -59,10 +59,10 @@ class MERROR(val message: String) : MObject {
     override fun inspect(): String = "ERROR: $message"
 }
 
-class Environment {
+class Environment(private val outer: Environment? = null) {
     private val store = mutableMapOf<String, MObject>()
 
-    fun get(name: String): MObject? = store[name]
+    fun get(name: String): MObject? = store[name] ?: outer?.get(name)
 
     fun set(name: String, value: MObject): MObject {
         store[name] = value

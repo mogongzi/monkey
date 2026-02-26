@@ -46,6 +46,10 @@ class Evaluator {
             is CallExpression -> {
                 val function = eval(node.function!!, env)
                 if (isMERROR(function!!)) function
+                val args = evalExpression(node.arguments!!, env)
+                if (args.size == 1 && args[0] is MERROR) args[0]
+
+
             }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
@@ -153,6 +157,17 @@ class Evaluator {
     private fun evalIdentifier(node: Identifier, env: Environment): MObject {
         val value = env.get(node.value) ?: return newMERROR("identifier not found: ${node.value}")
         return value
+    }
+
+    private fun evalExpression(exps: List<Expression>, env: Environment): List<MObject> {
+        val results = mutableListOf<MObject>()
+        for (exp in exps) {
+            val evaluated = eval(exp, env)
+            if (isMERROR(evaluated!!)) return listOf(evaluated)
+            results.add(evaluated)
+        }
+
+        return results
     }
 
     private fun hostBoolToMBoolean(input: Boolean) : MBoolean = if (input) TRUE else FALSE
