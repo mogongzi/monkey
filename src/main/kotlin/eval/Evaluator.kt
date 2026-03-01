@@ -48,8 +48,7 @@ class Evaluator {
                 if (isMERROR(function!!)) function
                 val args = evalExpression(node.arguments!!, env)
                 if (args.size == 1 && args[0] is MERROR) args[0]
-
-
+                return applyFunction(function, args)
             }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
@@ -168,6 +167,24 @@ class Evaluator {
         }
 
         return results
+    }
+
+    private fun applyFunction(fn : MObject, args : List<MObject>): MObject {
+        if (fn !is MFunction) return newMERROR("not a function: ${fn.type()}")
+        val extendedEnv = extendFunctionEnv(fn, args)
+        val evaluated = eval(fn.body, extendedEnv)
+        return unWrapReturnValue(evaluated)
+    }
+
+    private fun extendFunctionEnv(fn: MFunction, args: List<MObject>): Environment {
+        val env = Environment(fn.env)
+        fn.parameters.forEachIndexed { i, param -> env.set(param.value, args[i])  }
+        return env
+    }
+
+    private fun unWrapReturnValue(obj: MObject?): MObject {
+        if (obj is MReturnValue) return obj.value
+        return obj ?: MNULL
     }
 
     private fun hostBoolToMBoolean(input: Boolean) : MBoolean = if (input) TRUE else FALSE
