@@ -195,10 +195,17 @@ class EvaluatorTest {
         val tests = listOf(
             "let identity = fn(x) { x; }; identity(5);" to 5L,
             "let identity = fn(x) { return x; }; identity(5);" to 5L,
-            "let double = fn(x) { x * 2; }; identity(5);" to 10L,
+            "let double = fn(x) { x * 2; }; double(5);" to 10L,
             "let add = fn(x, y) { x + y; }; add(5, 5);" to 10L,
             "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));" to 20L,
             "fn(x) { x; }(5)" to 5L,
+            """
+                let newAdder = fn(x) {
+                  fn(y) { x + y };
+                };
+                let addTwo = newAdder(2);
+                addTwo(2);
+            """.trimIndent() to 4L,
         )
 
         for ((input, expected) in tests) {
