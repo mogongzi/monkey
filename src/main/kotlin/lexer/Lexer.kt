@@ -47,6 +47,7 @@ class Lexer(private val input: String) {
             '}' -> newToken(RBRACE, ch)
             ',' -> newToken(COMMA, ch)
             ';' -> newToken(SEMICOLON, ch)
+            '"' -> Token(STRING, readString())
             '\u0000' -> Token(EOF, "")
             else -> {
                 if (isLetter(ch)) {
@@ -119,5 +120,26 @@ class Lexer(private val input: String) {
         } else {
             return input[readPosition]
         }
+    }
+
+    private fun readString(): String {
+        val sb = StringBuilder()
+        do {
+            readChar()
+            if (ch == '\\') {
+                readChar()
+                when (ch) {
+                    '"'  -> sb.append('"')
+                    'n'  -> sb.append('\n')
+                    't'  -> sb.append('\t')
+                    '\\' -> sb.append('\\')
+                    else -> { sb.append('\\'); sb.append(ch) }
+                }
+                continue
+            }
+            if (ch == '"' || ch == '\u0000') break
+            sb.append(ch)
+        } while (true)
+        return sb.toString()
     }
 }

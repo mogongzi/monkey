@@ -206,6 +206,11 @@ class EvaluatorTest {
                 let addTwo = newAdder(2);
                 addTwo(2);
             """.trimIndent() to 4L,
+            """
+                let add = fn(a, b) { a + b };
+                let applyFunc = fn(a, b, func) { func(a, b) };
+                applyFunc(2, 2, add);
+            """.trimIndent() to 4L,
         )
 
         for ((input, expected) in tests) {

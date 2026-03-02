@@ -61,6 +61,13 @@ class IntegerLiteral(val token: Token, val value: Long) : Expression {
     override fun toString(): String = string()
 }
 
+class StringLiteral(val token: Token, val value: String) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = value
+
+}
+
 /**
  * A `let` binding is a statement in Monkey.
  *

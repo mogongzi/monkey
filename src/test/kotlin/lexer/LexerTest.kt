@@ -21,7 +21,7 @@ class LexerTest {
             TestCase(LBRACE, "{"),
             TestCase(RBRACE, "}"),
             TestCase(COMMA, ","),
-            TestCase(SEMICOLON, ";")
+            TestCase(SEMICOLON, ";"),
         )
 
         val l = Lexer(input)
@@ -61,6 +61,10 @@ class LexerTest {
             
             10 == 10;
             10 != 9;
+            "foobar"
+            "foo bar"
+            "hello\nworld"
+            "say \"hi\""
         """.trimIndent()
 
         val tests = listOf(
@@ -137,6 +141,10 @@ class LexerTest {
             TestCase(NOT_EQ, "!="),
             TestCase(INT, "9"),
             TestCase(SEMICOLON, ";"),
+            TestCase(STRING, "foobar"),
+            TestCase(STRING, "foo bar"),
+            TestCase(STRING, "hello\nworld"),
+            TestCase(STRING, "say \"hi\""),
             TestCase(EOF, "")
         )
 

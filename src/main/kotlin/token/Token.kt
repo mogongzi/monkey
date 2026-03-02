@@ -28,6 +28,7 @@ const val EOF = "EOF"
 // Identifier + literals
 const val IDENT = "IDENT"
 const val INT = "INT"
+const val STRING = "STRING"
 
 // Operators
 const val ASSIGN = "="

@@ -7,7 +7,7 @@ val FALSE = MBoolean(false)
 
 class Evaluator {
 
-    fun eval(node : Node, env: Environment): MObject? {
+    fun eval(node: Node, env: Environment): MObject? {
         return when (node) {
             is Program -> evalProgram(node.statements, env)
             is ExpressionStatement -> node.expression?.let { eval(it, env) }
@@ -18,6 +18,7 @@ class Evaluator {
                 if (isMERROR(right!!)) return right
                 evalPrefixExpression(node.operator, right)
             }
+
             is InfixExpression -> {
                 val left = eval(node.left!!, env)
                 if (isMERROR(left!!)) return left
@@ -25,6 +26,7 @@ class Evaluator {
                 if (isMERROR(right!!)) return right
                 evalInfixExpression(node.operator, left, right)
             }
+
             is BlockStatement -> evalBlockStatement(node.statements, env)
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
@@ -32,23 +34,27 @@ class Evaluator {
                 if (isMERROR(value!!)) return value
                 MReturnValue(value)
             }
+
             is LetStatement -> {
                 val value = eval(node.value!!, env)
                 if (isMERROR(value!!)) return value
                 env.set(node.name.value, value)
             }
+
             is Identifier -> {
                 evalIdentifier(node, env)
             }
+
             is FunctionLiteral -> {
                 MFunction(node.parameters!!, node.body!!, env)
             }
+
             is CallExpression -> {
                 val function = eval(node.function!!, env)
                 if (isMERROR(function!!)) function
                 val args = evalExpression(node.arguments!!, env)
                 if (args.size == 1 && args[0] is MERROR) args[0]
-                return applyFunction(function, args)
+                applyFunction(function, args)
             }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
@@ -76,16 +82,16 @@ class Evaluator {
         return result
     }
 
-    private fun evalPrefixExpression(operator : String, right: MObject?) : MObject? {
-        return when(operator) {
+    private fun evalPrefixExpression(operator: String, right: MObject?): MObject? {
+        return when (operator) {
             "!" -> evalBangOperatorExpression(right!!)
             "-" -> evalMinusPrefixOperatorExpression(right!!)
             else -> newMERROR("unknown operator: $operator ${right?.type()}")
         }
     }
 
-    private fun evalBangOperatorExpression(right: MObject) : MObject {
-        return when(right) {
+    private fun evalBangOperatorExpression(right: MObject): MObject {
+        return when (right) {
             TRUE -> FALSE
             FALSE -> TRUE
             MNULL -> TRUE
@@ -93,12 +99,12 @@ class Evaluator {
         }
     }
 
-    private fun evalMinusPrefixOperatorExpression(right: MObject) : MObject {
+    private fun evalMinusPrefixOperatorExpression(right: MObject): MObject {
         if (right !is MInteger) return newMERROR("unknown operator: -${right.type()}")
         return MInteger(value = (right.value).unaryMinus())
     }
 
-    private fun evalInfixExpression(operator: String, left: MObject, right: MObject) : MObject {
+    private fun evalInfixExpression(operator: String, left: MObject, right: MObject): MObject {
         return when {
             left is MInteger && right is MInteger -> evalIntegerInfixExpression(operator, left, right)
             operator == "==" -> hostBoolToMBoolean(left == right)
@@ -108,7 +114,7 @@ class Evaluator {
         }
     }
 
-    private fun evalIntegerInfixExpression(operator: String, left: MInteger, right: MInteger) : MObject {
+    private fun evalIntegerInfixExpression(operator: String, left: MInteger, right: MInteger): MObject {
         val leftValue = left.value
         val rightValue = right.value
         return when (operator) {
@@ -169,7 +175,7 @@ class Evaluator {
         return results
     }
 
-    private fun applyFunction(fn : MObject, args : List<MObject>): MObject {
+    private fun applyFunction(fn: MObject, args: List<MObject>): MObject {
         if (fn !is MFunction) return newMERROR("not a function: ${fn.type()}")
         val extendedEnv = extendFunctionEnv(fn, args)
         val evaluated = eval(fn.body, extendedEnv)
@@ -178,7 +184,7 @@ class Evaluator {
 
     private fun extendFunctionEnv(fn: MFunction, args: List<MObject>): Environment {
         val env = Environment(fn.env)
-        fn.parameters.forEachIndexed { i, param -> env.set(param.value, args[i])  }
+        fn.parameters.forEachIndexed { i, param -> env.set(param.value, args[i]) }
         return env
     }
 
@@ -187,5 +193,5 @@ class Evaluator {
         return obj ?: MNULL
     }
 
-    private fun hostBoolToMBoolean(input: Boolean) : MBoolean = if (input) TRUE else FALSE
+    private fun hostBoolToMBoolean(input: Boolean): MBoolean = if (input) TRUE else FALSE
 }

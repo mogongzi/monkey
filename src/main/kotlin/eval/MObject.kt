@@ -74,7 +74,7 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
     override fun type(): MObjectType = FUNCTION_OBJ
 
     override fun inspect(): String = buildString {
-        append("fn(${parameters.joinToString(", ") {it.string()}}) {\n")
+        append("fn(${parameters.joinToString(", ") { it.string() }}) {\n")
         append(body.string())
         append("\n}")
     }
