@@ -56,6 +56,7 @@ class Evaluator {
                 if (args.size == 1 && args[0] is MERROR) args[0]
                 applyFunction(function, args)
             }
+            is StringLiteral -> MString(node.value)
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
         }
@@ -107,6 +108,7 @@ class Evaluator {
     private fun evalInfixExpression(operator: String, left: MObject, right: MObject): MObject {
         return when {
             left is MInteger && right is MInteger -> evalIntegerInfixExpression(operator, left, right)
+            left is MString && right is MString -> evalStringInfixExpression(operator, left, right)
             operator == "==" -> hostBoolToMBoolean(left == right)
             operator == "!=" -> hostBoolToMBoolean(left != right)
             left.type() != right.type() -> newMERROR("type mismatch: ${left.type()} $operator ${right.type()}")
@@ -128,6 +130,14 @@ class Evaluator {
             "!=" -> hostBoolToMBoolean(leftValue != rightValue)
             else -> newMERROR("unknown operator: ${left.type()} $operator ${right.type()}")
         }
+    }
+
+    private fun evalStringInfixExpression(operator: String, left: MString, right: MString): MObject {
+        if (operator != "+") {
+            return newMERROR("unknown operator: ${left.type()} $operator ${right.type()}")
+        }
+
+        return MString("${left.value}${right.value}")
     }
 
     private fun evalIfExpression(ie: IfExpression, env: Environment): MObject? {
