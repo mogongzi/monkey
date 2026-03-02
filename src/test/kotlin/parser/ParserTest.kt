@@ -196,6 +196,30 @@ class ParserTest {
         assertEquals("5", literal.tokenLiteral(), "literal.tokenLiteral not 5. got=${literal.tokenLiteral()}")
     }
 
+
+    @Test
+    fun testStringLiteralExpression() {
+        val input = "\"hello world;\""
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "program.statements[0] is a not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val literal = assertInstanceOf(
+            IntegerLiteral::class.java,
+            stmt.expression!!,
+            "exp not StringLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals("hello world", literal.value, "literal.value not \"hello world\", got=${literal.value}")
+    }
+
     @Test
     fun testParsingPrefixExpressions() {
         val prefixTests = listOf(
