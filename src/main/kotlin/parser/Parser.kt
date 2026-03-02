@@ -64,6 +64,7 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(LPAREN, ::parseGroupedExpression)
         registerPrefix(IF, ::parseIfExpression)
         registerPrefix(FUNCTION, ::parseFunctionLiteral)
+        registerPrefix(STRING, ::parseStringLiteral)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -199,6 +200,10 @@ class Parser(private val lexer: Lexer) {
             return null
         }
         return IntegerLiteral(token, value)
+    }
+
+    fun parseStringLiteral(): Expression? {
+        return StringLiteral(curToken, curToken.literal)
     }
 
     fun parseBoolean(): Expression? {

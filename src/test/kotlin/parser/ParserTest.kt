@@ -199,7 +199,7 @@ class ParserTest {
 
     @Test
     fun testStringLiteralExpression() {
-        val input = "\"hello world;\""
+        val input = "\"hello world\";"
         val lexer = Lexer(input)
         val parser = Parser(lexer)
         val program = parser.parseProgram()
@@ -212,7 +212,7 @@ class ParserTest {
         )
 
         val literal = assertInstanceOf(
-            IntegerLiteral::class.java,
+            StringLiteral::class.java,
             stmt.expression!!,
             "exp not StringLiteral. got=${stmt.expression!!::class}"
         )

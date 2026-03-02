@@ -147,7 +147,8 @@ class EvaluatorTest {
               return 1;
             }
             """.trimIndent() to "unknown operator: BOOLEAN + BOOLEAN",
-            "foobar" to "identifier not found: foobar"
+            "foobar" to "identifier not found: foobar",
+            "\"Hello\" - \"World!\"" to "unknown operator: STRING - STRING",
         )
 
         assertAll(tests.map { (input, expectedMsg) ->
@@ -216,6 +217,24 @@ class EvaluatorTest {
         for ((input, expected) in tests) {
             testMIntegerObject(testEval(input)!!, expected)
         }
+    }
+
+    @Test
+    fun testStringLiteral() {
+        val input = "\"Hello World!\""
+        val evaluated = testEval(input)
+        assertInstanceOf(MString::class.java, evaluated)
+        val str = evaluated as MString
+        assertEquals("Hello World!", str.value)
+    }
+
+    @Test
+    fun testStringConcatenation() {
+        val input = "\"Hello\" + \" \" + \"World!\""
+        val evaluated = testEval(input)
+        assertInstanceOf(MString::class.java, evaluated)
+        val str = evaluated as MString
+        assertEquals("Hello World!", str.value)
     }
 
     private fun testMNULLObject(obj: MObject) {
