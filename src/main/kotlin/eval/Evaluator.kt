@@ -15,15 +15,15 @@ class Evaluator {
             is BooleanLiteral -> hostBoolToMBoolean(node.value)
             is PrefixExpression -> {
                 val right = eval(node.right!!, env)
-                if (isMERROR(right!!)) return right
+                if (right!! is MERROR) return right
                 evalPrefixExpression(node.operator, right)
             }
 
             is InfixExpression -> {
                 val left = eval(node.left!!, env)
-                if (isMERROR(left!!)) return left
+                if (left!! is MERROR) return left
                 val right = eval(node.right!!, env)
-                if (isMERROR(right!!)) return right
+                if (right!! is MERROR) return right
                 evalInfixExpression(node.operator, left, right)
             }
 
@@ -31,13 +31,13 @@ class Evaluator {
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
                 val value = eval(node.returnValue!!, env)
-                if (isMERROR(value!!)) return value
+                if (value!! is MERROR) return value
                 MReturnValue(value)
             }
 
             is LetStatement -> {
                 val value = eval(node.value!!, env)
-                if (isMERROR(value!!)) return value
+                if (value!! is MERROR) return value
                 env.set(node.name.value, value)
             }
 
@@ -51,7 +51,7 @@ class Evaluator {
 
             is CallExpression -> {
                 val function = eval(node.function!!, env)
-                if (isMERROR(function!!)) function
+                if (function!! is MERROR) function
                 val args = evalExpression(node.arguments!!, env)
                 if (args.size == 1 && args[0] is MERROR) args[0]
                 applyFunction(function, args)
@@ -87,7 +87,7 @@ class Evaluator {
         return when (operator) {
             "!" -> evalBangOperatorExpression(right!!)
             "-" -> evalMinusPrefixOperatorExpression(right!!)
-            else -> newMERROR("unknown operator: $operator ${right?.type()}")
+            else -> newMERROR("unknown operator: $operator ${right!!::class}")
         }
     }
 
@@ -101,7 +101,7 @@ class Evaluator {
     }
 
     private fun evalMinusPrefixOperatorExpression(right: MObject): MObject {
-        if (right !is MInteger) return newMERROR("unknown operator: -${right.type()}")
+        if (right !is MInteger) return newMERROR("unknown operator: -${right::class.simpleName}")
         return MInteger(value = (right.value).unaryMinus())
     }
 
@@ -111,8 +111,8 @@ class Evaluator {
             left is MString && right is MString -> evalStringInfixExpression(operator, left, right)
             operator == "==" -> hostBoolToMBoolean(left == right)
             operator == "!=" -> hostBoolToMBoolean(left != right)
-            left.type() != right.type() -> newMERROR("type mismatch: ${left.type()} $operator ${right.type()}")
-            else -> newMERROR("unknown operator: ${left.type()} $operator ${right.type()}")
+            left::class != right::class -> newMERROR("type mismatch: ${left::class.simpleName} $operator ${right::class.simpleName}")
+            else -> newMERROR("unknown operator: ${left::class.simpleName} $operator ${right::class.simpleName}")
         }
     }
 
@@ -128,13 +128,13 @@ class Evaluator {
             ">" -> hostBoolToMBoolean(leftValue > rightValue)
             "==" -> hostBoolToMBoolean(leftValue == rightValue)
             "!=" -> hostBoolToMBoolean(leftValue != rightValue)
-            else -> newMERROR("unknown operator: ${left.type()} $operator ${right.type()}")
+            else -> newMERROR("unknown operator: ${left::class.simpleName} $operator ${right::class.simpleName}")
         }
     }
 
     private fun evalStringInfixExpression(operator: String, left: MString, right: MString): MObject {
         if (operator != "+") {
-            return newMERROR("unknown operator: ${left.type()} $operator ${right.type()}")
+            return newMERROR("unknown operator: ${left::class.simpleName} $operator ${right::class.simpleName}")
         }
 
         return MString("${left.value}${right.value}")
@@ -142,7 +142,7 @@ class Evaluator {
 
     private fun evalIfExpression(ie: IfExpression, env: Environment): MObject? {
         val condition = eval(ie.condition!!, env)
-        if (isMERROR(condition!!)) return condition
+        if (condition!! is MERROR) return condition
         return if (isTruthy(condition)) {
             eval(ie.consequence!!, env)
         } else if (ie.alternative != null) {
@@ -161,10 +161,6 @@ class Evaluator {
         }
     }
 
-    private fun isMERROR(obj: MObject): Boolean {
-        return obj.type() == ERROR_OBJ
-    }
-
     private fun newMERROR(format: String, vararg args: Any): MERROR {
         return MERROR(message = String.format(format, *args))
     }
@@ -178,7 +174,7 @@ class Evaluator {
         val results = mutableListOf<MObject>()
         for (exp in exps) {
             val evaluated = eval(exp, env)
-            if (isMERROR(evaluated!!)) return listOf(evaluated)
+            if (evaluated!! is MERROR) return listOf(evaluated)
             results.add(evaluated)
         }
 
@@ -186,7 +182,7 @@ class Evaluator {
     }
 
     private fun applyFunction(fn: MObject, args: List<MObject>): MObject {
-        if (fn !is MFunction) return newMERROR("not a function: ${fn.type()}")
+        if (fn !is MFunction) return newMERROR("not a function: ${fn::class.simpleName}")
         val extendedEnv = extendFunctionEnv(fn, args)
         val evaluated = eval(fn.body, extendedEnv)
         return unWrapReturnValue(evaluated)

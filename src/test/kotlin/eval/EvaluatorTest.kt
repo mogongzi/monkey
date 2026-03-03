@@ -11,6 +11,10 @@ class EvaluatorTest {
 
     val evaluator = Evaluator()
 
+    private val INTEGER = MInteger::class.simpleName
+    private val BOOLEAN = MBoolean::class.simpleName
+    private val STRING = MString::class.simpleName
+
     @Test
     fun testEvalIntegerExpression() {
         val tests = listOf(
@@ -133,12 +137,12 @@ class EvaluatorTest {
     @Test
     fun testErrorHandling() {
         val tests = listOf(
-            "5 + true;" to "type mismatch: INTEGER + BOOLEAN",
-            "5 + true; 5;" to "type mismatch: INTEGER + BOOLEAN",
-            "-true" to "unknown operator: -BOOLEAN",
-            "true + false;" to "unknown operator: BOOLEAN + BOOLEAN",
-            "5; true + false; 5" to "unknown operator: BOOLEAN + BOOLEAN",
-            "if (10 > 1) { true + false; }" to "unknown operator: BOOLEAN + BOOLEAN",
+            "5 + true;" to "type mismatch: $INTEGER + $BOOLEAN",
+            "5 + true; 5;" to "type mismatch: $INTEGER + $BOOLEAN",
+            "-true" to "unknown operator: -$BOOLEAN",
+            "true + false;" to "unknown operator: $BOOLEAN + $BOOLEAN",
+            "5; true + false; 5" to "unknown operator: $BOOLEAN + $BOOLEAN",
+            "if (10 > 1) { true + false; }" to "unknown operator: $BOOLEAN + $BOOLEAN",
             """
             if (10 > 1) {
               if (10 > 1) {
@@ -146,9 +150,9 @@ class EvaluatorTest {
               }
               return 1;
             }
-            """.trimIndent() to "unknown operator: BOOLEAN + BOOLEAN",
+            """.trimIndent() to "unknown operator: $BOOLEAN + $BOOLEAN",
             "foobar" to "identifier not found: foobar",
-            "\"Hello\" - \"World!\"" to "unknown operator: STRING - STRING",
+            "\"Hello\" - \"World!\"" to "unknown operator: $STRING - $STRING",
         )
 
         assertAll(tests.map { (input, expectedMsg) ->
