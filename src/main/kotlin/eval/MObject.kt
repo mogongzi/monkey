@@ -11,7 +11,6 @@ import me.ryan.interpreter.ast.Identifier
 // two instances with the same value are considered equal (e.g., MInteger(5) == MInteger(5)).
 // Reference types (MFunction) remain regular classes with identity-based equality,
 // since each function definition creates a distinct value regardless of its body.
-typealias MObjectType = String
 
 /**
  * The base interface for all Monkey object types.
@@ -67,11 +66,6 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
 
 }
 
-class MBuiltinFunction(val parameters: List<Identifier>, val body: BlockStatement, val env: Environment) : MObject {
-    override fun inspect(): String = buildString {
-        append("fn(${parameters.joinToString(", ") { it.string() }}) {\n")
-        append(body.string())
-        append("\n}")
-    }
-
+class MBuiltinFunction(val function: (List<MObject>) -> MObject) : MObject {
+    override fun inspect(): String = "builtin function"
 }

@@ -1,9 +1,45 @@
 package me.ryan.interpreter.eval
 
 import me.ryan.interpreter.ast.*
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 val TRUE = MBoolean(true)
 val FALSE = MBoolean(false)
+
+// An anonymous object implementing (List<MObject>) -> MObject, which is Kotlin's
+// functional interface with an invoke() method. This is the explicit, non-sugared
+// form of a lambda: { args -> ... }. When stored in MBuiltinFunction and later
+// called via fn.function(args), Kotlin translates that to fn.function.invoke(args).
+val lenFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.size != 1) {
+            return MERROR("wrong number of arguments. got=${args.size}, want=1")
+        }
+        val arg = args[0]
+        if (arg is MString) {
+            return MInteger(arg.value.length.toLong())
+        }
+        return MERROR("argument to `len` not supported, got ${arg::class.simpleName}")
+    }
+}
+
+@OptIn(ExperimentalTime::class)
+var nowFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.isNotEmpty()) {
+            return MERROR("wrong number of arguments. got=${args.size}, want=0")
+        }
+        return MString("${Clock.System.now()}")
+    }
+}
+
+// Registry of built-in functions. evalIdentifier checks this after the user environment,
+// so user-defined bindings (e.g., let len = 42) shadow builtins.
+val builtins = mapOf<String, MBuiltinFunction>(
+    "len" to MBuiltinFunction(function = lenFunction),
+    "now" to MBuiltinFunction(function = nowFunction)
+)
 
 class Evaluator {
 
@@ -56,6 +92,7 @@ class Evaluator {
                 if (args.size == 1 && args[0] is MERROR) args[0]
                 applyFunction(function, args)
             }
+
             is StringLiteral -> MString(node.value)
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
@@ -166,13 +203,15 @@ class Evaluator {
     }
 
     private fun evalIdentifier(node: Identifier, env: Environment): MObject {
-        val value = env.get(node.value) ?: return newMERROR("identifier not found: ${node.value}")
-        return value
+        env.get(node.value)?.let { return it }
+        builtins[node.value]?.let { return it }
+        return newMERROR("identifier not found: ${node.value}")
+
     }
 
-    private fun evalExpression(exps: List<Expression>, env: Environment): List<MObject> {
+    private fun evalExpression(expressions: List<Expression>, env: Environment): List<MObject> {
         val results = mutableListOf<MObject>()
-        for (exp in exps) {
+        for (exp in expressions) {
             val evaluated = eval(exp, env)
             if (evaluated!! is MERROR) return listOf(evaluated)
             results.add(evaluated)
@@ -182,10 +221,16 @@ class Evaluator {
     }
 
     private fun applyFunction(fn: MObject, args: List<MObject>): MObject {
-        if (fn !is MFunction) return newMERROR("not a function: ${fn::class.simpleName}")
-        val extendedEnv = extendFunctionEnv(fn, args)
-        val evaluated = eval(fn.body, extendedEnv)
-        return unWrapReturnValue(evaluated)
+        when (fn) {
+            is MFunction -> {
+                val extendedEnv = extendFunctionEnv(fn, args)
+                val evaluated = eval(fn.body, extendedEnv)
+                return unWrapReturnValue(evaluated)
+            }
+
+            is MBuiltinFunction -> return fn.function(args)
+            else -> return newMERROR("not a function: ${fn::class.simpleName}")
+        }
     }
 
     private fun extendFunctionEnv(fn: MFunction, args: List<MObject>): Environment {
