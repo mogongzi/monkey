@@ -11,9 +11,9 @@ class EvaluatorTest {
 
     val evaluator = Evaluator()
 
-    private val INTEGER = MInteger::class.simpleName
-    private val BOOLEAN = MBoolean::class.simpleName
-    private val STRING = MString::class.simpleName
+    private val mInteger = MInteger::class.simpleName
+    private val mBoolean = MBoolean::class.simpleName
+    private val mString = MString::class.simpleName
 
     @Test
     fun testEvalIntegerExpression() {
@@ -137,12 +137,12 @@ class EvaluatorTest {
     @Test
     fun testErrorHandling() {
         val tests = listOf(
-            "5 + true;" to "type mismatch: $INTEGER + $BOOLEAN",
-            "5 + true; 5;" to "type mismatch: $INTEGER + $BOOLEAN",
-            "-true" to "unknown operator: -$BOOLEAN",
-            "true + false;" to "unknown operator: $BOOLEAN + $BOOLEAN",
-            "5; true + false; 5" to "unknown operator: $BOOLEAN + $BOOLEAN",
-            "if (10 > 1) { true + false; }" to "unknown operator: $BOOLEAN + $BOOLEAN",
+            "5 + true;" to "type mismatch: $mInteger + $mBoolean",
+            "5 + true; 5;" to "type mismatch: $mInteger + $mBoolean",
+            "-true" to "unknown operator: -$mBoolean",
+            "true + false;" to "unknown operator: $mBoolean + $mBoolean",
+            "5; true + false; 5" to "unknown operator: $mBoolean + $mBoolean",
+            "if (10 > 1) { true + false; }" to "unknown operator: $mBoolean + $mBoolean",
             """
             if (10 > 1) {
               if (10 > 1) {
@@ -150,9 +150,9 @@ class EvaluatorTest {
               }
               return 1;
             }
-            """.trimIndent() to "unknown operator: $BOOLEAN + $BOOLEAN",
+            """.trimIndent() to "unknown operator: $mBoolean + $mBoolean",
             "foobar" to "identifier not found: foobar",
-            "\"Hello\" - \"World!\"" to "unknown operator: $STRING - $STRING",
+            "\"Hello\" - \"World!\"" to "unknown operator: $mString - $mString",
         )
 
         assertAll(tests.map { (input, expectedMsg) ->
@@ -239,6 +239,48 @@ class EvaluatorTest {
         assertInstanceOf(MString::class.java, evaluated)
         val str = evaluated as MString
         assertEquals("Hello World!", str.value)
+    }
+
+    @Test
+    fun testBuiltinFunctions() {
+        val tests = listOf(
+            "len(\"\")" to 0L,
+            "len(\"four\")" to 4L,
+            "len(\"hello world\")" to 11L,
+            "len(1)" to "argument to `len` not supported, got $mInteger",
+            "len(\"one\", \"two\")" to "wrong number of arguments. got=2, want=1",
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+
+            when (expected) {
+                is Long -> testMIntegerObject(evaluated!!, expected)
+                is String -> {
+                    assertInstanceOf(
+                        MERROR::class.java,
+                        evaluated,
+                        "object is not Error. got=${evaluated?.let { it::class.java }} ($evaluated)"
+                    )
+                    assertEquals(expected, (evaluated as MERROR).message, "wrong error message.")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testNowBuiltin() {
+        val evaluated = testEval("now()")
+        assertInstanceOf(MString::class.java, evaluated)
+        val result = (evaluated as MString).value
+        assertTrue(result.endsWith("Z"), "expected UTC timestamp, got=$result")
+    }
+
+    @Test
+    fun testNowWrongArgs() {
+        val evaluated = testEval("now(1)")
+        assertInstanceOf(MERROR::class.java, evaluated)
+        assertEquals("wrong number of arguments. got=1, want=0", (evaluated as MERROR).message)
     }
 
     private fun testMNULLObject(obj: MObject) {
