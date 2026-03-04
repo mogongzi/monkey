@@ -68,6 +68,15 @@ class StringLiteral(val token: Token, val value: String) : Expression {
 
 }
 
+class ArrayLiteral(val token: Token, var elements: List<Expression>?) : Expression {
+    override fun tokenLiteral(): String = token.literal
+    override fun string(): String = buildString {
+        append("[")
+        append(elements!!.joinToString(", ") { it.string()})
+        append("]")
+    }
+}
+
 /**
  * A `let` binding is a statement in Monkey.
  *
@@ -176,4 +185,10 @@ class CallExpression(val token: Token, var function: Expression? = null, var arg
         append(")")
     }
 
+}
+
+class IndexExpression(val token: Token, var left: Expression, var index: Expression) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = "(${left.string()}[${index.string()}])"
 }

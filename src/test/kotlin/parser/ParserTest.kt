@@ -331,6 +331,8 @@ class ParserTest {
             Test("a + add(b * c) + d", "((a + add((b * c))) + d)"),
             Test("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"),
             Test("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"),
+            Test("a * [1, 2, 3, 4][b * c] * d", "((a * ([1, 2, 3, 4][(b * c)])) * d)"),
+            Test("add(a * b[2], b[1], 2 * [1, 2][1])", "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))")
         )
 
         assertAll(
@@ -529,7 +531,7 @@ class ParserTest {
             assertEquals(
                 expectedParams.size,
                 function.parameters?.size,
-                "length parameters wrong. want ${expectedParams?.size}, got=${function.parameters?.size}"
+                "length parameters wrong. want ${expectedParams.size}, got=${function.parameters?.size}"
             )
 
             expectedParams.forEachIndexed { i, ident ->
@@ -607,6 +609,58 @@ class ParserTest {
                 assertEquals(arg, exp.arguments!![i].string(), "Argument $i wrong.")
             }
         }
+    }
+
+    @Test
+    fun testParsingArrayLiterals() {
+        val input = "[1, 2 * 2, 3 + 3]"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val array = assertInstanceOf(
+            ArrayLiteral::class.java,
+            stmt.expression!!,
+            "exp not ArrayLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(3, array.elements?.size, "array.elements.size not 3. got=${array.elements?.size}")
+        testIntegerLiteral(array.elements?.get(0), 1L)
+        testInfixExpression(array.elements?.get(1), 2, "*", 2)
+        testInfixExpression(array.elements?.get(2), 3, "+", 3)
+    }
+
+
+    @Test
+    fun testParsingIndexExpressions() {
+        val input = "myArray[1 + 1]"
+
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val indexExp = assertInstanceOf(
+            IndexExpression::class.java,
+            stmt.expression!!,
+            "exp not IndexExpression. got=${stmt.expression!!::class}"
+        )
+
+        testIdentifier(indexExp.left, "myArray")
+        testInfixExpression(indexExp.index, 1L, "+", 1L)
     }
 
     @Test

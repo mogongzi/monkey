@@ -44,6 +44,7 @@ Once configured, the flow typically looks like:
 - [x] **AST** — Define node types for expressions and statements
 - [x] **Evaluator** — Execute the AST (tree-walking interpreter)
 - [x] **REPL** — Interactive read-eval-print loop
+- [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
 - [ ] **Extending the Interpreter** — String, built-in functions, array, and hashmap
 
 ### Part 2: Compiler + VM (Kotlin front-end, C back-end)
