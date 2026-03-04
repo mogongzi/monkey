@@ -42,7 +42,7 @@ data class MReturnValue(val value: MObject) : MObject {
     override fun inspect(): String = value.inspect()
 }
 
-class MERROR(val message: String) : MObject {
+class MError(val message: String) : MObject {
     override fun inspect(): String = "ERROR: $message"
 }
 
@@ -68,4 +68,13 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
 
 class MBuiltinFunction(val function: (List<MObject>) -> MObject) : MObject {
     override fun inspect(): String = "builtin function"
+}
+
+/** Wraps a Monkey array value. Uses `List` (immutable view) so structural equality is safe. */
+data class MArray(val elements: List<MObject> = emptyList()) : MObject {
+    override fun inspect(): String = buildString {
+        append("[")
+        append(elements.joinToString(", ") { it.inspect() })
+        append("]")
+    }
 }

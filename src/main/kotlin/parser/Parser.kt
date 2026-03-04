@@ -14,6 +14,7 @@ enum class Precedence {
     SUM, // +
     PRODUCT, // *
     PREFIX, // -X or !X
+    INDEX, // array[index]
     CALL; // myFunction(X)
 
     operator fun minus(n: Int): Precedence {
@@ -44,6 +45,7 @@ class Parser(private val lexer: Lexer) {
         MINUS to Precedence.SUM,
         SLASH to Precedence.PRODUCT,
         ASTERISK to Precedence.PRODUCT,
+        LBRACKET to Precedence.INDEX,
         LPAREN to Precedence.CALL,
     )
 
@@ -65,6 +67,7 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(IF, ::parseIfExpression)
         registerPrefix(FUNCTION, ::parseFunctionLiteral)
         registerPrefix(STRING, ::parseStringLiteral)
+        registerPrefix(LBRACKET, ::parseArrayLiteral)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -75,6 +78,7 @@ class Parser(private val lexer: Lexer) {
         registerInfix(LT, ::parseInfixExpression)
         registerInfix(GT, ::parseInfixExpression)
         registerInfix(LPAREN, ::parseCallExpression)
+        registerInfix(LBRACKET, ::parseIndexExpression)
     }
 
     fun registerPrefix(tokenType: TokenType, prefixParseFn: PrefixParseFn) {
@@ -373,25 +377,43 @@ class Parser(private val lexer: Lexer) {
 
     fun parseCallExpression(function: Expression): Expression {
         val exp = CallExpression(curToken, function)
-        exp.arguments = parseCallArguments()
+        exp.arguments = parseExpressionList(RPAREN)
         return exp
     }
 
-    fun parseCallArguments(): List<Expression>? {
-        val args = mutableListOf<Expression>()
-        if (peekTokenIs(RPAREN)) {
+    fun parseArrayLiteral() : Expression {
+        val array = ArrayLiteral(curToken, mutableListOf())
+        array.elements = parseExpressionList(RBRACKET)
+        return array
+    }
+
+    fun parseExpressionList(end: TokenType): List<Expression>? {
+        val list = mutableListOf<Expression>()
+        if (peekTokenIs(end)) {
             nextToken()
-            return args
+            return list
         }
         nextToken()
-        args.add(parseExpression(Precedence.LOWEST) ?: return null)
+        list.add(parseExpression(Precedence.LOWEST) ?: return null)
         while (peekTokenIs(COMMA)) {
             nextToken()
             nextToken()
-            args.add(parseExpression(Precedence.LOWEST) ?: return null)
+            list.add(parseExpression(Precedence.LOWEST) ?: return null)
         }
-        if (!expectPeek(RPAREN)) return null
-        return args
+
+        if (!expectPeek(end)) return null
+
+        return list
+    }
+
+    fun parseIndexExpression(left: Expression) : Expression? {
+        val token = curToken
+        nextToken()
+        val index = parseExpression(Precedence.LOWEST) ?: return null
+        if (!expectPeek(RBRACKET)) {
+            return null
+        }
+        return IndexExpression(token, left, index)
     }
 
     fun noPrefixParseFnError(tokenType: TokenType) {

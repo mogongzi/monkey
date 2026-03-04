@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.3.0"
     id("application")
+    id("org.graalvm.buildtools.native") version "0.10.6"
 }
 
 group = "me.ryan.interpreter"
@@ -24,6 +25,15 @@ tasks.test {
 
 application {
     mainClass.set("me.ryan.interpreter.ReplKt")
+}
+
+graalvmNative {
+    binaries {
+        named("main") {
+            mainClass.set("me.ryan.interpreter.ReplKt")
+            imageName.set("monkey")
+        }
+    }
 }
 
 tasks.named<JavaExec>("run") {

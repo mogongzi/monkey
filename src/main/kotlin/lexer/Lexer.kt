@@ -48,6 +48,8 @@ class Lexer(private val input: String) {
             ',' -> newToken(COMMA, ch)
             ';' -> newToken(SEMICOLON, ch)
             '"' -> Token(STRING, readString())
+            '[' -> newToken(LBRACKET, ch)
+            ']' -> newToken(RBRACKET, ch)
             '\u0000' -> Token(EOF, "")
             else -> {
                 if (isLetter(ch)) {

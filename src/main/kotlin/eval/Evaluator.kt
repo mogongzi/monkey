@@ -14,13 +14,15 @@ val FALSE = MBoolean(false)
 val lenFunction = object : (List<MObject>) -> MObject {
     override fun invoke(args: List<MObject>): MObject {
         if (args.size != 1) {
-            return MERROR("wrong number of arguments. got=${args.size}, want=1")
+            return MError("wrong number of arguments. got=${args.size}, want=1")
         }
         val arg = args[0]
         if (arg is MString) {
             return MInteger(arg.value.length.toLong())
+        } else if(arg is MArray) {
+            return MInteger(arg.elements.size.toLong())
         }
-        return MERROR("argument to `len` not supported, got ${arg::class.simpleName}")
+        return MError("argument to `len` not supported, got ${arg::class.simpleName}")
     }
 }
 
@@ -28,7 +30,7 @@ val lenFunction = object : (List<MObject>) -> MObject {
 var nowFunction = object : (List<MObject>) -> MObject {
     override fun invoke(args: List<MObject>): MObject {
         if (args.isNotEmpty()) {
-            return MERROR("wrong number of arguments. got=${args.size}, want=0")
+            return MError("wrong number of arguments. got=${args.size}, want=0")
         }
         return MString("${Clock.System.now()}")
     }
@@ -51,15 +53,15 @@ class Evaluator {
             is BooleanLiteral -> hostBoolToMBoolean(node.value)
             is PrefixExpression -> {
                 val right = eval(node.right!!, env)
-                if (right!! is MERROR) return right
+                if (right!! is MError) return right
                 evalPrefixExpression(node.operator, right)
             }
 
             is InfixExpression -> {
                 val left = eval(node.left!!, env)
-                if (left!! is MERROR) return left
+                if (left!! is MError) return left
                 val right = eval(node.right!!, env)
-                if (right!! is MERROR) return right
+                if (right!! is MError) return right
                 evalInfixExpression(node.operator, left, right)
             }
 
@@ -67,13 +69,13 @@ class Evaluator {
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
                 val value = eval(node.returnValue!!, env)
-                if (value!! is MERROR) return value
+                if (value!! is MError) return value
                 MReturnValue(value)
             }
 
             is LetStatement -> {
                 val value = eval(node.value!!, env)
-                if (value!! is MERROR) return value
+                if (value!! is MError) return value
                 env.set(node.name.value, value)
             }
 
@@ -87,13 +89,27 @@ class Evaluator {
 
             is CallExpression -> {
                 val function = eval(node.function!!, env)
-                if (function!! is MERROR) function
-                val args = evalExpression(node.arguments!!, env)
-                if (args.size == 1 && args[0] is MERROR) args[0]
+                if (function!! is MError) function
+                val args = evalExpressions(node.arguments!!, env)
+                if (args.size == 1 && args[0] is MError) args[0]
                 applyFunction(function, args)
             }
 
             is StringLiteral -> MString(node.value)
+
+            is ArrayLiteral -> {
+                val elements = evalExpressions(node.elements!!, env)
+                if (elements.size == 1 && elements[0] is MError) elements[0]
+                MArray(elements)
+            }
+
+            is IndexExpression -> {
+                val left = eval(node.left, env)
+                if (left is MError) return left
+                val index = eval(node.index, env)
+                if (index is MError) return index
+                evalIndexExpression(left, index)
+            }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
         }
@@ -105,7 +121,7 @@ class Evaluator {
             result = eval(statement, env)
             when (result) {
                 is MReturnValue -> return result.value
-                is MERROR -> return result
+                is MError -> return result
             }
         }
         return result
@@ -115,7 +131,7 @@ class Evaluator {
         var result: MObject? = null
         for (statement in statements) {
             result = eval(statement, env)
-            if (result is MReturnValue || result is MERROR) return result
+            if (result is MReturnValue || result is MError) return result
         }
         return result
     }
@@ -179,7 +195,7 @@ class Evaluator {
 
     private fun evalIfExpression(ie: IfExpression, env: Environment): MObject? {
         val condition = eval(ie.condition!!, env)
-        if (condition!! is MERROR) return condition
+        if (condition!! is MError) return condition
         return if (isTruthy(condition)) {
             eval(ie.consequence!!, env)
         } else if (ie.alternative != null) {
@@ -198,8 +214,8 @@ class Evaluator {
         }
     }
 
-    private fun newMERROR(format: String, vararg args: Any): MERROR {
-        return MERROR(message = String.format(format, *args))
+    private fun newMERROR(format: String, vararg args: Any): MError {
+        return MError(message = String.format(format, *args))
     }
 
     private fun evalIdentifier(node: Identifier, env: Environment): MObject {
@@ -209,11 +225,11 @@ class Evaluator {
 
     }
 
-    private fun evalExpression(expressions: List<Expression>, env: Environment): List<MObject> {
+    private fun evalExpressions(expressions: List<Expression>, env: Environment): List<MObject> {
         val results = mutableListOf<MObject>()
         for (exp in expressions) {
             val evaluated = eval(exp, env)
-            if (evaluated!! is MERROR) return listOf(evaluated)
+            if (evaluated!! is MError) return listOf(evaluated)
             results.add(evaluated)
         }
 
@@ -242,6 +258,20 @@ class Evaluator {
     private fun unWrapReturnValue(obj: MObject?): MObject {
         if (obj is MReturnValue) return obj.value
         return obj ?: MNULL
+    }
+
+    private fun evalIndexExpression(left: MObject?, index: MObject?): MObject {
+        return when {
+            left is MArray && index is MInteger -> evalArrayIndexExpression(left, index)
+            else -> MError("index operator not supported: ${left!!::class.simpleName}")
+        }
+    }
+
+    private fun evalArrayIndexExpression(left: MArray, index: MInteger): MObject {
+        val idx = index.value.toInt()
+        val max = left.elements.size - 1
+        if (idx !in 0..max) return MNULL
+        return left.elements[idx]
     }
 
     private fun hostBoolToMBoolean(input: Boolean): MBoolean = if (input) TRUE else FALSE

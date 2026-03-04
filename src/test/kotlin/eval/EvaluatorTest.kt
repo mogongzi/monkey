@@ -159,10 +159,10 @@ class EvaluatorTest {
             Executable {
                 val evaluated = testEval(input)
                 assertInstanceOf(
-                    MERROR::class.java, evaluated,
+                    MError::class.java, evaluated,
                     "No error object returned for '$input'. got=${evaluated?.let { it::class.java }}($evaluated)"
                 )
-                assertEquals(expectedMsg, (evaluated as MERROR).message)
+                assertEquals(expectedMsg, (evaluated as MError).message)
             }
         })
     }
@@ -249,6 +249,7 @@ class EvaluatorTest {
             "len(\"hello world\")" to 11L,
             "len(1)" to "argument to `len` not supported, got $mInteger",
             "len(\"one\", \"two\")" to "wrong number of arguments. got=2, want=1",
+            "len([1, 2, 3])" to 3L,
         )
 
         for ((input, expected) in tests) {
@@ -258,11 +259,11 @@ class EvaluatorTest {
                 is Long -> testMIntegerObject(evaluated!!, expected)
                 is String -> {
                     assertInstanceOf(
-                        MERROR::class.java,
+                        MError::class.java,
                         evaluated,
                         "object is not Error. got=${evaluated?.let { it::class.java }} ($evaluated)"
                     )
-                    assertEquals(expected, (evaluated as MERROR).message, "wrong error message.")
+                    assertEquals(expected, (evaluated as MError).message, "wrong error message.")
                 }
             }
         }
@@ -279,8 +280,46 @@ class EvaluatorTest {
     @Test
     fun testNowWrongArgs() {
         val evaluated = testEval("now(1)")
-        assertInstanceOf(MERROR::class.java, evaluated)
-        assertEquals("wrong number of arguments. got=1, want=0", (evaluated as MERROR).message)
+        assertInstanceOf(MError::class.java, evaluated)
+        assertEquals("wrong number of arguments. got=1, want=0", (evaluated as MError).message)
+    }
+
+    @Test
+    fun testArrayLiterals() {
+        val input = "[1, 2 * 2, 3 + 3]"
+        val evaluated = testEval(input)
+        val result = evaluated as MArray
+        assertInstanceOf(MArray::class.java, result, "object is not Array. got=${result::class.simpleName}")
+        assertEquals(3, result.elements.size, "array has wrong num of elements. got=${result.elements.size}")
+
+        testMIntegerObject(result.elements[0], 1L)
+        testMIntegerObject(result.elements[1], 4L)
+        testMIntegerObject(result.elements[2], 6L)
+    }
+
+    @Test
+    fun testArrayIndexExpressions() {
+        val tests = listOf(
+            "[1, 2, 3][0]" to 1L,
+            "[1, 2, 3][1]" to 2L,
+            "[1, 2, 3][2]" to 3L,
+            "let i = 0; [1][i];" to 1L,
+            "[1, 2, 3][1 + 1];" to 3L,
+            "let myArray = [1, 2, 3]; myArray[2];" to 3L,
+            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];" to 6L,
+            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]" to 2L,
+            "[1, 2, 3][3]" to null,
+            "[1, 2, 3][-1]" to null,
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            if (expected != null) {
+                testMIntegerObject(evaluated!!, expected)
+            } else {
+                testMNULLObject(evaluated!!)
+            }
+        }
     }
 
     private fun testMNULLObject(obj: MObject) {
