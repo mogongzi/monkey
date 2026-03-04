@@ -25,3 +25,33 @@ Tasks Breakdown (Number Literal Support Scope)
 - Tests to record (so behavior is fixed)
     - Accept: 0, 123, 99999
     - Reject (expected failure path): 1.23, 0x10, 077, 0o77, 0b10, .5, 5.
+
+## REPL Multi-line Input Support
+
+Current REPL uses `readlnOrNull()` which reads one line at a time — multi-line code (pasting or typing) fails.
+
+Goal: IRB-style behavior — Enter on incomplete input shows continuation prompt, Enter on complete input submits.
+
+### Key Concepts
+
+- **Terminal cannot distinguish paste newlines from Enter** — both send the same byte (`\r`/`\n`)
+- Two concerns to solve:
+    1. **Mechanism**: intercepting Enter keypress to decide submit vs. newline insertion
+    2. **Policy**: determining whether input is "complete"
+- **Bracketed paste mode**: modern terminals wrap pasted text in escape sequences (`\e[200~`...`\e[201~`), allowing the app to treat pasted newlines as text insertion — but not universally supported
+
+### Solution: JLine + Monkey Parser
+
+- **JLine** (JVM equivalent of Python's `prompt_toolkit`): provides terminal control, key handling, continuation prompts, history, line editing
+- JLine's `Parser` interface: `parse()` throws `EOFError` → keep reading (show continuation prompt); returns → submit
+- **Completeness detection**: use the real Monkey `Parser` instead of simple bracket-counting
+    - Parse the accumulated input; if errors contain `"got EOF instead"` → incomplete (throw `EOFError`)
+    - Real syntax errors (not EOF-related) → submit and let REPL show the error
+    - This is the same approach IRB uses (Ruby's Ripper parser) and IPython uses (`code.compile_command()`)
+
+### Implementation Steps (deferred to after finishing Book 1)
+
+1. Add dependency: `org.jline:jline:3.28.0`
+2. Create `MonkeyLineParser` implementing JLine's `Parser` — delegates to Monkey `Parser` for completeness check
+3. Replace `readlnOrNull()` with JLine `LineReader` (configured with `SECONDARY_PROMPT_PATTERN` = `".. "`)
+4. Remove `standardInput = System.in` workaround from `build.gradle.kts`
