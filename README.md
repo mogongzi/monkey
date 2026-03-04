@@ -43,6 +43,7 @@ Once configured, the flow typically looks like:
 - [x] **Parser** — Build Abstract Syntax Tree (AST) from tokens
 - [x] **AST** — Define node types for expressions and statements
 - [x] **Evaluator** — Execute the AST (tree-walking interpreter)
+- [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
 - [x] **REPL** — Interactive read-eval-print loop
 - [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
 - [ ] **Extending the Interpreter** — String, built-in functions, array, and hashmap
@@ -64,7 +65,9 @@ Once configured, the flow typically looks like:
 - [x] If/else expressions (`if (x > 5) { 1 }`, `if (x) { x } else { 0 }`)
 - [x] Return statements (`return 10;`, `return add(1, 2);`)
 - [x] Error handling (type mismatches, unknown operators)
-- [ ] String (`"hello world"`, `"hello" + " " + "world"`)
-- [ ] Built-in functions (`len("hello")`, `puts("hi")`)
+- [x] String (`"hello world"`, `"hello" + " " + "world"`)
+- [x] Built-in functions (`len("hello")`, `len([1,2])`, `now()`)
 - [x] First-class functions and closures (`let add = fn(x, y) { x + y };`, `fn(x) { fn(y) { x + y } }`)
-- [ ] Array and hashmap (`[1, 2, 3]`, `{"key": "value"}`)
+- [x] Array and index expressions (`[1, 2, 3]`, `arr[0]`)
+- [ ] Hashmap (`{"key": "value"}`)
+- [ ] More built-in functions (`puts`, `first`, `last`, `rest`, `push`)

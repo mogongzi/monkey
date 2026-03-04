@@ -36,11 +36,75 @@ var nowFunction = object : (List<MObject>) -> MObject {
     }
 }
 
+val firstFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.size != 1) {
+            return MError("wrong number of arguments. got=${args.size},, want=1")
+        }
+        val arg = args[0]
+        return if (arg is MArray) {
+            if (arg.elements.isNotEmpty()) {
+                arg.elements[0]
+            } else {
+                MNULL
+            }
+        } else {
+            MError("argument to `first` must be MARRAY, got ${arg::class.simpleName}")
+        }
+    }
+}
+
+val lastFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.size != 1) {
+            return MError("wrong number of arguments. got=${args.size},, want=1")
+        }
+        val arg = args[0]
+        return if (arg is MArray) {
+            if (arg.elements.isNotEmpty()) {
+                arg.elements[arg.elements.size - 1]
+            } else {
+                MNULL
+            }
+        } else {
+            MError("argument to `last` must be MARRAY, got ${arg::class.simpleName}")
+        }
+    }
+}
+
+val restFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.size != 1) {
+            return MError("wrong number of arguments. got=${args.size},, want=1")
+        }
+        val arg = args[0]
+        if (arg !is MArray) return MError("argument to `rest` must be MArray, got ${arg::class.simpleName}")
+        if (arg.elements.isEmpty()) return MNULL
+        val newElements = arg.elements.drop(1) // copies into a new List
+        return MArray(newElements)
+    }
+}
+
+val pushFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        if (args.size != 2) {
+            return MError("wrong number of arguments. got=${args.size},want=2")
+        }
+        val arg = args[0]
+        if (arg !is MArray) return MError("argument to `push` must be MArray, got ${arg::class.simpleName}")
+        return MArray(arg.elements + args[1])
+    }
+}
+
 // Registry of built-in functions. evalIdentifier checks this after the user environment,
 // so user-defined bindings (e.g., let len = 42) shadow builtins.
 val builtins = mapOf<String, MBuiltinFunction>(
     "len" to MBuiltinFunction(function = lenFunction),
-    "now" to MBuiltinFunction(function = nowFunction)
+    "now" to MBuiltinFunction(function = nowFunction),
+    "first" to MBuiltinFunction(function = firstFunction),
+    "last" to MBuiltinFunction(function = lastFunction),
+    "rest" to MBuiltinFunction(function = restFunction),
+    "push" to MBuiltinFunction(function = pushFunction),
 )
 
 class Evaluator {
