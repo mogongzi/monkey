@@ -68,11 +68,11 @@ class StringLiteral(val token: Token, val value: String) : Expression {
 
 }
 
-class ArrayLiteral(val token: Token, var elements: List<Expression>?) : Expression {
+class ArrayLiteral(val token: Token, val elements: List<Expression>) : Expression {
     override fun tokenLiteral(): String = token.literal
     override fun string(): String = buildString {
         append("[")
-        append(elements!!.joinToString(", ") { it.string()})
+        append(elements.joinToString(", ") { it.string() })
         append("]")
     }
 }
@@ -84,7 +84,7 @@ class ArrayLiteral(val token: Token, var elements: List<Expression>?) : Expressi
  * until the semicolon (like the book), so there may be no parsed RHS yet. Later, when
  * `parseExpression(...)` is implemented, `value` should be set to a real expression node.
  */
-class LetStatement(val token: Token, var name: Identifier, var value: Expression? = null) : Statement {
+class LetStatement(val token: Token, val name: Identifier, val value: Expression) : Statement {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
@@ -92,38 +92,38 @@ class LetStatement(val token: Token, var name: Identifier, var value: Expression
         append(" ")
         append(name.string())
         append(" = ")
-        value?.let { append(it.string()) }
+        append(value.string())
         append(";")
     }
 }
 
-class ReturnStatement(val token: Token, var returnValue: Expression? = null) : Statement {
+class ReturnStatement(val token: Token, val returnValue: Expression) : Statement {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
         append(tokenLiteral())
         append(" ")
-        returnValue?.let { append(it.string()) }
+        append(returnValue.string())
         append(";")
     }
 }
 
-class ExpressionStatement(val token: Token, var expression: Expression? = null) : Statement {
+class ExpressionStatement(val token: Token, val expression: Expression) : Statement {
     override fun tokenLiteral(): String = token.literal
-    override fun string(): String = expression?.string().orEmpty()
+    override fun string(): String = expression.string()
 }
 
-class PrefixExpression(val token: Token, val operator: String, var right: Expression? = null) : Expression {
+class PrefixExpression(val token: Token, val operator: String, val right: Expression) : Expression {
     override fun tokenLiteral(): String = token.literal
 
-    override fun string(): String = "(${operator}${right?.string() ?: ""})"
+    override fun string(): String = "(${operator}${right.string()})"
 }
 
-class InfixExpression(val token: Token, val operator: String, var left: Expression?, var right: Expression? = null) :
+class InfixExpression(val token: Token, val operator: String, val left: Expression, val right: Expression) :
     Expression {
     override fun tokenLiteral(): String = token.literal
 
-    override fun string(): String = "(${left?.string()} $operator ${right?.string() ?: ""})"
+    override fun string(): String = "(${left.string()} $operator ${right.string()})"
 }
 
 class BooleanLiteral(val token: Token, val value: Boolean) : Expression {
@@ -146,17 +146,17 @@ class BlockStatement(val token: Token, val statements: MutableList<Statement>) :
 
 class IfExpression(
     val token: Token,
-    var condition: Expression? = null,
-    var consequence: BlockStatement? = null,
-    var alternative: BlockStatement? = null
+    val condition: Expression,
+    val consequence: BlockStatement,
+    val alternative: BlockStatement?
 ) : Expression {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
         append("if")
-        append(condition?.string())
+        append(condition.string())
         append(" ")
-        append(consequence?.string())
+        append(consequence.string())
         alternative?.let {
             append("else ")
             append(it.string())
@@ -164,31 +164,42 @@ class IfExpression(
     }
 }
 
-class FunctionLiteral(val token: Token, var parameters: List<Identifier>? = null, var body: BlockStatement? = null) : Expression {
+class FunctionLiteral(val token: Token, val parameters: List<Identifier>, val body: BlockStatement) : Expression {
     override fun tokenLiteral(): String = token.literal
     override fun string(): String = buildString {
         append(tokenLiteral())
         append("(")
-        append(parameters?.joinToString(",") { it.string() })
+        append(parameters.joinToString(",") { it.string() })
         append(")")
-        append(body?.string())
+        append(body.string())
     }
 }
 
-class CallExpression(val token: Token, var function: Expression? = null, var arguments: List<Expression>? = null) : Expression {
+class CallExpression(val token: Token, val function: Expression, val arguments: List<Expression>) : Expression {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = buildString {
-        append(function?.string())
+        append(function.string())
         append("(")
-        append(arguments?.joinToString(", ") { it.string() })
+        append(arguments.joinToString(", ") { it.string() })
         append(")")
     }
 
 }
 
-class IndexExpression(val token: Token, var left: Expression, var index: Expression) : Expression {
+class IndexExpression(val token: Token, val left: Expression, val index: Expression) : Expression {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = "(${left.string()}[${index.string()}])"
+}
+
+class HashLiteral(val token: Token, val pairs: Map<Expression, Expression>) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        append("{")
+        append(pairs.entries.joinToString(", ") { (key, value) -> "${key.string()}:${value.string()}" })
+        append("}")
+    }
+
 }

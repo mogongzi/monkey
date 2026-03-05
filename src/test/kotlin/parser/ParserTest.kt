@@ -664,6 +664,101 @@ class ParserTest {
     }
 
     @Test
+    fun testParsingHashLiteralsStringKeys() {
+        val input = """{"one": 1, "two": 2, "three": 3}"""
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val hash = assertInstanceOf(
+            HashLiteral::class.java,
+            stmt.expression!!,
+            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(3, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")
+        val expected = mapOf("one" to 1L, "two" to 2L, "three" to 3L)
+        for ((key, value) in hash.pairs) {
+            assertInstanceOf(
+                StringLiteral::class.java,
+                key,
+                "key is not StringLiteral. got=${key.javaClass.name}"
+            )
+            val expectedValue = expected[key.string()]
+            testIntegerLiteral(value, expectedValue!!)
+        }
+    }
+
+    @Test
+    fun testParsingEmptyHashLiteral() {
+        val input = "{}"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val hash = assertInstanceOf(
+            HashLiteral::class.java,
+            stmt.expression!!,
+            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(0, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")
+    }
+
+    @Test
+    fun testParsingHashLiteralsWithExpressions() {
+        val input = """{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"""
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val hash = assertInstanceOf(
+            HashLiteral::class.java,
+            stmt.expression!!,
+            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+        )
+
+        assertEquals(3, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")
+
+        val tests = mapOf<String, (Expression) -> Unit>(
+            "one" to { e -> testInfixExpression(e, 0, "+", 1) },
+            "two" to { e -> testInfixExpression(e, 10, "-", 8) },
+            "three" to { e -> testInfixExpression(e, 15, "/", 5) },
+        )
+
+        for ((key, value) in hash.pairs) {
+            assertInstanceOf(
+                StringLiteral::class.java,
+                key,
+                "key is not StringLiteral. got=${key.javaClass.name}"
+            )
+            val testFunc = tests[key.string()] ?: fail("No test function for key ${key.string()} found")
+            testFunc.invoke(value)
+        }
+    }
+
+    @Test
     fun testDebug() {
         val lexer = Lexer("1 + 2 + 3")
         val parser = Parser(lexer)

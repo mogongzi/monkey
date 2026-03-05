@@ -47,6 +47,7 @@ const val NOT_EQ = "!="
 // Delimiters
 const val COMMA = ","
 const val SEMICOLON = ";"
+const val COLON = ":"
 
 const val LPAREN = "("
 const val RPAREN = ")"
