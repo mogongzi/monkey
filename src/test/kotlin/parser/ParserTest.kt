@@ -160,8 +160,8 @@ class ParserTest {
 
         val ident = assertInstanceOf(
             Identifier::class.java,
-            stmt.expression!!,
-            "exp not Identifier. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not Identifier. got=${stmt.expression::class}"
         )
 
         assertEquals("foobar", ident.value, "ident.value not foobar. got=${ident.value}")
@@ -188,8 +188,8 @@ class ParserTest {
 
         val literal = assertInstanceOf(
             IntegerLiteral::class.java,
-            stmt.expression!!,
-            "exp not IntegerLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not IntegerLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(5L, literal.value, "ident.value not 5. got=${literal.value}")
@@ -213,8 +213,8 @@ class ParserTest {
 
         val literal = assertInstanceOf(
             StringLiteral::class.java,
-            stmt.expression!!,
-            "exp not StringLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not StringLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals("hello world", literal.value, "literal.value not \"hello world\", got=${literal.value}")
@@ -247,8 +247,8 @@ class ParserTest {
 
             val exp = assertInstanceOf(
                 PrefixExpression::class.java,
-                stmt.expression!!,
-                "exp not PrefixExpression. got=${stmt.expression!!::class}"
+                stmt.expression,
+                "exp not PrefixExpression. got=${stmt.expression::class}"
             )
 
             if (exp.operator != operator) {
@@ -368,8 +368,8 @@ class ParserTest {
 
         val literal = assertInstanceOf(
             BooleanLiteral::class.java,
-            stmt.expression!!,
-            "exp not IntegerLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not IntegerLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(true, literal.value, "Boolean.value not true. got=${literal.value}")
@@ -394,17 +394,17 @@ class ParserTest {
         )
         val exp = assertInstanceOf(
             IfExpression::class.java,
-            stmt.expression!!,
-            "exp not IfExpression. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not IfExpression. got=${stmt.expression::class}"
         )
         testInfixExpression(exp.condition, "x", "<", "y")
-        if (exp.consequence?.statements?.size != 1) {
-            fail("consequence is not 1 statements. got ${exp.consequence?.statements?.size}")
+        if (exp.consequence.statements.size != 1) {
+            fail("consequence is not 1 statements. got ${exp.consequence.statements.size}")
         }
         val consequence = assertInstanceOf(
             ExpressionStatement::class.java,
-            exp.consequence!!.statements[0],
-            "Statements[0] is not ExpressionStatement. got=${exp.consequence!!.statements[0]::class}"
+            exp.consequence.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.consequence.statements[0]::class}"
         )
         testIdentifier(consequence.expression, "x")
         assertNull(exp.alternative, "exp.alternative was not null. got=${exp.alternative}")
@@ -428,17 +428,17 @@ class ParserTest {
         )
         val exp = assertInstanceOf(
             IfExpression::class.java,
-            stmt.expression!!,
-            "exp not IfExpression. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not IfExpression. got=${stmt.expression::class}"
         )
         testInfixExpression(exp.condition, "x", "<", "y")
-        if (exp.consequence?.statements?.size != 1) {
-            fail("consequence is not 1 statements. got ${exp.consequence?.statements?.size}")
+        if (exp.consequence.statements.size != 1) {
+            fail("consequence is not 1 statements. got ${exp.consequence.statements.size}")
         }
         val consequence = assertInstanceOf(
             ExpressionStatement::class.java,
-            exp.consequence!!.statements[0],
-            "Statements[0] is not ExpressionStatement. got=${exp.consequence!!.statements[0]::class}"
+            exp.consequence.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.consequence.statements[0]::class}"
         )
         testIdentifier(consequence.expression, "x")
 
@@ -448,8 +448,8 @@ class ParserTest {
 
         val alternative = assertInstanceOf(
             ExpressionStatement::class.java,
-            exp.alternative!!.statements[0],
-            "Statements[0] is not ExpressionStatement. got=${exp.alternative!!.statements[0]::class}"
+            exp.alternative.statements[0],
+            "Statements[0] is not ExpressionStatement. got=${exp.alternative.statements[0]::class}"
         )
         testIdentifier(alternative.expression, "y")
     }
@@ -474,29 +474,29 @@ class ParserTest {
 
         val function = assertInstanceOf(
             FunctionLiteral::class.java,
-            stmt.expression!!,
-            "stmt.expression is not FunctionLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "stmt.expression is not FunctionLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(
             2,
-            function.parameters?.size,
-            "function literal parameters wrong. want 2, got=${function.parameters?.size}"
+            function.parameters.size,
+            "function literal parameters wrong. want 2, got=${function.parameters.size}"
         )
 
-        testLiteralExpression(function.parameters?.get(0), "x")
-        testLiteralExpression(function.parameters?.get(1), "y")
+        testLiteralExpression(function.parameters[0], "x")
+        testLiteralExpression(function.parameters[1], "y")
 
         assertEquals(
             1,
-            function.body?.statements?.size,
-            "function.body.statements has not 1 statements. got=${function.body?.statements?.size}"
+            function.body.statements.size,
+            "function.body.statements has not 1 statements. got=${function.body.statements.size}"
         )
 
         val bodyStmt = assertInstanceOf(
             ExpressionStatement::class.java,
-            function.body?.statements[0],
-            "function body stmt is not ExpressionStatement. got=${function.body?.statements?.get(0)!!::class}"
+            function.body.statements[0],
+            "function body stmt is not ExpressionStatement. got=${function.body.statements.get(0)::class}"
         )
 
         testInfixExpression(bodyStmt.expression, "x", "+", "y")
@@ -524,18 +524,18 @@ class ParserTest {
 
             val function = assertInstanceOf(
                 FunctionLiteral::class.java,
-                stmt.expression!!,
-                "stmt.expression is not FunctionLiteral. got=${stmt.expression!!::class}"
+                stmt.expression,
+                "stmt.expression is not FunctionLiteral. got=${stmt.expression::class}"
             )
 
             assertEquals(
                 expectedParams.size,
-                function.parameters?.size,
-                "length parameters wrong. want ${expectedParams.size}, got=${function.parameters?.size}"
+                function.parameters.size,
+                "length parameters wrong. want ${expectedParams.size}, got=${function.parameters.size}"
             )
 
             expectedParams.forEachIndexed { i, ident ->
-                testLiteralExpression(function.parameters?.get(i), ident)
+                testLiteralExpression(function.parameters.get(i), ident)
             }
         }
     }
@@ -562,15 +562,15 @@ class ParserTest {
 
         val exp = assertInstanceOf(
             CallExpression::class.java,
-            stmt.expression!!,
-            "stmt.expression is not CallExpression. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "stmt.expression is not CallExpression. got=${stmt.expression::class}"
         )
 
         testIdentifier(exp.function, "add")
-        assertEquals(3, exp.arguments?.size, "wrong length of arguments. got=${exp.arguments?.size}")
-        testLiteralExpression(exp.arguments!![0], 1)
-        testInfixExpression(exp.arguments!![1], 2, "*", 3)
-        testInfixExpression(exp.arguments!![2], 4, "+", 5)
+        assertEquals(3, exp.arguments.size, "wrong length of arguments. got=${exp.arguments.size}")
+        testLiteralExpression(exp.arguments[0], 1)
+        testInfixExpression(exp.arguments[1], 2, "*", 3)
+        testInfixExpression(exp.arguments[2], 4, "+", 5)
     }
 
     @Test
@@ -594,19 +594,19 @@ class ParserTest {
 
             val exp = assertInstanceOf(
                 CallExpression::class.java,
-                stmt.expression!!,
-                "stmt.expression is not CallExpression. got=${stmt.expression!!::class}"
+                stmt.expression,
+                "stmt.expression is not CallExpression. got=${stmt.expression::class}"
             )
 
             testIdentifier(exp.function, expectedIdent)
             assertEquals(
                 expectedArgs.size,
-                exp.arguments?.size,
-                "wrong number of arguments. Expected ${expectedArgs.size}, got=${exp.arguments?.size}"
+                exp.arguments.size,
+                "wrong number of arguments. Expected ${expectedArgs.size}, got=${exp.arguments.size}"
             )
 
             expectedArgs.forEachIndexed { i, arg ->
-                assertEquals(arg, exp.arguments!![i].string(), "Argument $i wrong.")
+                assertEquals(arg, exp.arguments[i].string(), "Argument $i wrong.")
             }
         }
     }
@@ -627,14 +627,14 @@ class ParserTest {
 
         val array = assertInstanceOf(
             ArrayLiteral::class.java,
-            stmt.expression!!,
-            "exp not ArrayLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not ArrayLiteral. got=${stmt.expression::class}"
         )
 
-        assertEquals(3, array.elements?.size, "array.elements.size not 3. got=${array.elements?.size}")
-        testIntegerLiteral(array.elements?.get(0), 1L)
-        testInfixExpression(array.elements?.get(1), 2, "*", 2)
-        testInfixExpression(array.elements?.get(2), 3, "+", 3)
+        assertEquals(3, array.elements.size, "array.elements.size not 3. got=${array.elements.size}")
+        testIntegerLiteral(array.elements.get(0), 1L)
+        testInfixExpression(array.elements.get(1), 2, "*", 2)
+        testInfixExpression(array.elements.get(2), 3, "+", 3)
     }
 
 
@@ -655,8 +655,8 @@ class ParserTest {
 
         val indexExp = assertInstanceOf(
             IndexExpression::class.java,
-            stmt.expression!!,
-            "exp not IndexExpression. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp not IndexExpression. got=${stmt.expression::class}"
         )
 
         testIdentifier(indexExp.left, "myArray")
@@ -679,8 +679,8 @@ class ParserTest {
 
         val hash = assertInstanceOf(
             HashLiteral::class.java,
-            stmt.expression!!,
-            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp is not HashLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(3, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")
@@ -712,8 +712,8 @@ class ParserTest {
 
         val hash = assertInstanceOf(
             HashLiteral::class.java,
-            stmt.expression!!,
-            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp is not HashLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(0, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")
@@ -735,8 +735,8 @@ class ParserTest {
 
         val hash = assertInstanceOf(
             HashLiteral::class.java,
-            stmt.expression!!,
-            "exp is not HashLiteral. got=${stmt.expression!!::class}"
+            stmt.expression,
+            "exp is not HashLiteral. got=${stmt.expression::class}"
         )
 
         assertEquals(3, hash.pairs.size, "hash.pairs has wrong length. got=${hash.pairs.size}")

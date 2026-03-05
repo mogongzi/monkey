@@ -21,21 +21,30 @@ interface MObject {
     fun inspect(): String
 }
 
-/** Wraps a 64-bit integer value produced by evaluating an integer literal or expression. */
-data class MInteger(val value: Long) : MObject {
-    override fun inspect(): String = value.toString()
+data class HashKey(val type: String, val value: Long)
+
+interface Hashable {
+    fun hashKey(): HashKey
 }
 
-data class MBoolean(val value: Boolean) : MObject {
+/** Wraps a 64-bit integer value produced by evaluating an integer literal or expression. */
+data class MInteger(val value: Long) : MObject, Hashable {
     override fun inspect(): String = value.toString()
+    override fun hashKey(): HashKey = HashKey("MInteger", value)
+}
+
+data class MBoolean(val value: Boolean) : MObject, Hashable {
+    override fun inspect(): String = value.toString()
+    override fun hashKey(): HashKey = HashKey("MBoolean", if (value) 1 else 0)
 }
 
 data object MNULL : MObject {
     override fun inspect(): String = "null"
 }
 
-data class MString(val value: String) : MObject {
+data class MString(val value: String) : MObject, Hashable {
     override fun inspect(): String = value
+    override fun hashKey(): HashKey = HashKey("MString", value.hashCode().toLong())
 }
 
 data class MReturnValue(val value: MObject) : MObject {
@@ -76,5 +85,15 @@ data class MArray(val elements: List<MObject> = emptyList()) : MObject {
         append("[")
         append(elements.joinToString(", ") { it.inspect() })
         append("]")
+    }
+}
+
+data class HashPair(val key: MObject, val value: MObject)
+
+data class MHash(val pairs: Map<HashKey, HashPair>) : MObject {
+    override fun inspect(): String = buildString {
+        val entries = pairs.values.joinToString(", ") {
+            "${it.key.inspect()}: ${it.value.inspect()}"
+        }
     }
 }
