@@ -98,7 +98,7 @@ val pushFunction = object : (List<MObject>) -> MObject {
 
 // Registry of built-in functions. evalIdentifier checks this after the user environment,
 // so user-defined bindings (e.g., let len = 42) shadow builtins.
-val builtins = mapOf<String, MBuiltinFunction>(
+val builtins = mapOf(
     "len" to MBuiltinFunction(function = lenFunction),
     "now" to MBuiltinFunction(function = nowFunction),
     "first" to MBuiltinFunction(function = firstFunction),
@@ -112,19 +112,19 @@ class Evaluator {
     fun eval(node: Node, env: Environment): MObject? {
         return when (node) {
             is Program -> evalProgram(node.statements, env)
-            is ExpressionStatement -> node.expression?.let { eval(it, env) }
+            is ExpressionStatement -> node.expression.let { eval(it, env) }
             is IntegerLiteral -> MInteger(node.value)
             is BooleanLiteral -> hostBoolToMBoolean(node.value)
             is PrefixExpression -> {
-                val right = eval(node.right!!, env)
+                val right = eval(node.right, env)
                 if (right!! is MError) return right
                 evalPrefixExpression(node.operator, right)
             }
 
             is InfixExpression -> {
-                val left = eval(node.left!!, env)
+                val left = eval(node.left, env)
                 if (left!! is MError) return left
-                val right = eval(node.right!!, env)
+                val right = eval(node.right, env)
                 if (right!! is MError) return right
                 evalInfixExpression(node.operator, left, right)
             }
@@ -132,13 +132,13 @@ class Evaluator {
             is BlockStatement -> evalBlockStatement(node.statements, env)
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
-                val value = eval(node.returnValue!!, env)
+                val value = eval(node.returnValue, env)
                 if (value!! is MError) return value
                 MReturnValue(value)
             }
 
             is LetStatement -> {
-                val value = eval(node.value!!, env)
+                val value = eval(node.value, env)
                 if (value!! is MError) return value
                 env.set(node.name.value, value)
             }
@@ -148,13 +148,13 @@ class Evaluator {
             }
 
             is FunctionLiteral -> {
-                MFunction(node.parameters!!, node.body!!, env)
+                MFunction(node.parameters, node.body, env)
             }
 
             is CallExpression -> {
-                val function = eval(node.function!!, env)
-                if (function!! is MError) function
-                val args = evalExpressions(node.arguments!!, env)
+                val function = eval(node.function, env)
+                if (function!! is MError) return function
+                val args = evalExpressions(node.arguments, env)
                 if (args.size == 1 && args[0] is MError) args[0]
                 applyFunction(function, args)
             }
@@ -162,7 +162,7 @@ class Evaluator {
             is StringLiteral -> MString(node.value)
 
             is ArrayLiteral -> {
-                val elements = evalExpressions(node.elements!!, env)
+                val elements = evalExpressions(node.elements, env)
                 if (elements.size == 1 && elements[0] is MError) elements[0]
                 MArray(elements)
             }
@@ -258,12 +258,12 @@ class Evaluator {
     }
 
     private fun evalIfExpression(ie: IfExpression, env: Environment): MObject? {
-        val condition = eval(ie.condition!!, env)
+        val condition = eval(ie.condition, env)
         if (condition!! is MError) return condition
         return if (isTruthy(condition)) {
-            eval(ie.consequence!!, env)
+            eval(ie.consequence, env)
         } else if (ie.alternative != null) {
-            eval(ie.alternative!!, env)
+            eval(ie.alternative, env)
         } else {
             MNULL
         }

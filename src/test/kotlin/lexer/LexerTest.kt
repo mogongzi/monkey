@@ -66,6 +66,7 @@ class LexerTest {
             "hello\nworld"
             "say \"hi\""
             [1, 2];
+            {"foo": "bar"}
         """.trimIndent()
 
         val tests = listOf(
@@ -152,6 +153,11 @@ class LexerTest {
             TestCase(INT, "2"),
             TestCase(RBRACKET, "]"),
             TestCase(SEMICOLON, ";"),
+            TestCase(LBRACE, "{"),
+            TestCase(STRING, "foo"),
+            TestCase(COLON, ":"),
+            TestCase(STRING, "bar"),
+            TestCase(RBRACE, "}"),
             TestCase(EOF, "")
         )
 
