@@ -430,7 +430,7 @@ class Parser(private val lexer: Lexer) {
             if (!peekTokenIs(RBRACE) && !expectPeek(COMMA)) return null
         }
 
-        if (!expectPeek(COLON)) return null
+        if (!expectPeek(RBRACE)) return null
         return HashLiteral(token, pairs)
     }
 
