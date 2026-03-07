@@ -39,3 +39,7 @@ graalvmNative {
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
 }
+
+tasks.register("compile") {
+    dependsOn("compileKotlin")
+}
