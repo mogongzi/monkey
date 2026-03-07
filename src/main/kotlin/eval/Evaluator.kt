@@ -1,5 +1,6 @@
 package me.ryan.interpreter.eval
 
+import jdk.internal.org.jline.keymap.KeyMap.key
 import me.ryan.interpreter.ast.*
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -19,7 +20,7 @@ val lenFunction = object : (List<MObject>) -> MObject {
         val arg = args[0]
         if (arg is MString) {
             return MInteger(arg.value.length.toLong())
-        } else if(arg is MArray) {
+        } else if (arg is MArray) {
             return MInteger(arg.elements.size.toLong())
         }
         return MError("argument to `len` not supported, got ${arg::class.simpleName}")
@@ -109,64 +110,55 @@ val builtins = mapOf(
 
 class Evaluator {
 
-    fun eval(node: Node, env: Environment): MObject? {
+    fun eval(node: Node, env: Environment): MObject {
         return when (node) {
             is Program -> evalProgram(node.statements, env)
-            is ExpressionStatement -> node.expression.let { eval(it, env) }
+            is ExpressionStatement -> eval(node.expression, env)
             is IntegerLiteral -> MInteger(node.value)
             is BooleanLiteral -> hostBoolToMBoolean(node.value)
             is PrefixExpression -> {
                 val right = eval(node.right, env)
-                if (right!! is MError) return right
+                if (right is MError) return right
                 evalPrefixExpression(node.operator, right)
             }
-
             is InfixExpression -> {
                 val left = eval(node.left, env)
-                if (left!! is MError) return left
+                if (left is MError) return left
                 val right = eval(node.right, env)
-                if (right!! is MError) return right
+                if (right is MError) return right
                 evalInfixExpression(node.operator, left, right)
             }
-
             is BlockStatement -> evalBlockStatement(node.statements, env)
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
                 val value = eval(node.returnValue, env)
-                if (value!! is MError) return value
+                if (value is MError) return value
                 MReturnValue(value)
             }
-
             is LetStatement -> {
                 val value = eval(node.value, env)
-                if (value!! is MError) return value
+                if (value is MError) return value
                 env.set(node.name.value, value)
             }
-
             is Identifier -> {
                 evalIdentifier(node, env)
             }
-
             is FunctionLiteral -> {
                 MFunction(node.parameters, node.body, env)
             }
-
             is CallExpression -> {
                 val function = eval(node.function, env)
-                if (function!! is MError) return function
+                if (function is MError) return function
                 val args = evalExpressions(node.arguments, env)
                 if (args.size == 1 && args[0] is MError) args[0]
                 applyFunction(function, args)
             }
-
             is StringLiteral -> MString(node.value)
-
             is ArrayLiteral -> {
                 val elements = evalExpressions(node.elements, env)
                 if (elements.size == 1 && elements[0] is MError) elements[0]
                 MArray(elements)
             }
-
             is IndexExpression -> {
                 val left = eval(node.left, env)
                 if (left is MError) return left
@@ -174,13 +166,16 @@ class Evaluator {
                 if (index is MError) return index
                 evalIndexExpression(left, index)
             }
+            is HashLiteral -> {
+                evalHashLiteral(node, env)
+            }
             // Fail fast: don't default to Monkey's NULL object (MNULL) here; it would hide missing evaluator cases.
             else -> error("unhandled node: ${node::class}")
         }
     }
 
-    private fun evalProgram(statements: List<Statement>, env: Environment): MObject? {
-        var result: MObject? = null
+    private fun evalProgram(statements: List<Statement>, env: Environment): MObject {
+        var result: MObject = MNULL
         for (statement in statements) {
             result = eval(statement, env)
             when (result) {
@@ -191,8 +186,8 @@ class Evaluator {
         return result
     }
 
-    private fun evalBlockStatement(statements: List<Statement>, env: Environment): MObject? {
-        var result: MObject? = null
+    private fun evalBlockStatement(statements: List<Statement>, env: Environment): MObject {
+        var result: MObject = MNULL
         for (statement in statements) {
             result = eval(statement, env)
             if (result is MReturnValue || result is MError) return result
@@ -200,11 +195,11 @@ class Evaluator {
         return result
     }
 
-    private fun evalPrefixExpression(operator: String, right: MObject?): MObject? {
+    private fun evalPrefixExpression(operator: String, right: MObject): MObject {
         return when (operator) {
-            "!" -> evalBangOperatorExpression(right!!)
-            "-" -> evalMinusPrefixOperatorExpression(right!!)
-            else -> newMERROR("unknown operator: $operator ${right!!::class}")
+            "!" -> evalBangOperatorExpression(right)
+            "-" -> evalMinusPrefixOperatorExpression(right)
+            else -> newMERROR("unknown operator: $operator ${right::class}")
         }
     }
 
@@ -257,9 +252,9 @@ class Evaluator {
         return MString("${left.value}${right.value}")
     }
 
-    private fun evalIfExpression(ie: IfExpression, env: Environment): MObject? {
+    private fun evalIfExpression(ie: IfExpression, env: Environment): MObject {
         val condition = eval(ie.condition, env)
-        if (condition!! is MError) return condition
+        if (condition is MError) return condition
         return if (isTruthy(condition)) {
             eval(ie.consequence, env)
         } else if (ie.alternative != null) {
@@ -293,7 +288,7 @@ class Evaluator {
         val results = mutableListOf<MObject>()
         for (exp in expressions) {
             val evaluated = eval(exp, env)
-            if (evaluated!! is MError) return listOf(evaluated)
+            if (evaluated is MError) return listOf(evaluated)
             results.add(evaluated)
         }
 
@@ -319,15 +314,16 @@ class Evaluator {
         return env
     }
 
-    private fun unWrapReturnValue(obj: MObject?): MObject {
+    private fun unWrapReturnValue(obj: MObject): MObject {
         if (obj is MReturnValue) return obj.value
-        return obj ?: MNULL
+        return obj
     }
 
-    private fun evalIndexExpression(left: MObject?, index: MObject?): MObject {
+    private fun evalIndexExpression(left: MObject, index: MObject): MObject {
         return when {
             left is MArray && index is MInteger -> evalArrayIndexExpression(left, index)
-            else -> MError("index operator not supported: ${left!!::class.simpleName}")
+            left is MHash -> evalHashIndexExpression(left, index)
+            else -> MError("index operator not supported: ${left::class.simpleName}")
         }
     }
 
@@ -336,6 +332,28 @@ class Evaluator {
         val max = left.elements.size - 1
         if (idx !in 0..max) return MNULL
         return left.elements[idx]
+    }
+
+    private fun evalHashLiteral(node: HashLiteral, env: Environment): MObject {
+        val pairs = mutableMapOf<HashKey, HashPair>();
+        for ((keyNode, valueNode) in node.pairs) {
+            val key = eval(keyNode, env)
+            if (key is MError) return key
+
+            val hashKey = key as? Hashable ?: return newMERROR("unusable as hash key: ${key::class.simpleName}")
+            val value = eval(valueNode, env)
+            if (value is MError) return value
+
+            val hashed = hashKey.hashKey()
+            pairs[hashed] = HashPair(key, value)
+        }
+        return MHash(pairs)
+    }
+
+    private fun evalHashIndexExpression(left: MHash, index: MObject): MObject {
+        val key = index as? Hashable ?: return newMERROR("unusable as hash key: ${index::class.simpleName}")
+        val pair = left.pairs[key.hashKey()] ?: return MNULL
+        return pair.value
     }
 
     private fun hostBoolToMBoolean(input: Boolean): MBoolean = if (input) TRUE else FALSE

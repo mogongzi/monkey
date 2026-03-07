@@ -153,6 +153,7 @@ class EvaluatorTest {
             """.trimIndent() to "unknown operator: $mBoolean + $mBoolean",
             "foobar" to "identifier not found: foobar",
             "\"Hello\" - \"World!\"" to "unknown operator: $mString - $mString",
+            "{\"name\": \"Monkey\"}[fn(x) { x }];" to "unusable as hash key: MFunction",
         )
 
         assertAll(tests.map { (input, expectedMsg) ->
@@ -310,6 +311,64 @@ class EvaluatorTest {
             "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]" to 2L,
             "[1, 2, 3][3]" to null,
             "[1, 2, 3][-1]" to null,
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            if (expected != null) {
+                testMIntegerObject(evaluated!!, expected)
+            } else {
+                testMNULLObject(evaluated!!)
+            }
+        }
+    }
+
+    @Test
+    fun testHashLiterals() {
+        val input = """
+            let two = "two";
+            {
+                "one": 10 - 9,
+                two: 1 + 1,
+                "thr" + "ee": 6 / 2,
+                4: 4,
+                true: 5,
+                false: 6
+            }
+        """.trimIndent()
+        val evaluated = testEval(input)
+        val result = evaluated as MHash
+        assertInstanceOf(MHash::class.java, evaluated, "eval didn't return MHash. got=${result::class.simpleName}")
+        val expected = mapOf(
+            MString("one").hashKey() to 1L,
+            MString("two").hashKey() to 2L,
+            MString("three").hashKey() to 3L,
+            MInteger(4).hashKey() to 4L,
+            TRUE.hashKey() to 5L,
+            FALSE.hashKey() to 6L,
+        )
+
+        assertEquals(expected.size, result.pairs.size, "Hash has wrong num of pairs. got=${result.pairs.size}")
+        for((expectedKey, expectedValue) in expected) {
+            // Using kotlin.test.assertNotNull instead of JUnit's org.junit.jupiter.api.Assertions.assertNotNull:
+            // JUnit's version returns Unit (void), so casting its result (e.g., `as HashPair`) always fails.
+            // Kotlin's version is generic — fun <T : Any> assertNotNull(actual: T?): T — and returns the
+            // non-null value directly, giving us smart-cast to HashPair without an explicit cast.
+            val pair = kotlin.test.assertNotNull(result.pairs[expectedKey], "no pair for given key in Pairs")
+            testMIntegerObject(pair.value, expectedValue)
+        }
+    }
+
+    @Test
+    fun testHashIndexExpressions() {
+        val tests = listOf(
+            "{\"foo\": 5}[\"foo\"]" to 5L,
+            "{\"foo\": 5}[\"bar\"]" to null,
+            "let key = \"foo\"; {\"foo\": 5}[key]" to 5L,
+            "{}[\"foo\"]" to null,
+            "{5: 5}[5]" to 5L,
+            "{true: 5}[true]" to 5L,
+            "{false: 5}[false]" to 5L,
         )
 
         for ((input, expected) in tests) {

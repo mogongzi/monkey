@@ -92,8 +92,11 @@ data class HashPair(val key: MObject, val value: MObject)
 
 data class MHash(val pairs: Map<HashKey, HashPair>) : MObject {
     override fun inspect(): String = buildString {
+        append("{")
         val entries = pairs.values.joinToString(", ") {
             "${it.key.inspect()}: ${it.value.inspect()}"
         }
+        append(entries)
+        append("}")
     }
 }
