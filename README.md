@@ -9,6 +9,7 @@ Option 1: Gradle (dev loop)
 ./gradlew run --console=plain
 ./gradlew run --console=plain --args="--lexer"    # Start REPL in lexer-only mode
 ./gradlew run --console=plain --args="--parser"   # Start REPL in parser-only mode
+./gradlew run --console=plain --args="--eval"     # Start REPL in eval mode (print results)
 ```
 
 Option 2: Installable app distribution (zip/tar + launch script)
@@ -46,7 +47,7 @@ Once configured, the flow typically looks like:
 - [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
 - [x] **REPL** — Interactive read-eval-print loop
 - [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
-- [ ] **Extending the Interpreter** — String, built-in functions, array, and hashmap
+- [x] **Extending the Interpreter** — String, built-in functions, array, and hashmap
 
 ### Part 2: Compiler + VM (Kotlin front-end, C back-end)
 
@@ -69,5 +70,5 @@ Once configured, the flow typically looks like:
 - [x] Built-in functions (`len("hello")`, `len([1,2])`, `now()`)
 - [x] First-class functions and closures (`let add = fn(x, y) { x + y };`, `fn(x) { fn(y) { x + y } }`)
 - [x] Array and index expressions (`[1, 2, 3]`, `arr[0]`)
-- [ ] Hashmap (`{"key": "value"}`)
-- [ ] More built-in functions (`puts`, `first`, `last`, `rest`, `push`)
+- [x] Hashmap (`{"key": "value"}`)
+- [x] Built-in functions (`puts`, `first`, `last`, `rest`, `push`)

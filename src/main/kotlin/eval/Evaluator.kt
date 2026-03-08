@@ -1,6 +1,5 @@
 package me.ryan.interpreter.eval
 
-import jdk.internal.org.jline.keymap.KeyMap.key
 import me.ryan.interpreter.ast.*
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -97,6 +96,15 @@ val pushFunction = object : (List<MObject>) -> MObject {
     }
 }
 
+val putsFunction = object : (List<MObject>) -> MObject {
+    override fun invoke(args: List<MObject>): MObject {
+        args.forEach {
+            println(it.inspect())
+        }
+        return MNULL
+    }
+}
+
 // Registry of built-in functions. evalIdentifier checks this after the user environment,
 // so user-defined bindings (e.g., let len = 42) shadow builtins.
 val builtins = mapOf(
@@ -106,6 +114,7 @@ val builtins = mapOf(
     "last" to MBuiltinFunction(function = lastFunction),
     "rest" to MBuiltinFunction(function = restFunction),
     "push" to MBuiltinFunction(function = pushFunction),
+    "puts" to MBuiltinFunction(function = putsFunction),
 )
 
 class Evaluator {

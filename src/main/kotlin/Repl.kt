@@ -11,6 +11,7 @@ private const val PROMPT = ">> "
 fun main(args: Array<String>) {
     val lexerMode = args.contains("--lexer")
     val parserMode = args.contains("--parser")
+    val evalMode = args.contains("--eval")
     val env = Environment()
     println("🐒 Monkey REPL")
     while (true) {
@@ -18,6 +19,7 @@ fun main(args: Array<String>) {
         System.out.flush()
 
         val line = readlnOrNull() ?: return
+        if (line == "exit") return
 
         if (lexerMode) {
             println("--- Lexer ---")
@@ -42,9 +44,9 @@ fun main(args: Array<String>) {
             println(program.string())
         }
 
-        println("--- Evaluator ---")
         val evaluated = Evaluator().eval(program, env)
-        if (evaluated != null) {
+        if (evalMode) {
+            println("--- Evaluator ---")
             println(evaluated.inspect())
         }
     }
