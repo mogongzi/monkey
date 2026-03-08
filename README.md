@@ -44,10 +44,11 @@ Once configured, the flow typically looks like:
 - [x] **Parser** — Build Abstract Syntax Tree (AST) from tokens
 - [x] **AST** — Define node types for expressions and statements
 - [x] **Evaluator** — Execute the AST (tree-walking interpreter)
-- [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
-- [x] **REPL** — Interactive read-eval-print loop
+- [x] **REPL** — Interactive read-eval-print loop with JLine (syntax highlighting, multi-line input, auto-indentation)
 - [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
 - [x] **Extending the Interpreter** — String, built-in functions, array, and hashmap
+
+![Monkey Interpreter](screenshots/monkey_interpreter.png)
 
 ### Part 2: Compiler + VM (Kotlin front-end, C back-end)
 
@@ -57,6 +58,7 @@ Once configured, the flow typically looks like:
 - [ ] **Compiler** (Kotlin) — Walk the AST and emit bytecode
 - [ ] **Serializer** (Kotlin) — Write bytecode to a binary file/stream
 - [ ] **Virtual Machine** (C) — Read and execute bytecode
+- [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
 
 ## Language Features (Monkey)
 
