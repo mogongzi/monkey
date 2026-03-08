@@ -12,6 +12,8 @@ repositories {
 }
 
 dependencies {
+    implementation("org.jline:jline-reader:4.0.0")
+    implementation("org.jline:jline-terminal-ffm:4.0.0")
     testImplementation(kotlin("test"))
 }
 
@@ -24,13 +26,14 @@ tasks.test {
 }
 
 application {
-    mainClass.set("me.ryan.interpreter.ReplKt")
+    mainClass.set("me.ryan.interpreter.repl.ReplKt")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 graalvmNative {
     binaries {
         named("main") {
-            mainClass.set("me.ryan.interpreter.ReplKt")
+            mainClass.set("me.ryan.interpreter.repl.ReplKt")
             imageName.set("monkey")
         }
     }
