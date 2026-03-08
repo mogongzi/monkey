@@ -307,6 +307,9 @@ class Evaluator {
     private fun applyFunction(fn: MObject, args: List<MObject>): MObject {
         when (fn) {
             is MFunction -> {
+                if (fn.parameters.size != args.size) {
+                    return newMERROR("wrong number of arguments: expected=${fn.parameters.size}, got=${args.size}")
+                }
                 val extendedEnv = extendFunctionEnv(fn, args)
                 val evaluated = eval(fn.body, extendedEnv)
                 return unWrapReturnValue(evaluated)

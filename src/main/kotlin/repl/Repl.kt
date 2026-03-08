@@ -14,17 +14,16 @@ private const val PROMPT = ">> "
 fun main(args: Array<String>) {
     val lexerMode = args.contains("--lexer")
     val parserMode = args.contains("--parser")
-    val evalMode = args.contains("--eval")
     val env = Environment()
 
     val reader = LineReaderBuilder.builder()
         .parser(MonkeyLineParser())
         .highlighter(MonkeyHighlighter())
-        .variable(org.jline.reader.LineReader.SECONDARY_PROMPT_PATTERN, ".. ")
+        .variable(org.jline.reader.LineReader.SECONDARY_PROMPT_PATTERN, "%N.. ")
         .variable(org.jline.reader.LineReader.INDENTATION, 2)
         .build()
 
-    println("🐒 Monkey REPL")
+    println("🐒  Monkey REPL")
     while (true) {
         val line: String
         try {
@@ -59,16 +58,14 @@ fun main(args: Array<String>) {
             println(program.string())
         }
 
+        if (parserMode) println("--- Evaluator ---")
         val evaluated = Evaluator().eval(program, env)
-        if (evalMode) {
-            println("--- Evaluator ---")
-            println(evaluated.inspect())
-        }
+        println(evaluated.inspect())
     }
 }
 
 private fun printParserErrors(errors: List<String>) {
-    println("❌ Woops! We ran into some monkey business here!")
+    println("❌ Whoops! We ran into some monkey business here!")
     println(" Parser errors:")
     for (msg in errors) {
         println("\t$msg")

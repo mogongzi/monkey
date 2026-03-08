@@ -9,7 +9,6 @@ Option 1: Gradle (dev loop)
 ./gradlew run --console=plain
 ./gradlew run --console=plain --args="--lexer"    # Start REPL in lexer-only mode
 ./gradlew run --console=plain --args="--parser"   # Start REPL in parser-only mode
-./gradlew run --console=plain --args="--eval"     # Start REPL in eval mode (print results)
 ```
 
 Option 2: Installable app distribution (zip/tar + launch script)
