@@ -2,6 +2,7 @@ package me.ryan.interpreter.eval
 
 import me.ryan.interpreter.ast.BlockStatement
 import me.ryan.interpreter.ast.Identifier
+import me.ryan.interpreter.ast.Node
 
 // MObject (Monkey Object) is the internal representation of values
 // produced during evaluation of Monkey programs.
@@ -99,4 +100,8 @@ data class MHash(val pairs: Map<HashKey, HashPair>) : MObject {
         append(entries)
         append("}")
     }
+}
+
+class MQuote(val node: Node) : MObject {
+    override fun inspect(): String = "QUOTE(${node.string()})"
 }
