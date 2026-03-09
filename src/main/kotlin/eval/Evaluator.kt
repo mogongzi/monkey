@@ -156,6 +156,7 @@ class Evaluator {
                 MFunction(node.parameters, node.body, env)
             }
             is CallExpression -> {
+                if (node.function.tokenLiteral() == "quote") return quote(node.arguments[0])
                 val function = eval(node.function, env)
                 if (function is MError) return function
                 val args = evalExpressions(node.arguments, env)
@@ -369,4 +370,6 @@ class Evaluator {
     }
 
     private fun hostBoolToMBoolean(input: Boolean): MBoolean = if (input) TRUE else FALSE
+
+    private fun quote(node: Node): MObject = MQuote(node)
 }

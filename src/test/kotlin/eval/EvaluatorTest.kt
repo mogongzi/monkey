@@ -37,7 +37,7 @@ class EvaluatorTest {
 
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
-            testMIntegerObject(evaluated!!, expected)
+            testMIntegerObject(evaluated, expected)
         }
     }
 
@@ -67,7 +67,7 @@ class EvaluatorTest {
 
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
-            testMBooleanObject(evaluated!!, expected)
+            testMBooleanObject(evaluated, expected)
         }
     }
 
@@ -84,7 +84,7 @@ class EvaluatorTest {
 
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
-            testMBooleanObject(evaluated!!, expected)
+            testMBooleanObject(evaluated, expected)
         }
     }
 
@@ -103,9 +103,9 @@ class EvaluatorTest {
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
             if (expected != null) {
-                testMIntegerObject(evaluated!!, expected)
+                testMIntegerObject(evaluated, expected)
             } else {
-                testMNULLObject(evaluated!!)
+                testMNULLObject(evaluated)
             }
         }
     }
@@ -130,7 +130,7 @@ class EvaluatorTest {
 
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
-            testMIntegerObject(evaluated!!, expected)
+            testMIntegerObject(evaluated, expected)
         }
     }
 
@@ -178,7 +178,7 @@ class EvaluatorTest {
         )
 
         for ((input, expected) in tests) {
-            testMIntegerObject(testEval(input)!!, expected)
+            testMIntegerObject(testEval(input), expected)
         }
     }
 
@@ -188,7 +188,7 @@ class EvaluatorTest {
 
         val evaluated = testEval(input)
         assertInstanceOf(
-            MFunction::class.java, evaluated, "object is not Function. got=${evaluated!!::class.java}"
+            MFunction::class.java, evaluated, "object is not Function. got=${evaluated::class.java}"
         )
         val fn = evaluated as MFunction
         assertEquals(1, fn.parameters.size, "function has wrong parameters. Parameters=${fn.parameters.size}")
@@ -220,7 +220,7 @@ class EvaluatorTest {
         )
 
         for ((input, expected) in tests) {
-            testMIntegerObject(testEval(input)!!, expected)
+            testMIntegerObject(testEval(input), expected)
         }
     }
 
@@ -257,7 +257,7 @@ class EvaluatorTest {
             val evaluated = testEval(input)
 
             when (expected) {
-                is Long -> testMIntegerObject(evaluated!!, expected)
+                is Long -> testMIntegerObject(evaluated, expected)
                 is String -> {
                     assertInstanceOf(
                         MError::class.java,
@@ -316,9 +316,9 @@ class EvaluatorTest {
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
             if (expected != null) {
-                testMIntegerObject(evaluated!!, expected)
+                testMIntegerObject(evaluated, expected)
             } else {
-                testMNULLObject(evaluated!!)
+                testMNULLObject(evaluated)
             }
         }
     }
@@ -349,7 +349,7 @@ class EvaluatorTest {
         )
 
         assertEquals(expected.size, result.pairs.size, "Hash has wrong num of pairs. got=${result.pairs.size}")
-        for((expectedKey, expectedValue) in expected) {
+        for ((expectedKey, expectedValue) in expected) {
             // Using kotlin.test.assertNotNull instead of JUnit's org.junit.jupiter.api.Assertions.assertNotNull:
             // JUnit's version returns Unit (void), so casting its result (e.g., `as HashPair`) always fails.
             // Kotlin's version is generic — fun <T : Any> assertNotNull(actual: T?): T — and returns the
@@ -374,10 +374,35 @@ class EvaluatorTest {
         for ((input, expected) in tests) {
             val evaluated = testEval(input)
             if (expected != null) {
-                testMIntegerObject(evaluated!!, expected)
+                testMIntegerObject(evaluated, expected)
             } else {
-                testMNULLObject(evaluated!!)
+                testMNULLObject(evaluated)
             }
+        }
+    }
+
+    @Test
+    fun testQuote() {
+        val tests = listOf(
+            "quote(5)" to "5",
+            "quote(foobar)" to "foobar",
+            "quote(5 + 8)" to "(5 + 8)",
+            "quote(foobar + barfoo)" to "(foobar + barfoo)",
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            val quote = assertInstanceOf(
+                MQuote::class.java,
+                evaluated,
+                "expected MQuote. got=${evaluated::class.simpleName}"
+            )
+            assertNotNull(quote.node, "quote.node is null")
+            assertEquals(
+                expected,
+                quote.node.string(),
+                "not equal. got=${quote.node.string()}, want=${quote.node.string()}"
+            )
         }
     }
 
@@ -385,7 +410,7 @@ class EvaluatorTest {
         assertEquals(MNULL, obj, "object is not NULL. got=${obj::class} ($obj)")
     }
 
-    private fun testEval(input: String): MObject? {
+    private fun testEval(input: String): MObject {
         val lexer = Lexer(input)
         val parser = Parser(lexer)
         val program = parser.parseProgram()
