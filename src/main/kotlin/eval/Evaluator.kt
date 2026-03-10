@@ -3,7 +3,6 @@ package me.ryan.interpreter.eval
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.modify.modify
 import me.ryan.interpreter.token.Token
-import me.ryan.interpreter.token.TokenType
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 

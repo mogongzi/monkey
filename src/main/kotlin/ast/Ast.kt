@@ -65,7 +65,6 @@ class StringLiteral(val token: Token, val value: String) : Expression {
     override fun tokenLiteral(): String = token.literal
 
     override fun string(): String = value
-
 }
 
 class ArrayLiteral(val token: Token, val elements: List<Expression>) : Expression {
@@ -141,7 +140,6 @@ class BlockStatement(val token: Token, val statements: MutableList<Statement>) :
             append(statement.string())
         }
     }
-
 }
 
 class IfExpression(
@@ -184,7 +182,6 @@ class CallExpression(val token: Token, val function: Expression, val arguments: 
         append(arguments.joinToString(", ") { it.string() })
         append(")")
     }
-
 }
 
 class IndexExpression(val token: Token, val left: Expression, val index: Expression) : Expression {
@@ -201,5 +198,16 @@ class HashLiteral(val token: Token, val pairs: Map<Expression, Expression>) : Ex
         append(pairs.entries.joinToString(", ") { (key, value) -> "${key.string()}:${value.string()}" })
         append("}")
     }
+}
 
+class MacroLiteral(val token: Token, val parameters: List<Identifier>, val body: BlockStatement) : Expression {
+    override fun tokenLiteral(): String = token.literal
+
+    override fun string(): String = buildString {
+        append(tokenLiteral())
+        append("(")
+        append(parameters.joinToString(", ") { it.string() })
+        append(") ")
+        append(body.string())
+    }
 }

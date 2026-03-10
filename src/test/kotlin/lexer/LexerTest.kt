@@ -67,6 +67,7 @@ class LexerTest {
             "say \"hi\""
             [1, 2];
             {"foo": "bar"}
+            macro(x, y) { x + y; };
         """.trimIndent()
 
         val tests = listOf(
@@ -158,7 +159,20 @@ class LexerTest {
             TestCase(COLON, ":"),
             TestCase(STRING, "bar"),
             TestCase(RBRACE, "}"),
-            TestCase(EOF, "")
+            TestCase(MACRO, "macro"),
+            TestCase(LPAREN, "("),
+            TestCase(IDENT, "x"),
+            TestCase(COMMA, ","),
+            TestCase(IDENT, "y"),
+            TestCase(RPAREN, ")"),
+            TestCase(LBRACE, "{"),
+            TestCase(IDENT, "x"),
+            TestCase(PLUS, "+"),
+            TestCase(IDENT, "y"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(RBRACE, "}"),
+            TestCase(SEMICOLON, ";"),
+            TestCase(EOF, ""),
         )
 
         val l = Lexer(input)
