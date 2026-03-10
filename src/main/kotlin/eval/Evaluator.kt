@@ -1,6 +1,9 @@
 package me.ryan.interpreter.eval
 
 import me.ryan.interpreter.ast.*
+import me.ryan.interpreter.modify.modify
+import me.ryan.interpreter.token.Token
+import me.ryan.interpreter.token.TokenType
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -130,6 +133,7 @@ class Evaluator {
                 if (right is MError) return right
                 evalPrefixExpression(node.operator, right)
             }
+
             is InfixExpression -> {
                 val left = eval(node.left, env)
                 if (left is MError) return left
@@ -137,6 +141,7 @@ class Evaluator {
                 if (right is MError) return right
                 evalInfixExpression(node.operator, left, right)
             }
+
             is BlockStatement -> evalBlockStatement(node.statements, env)
             is IfExpression -> evalIfExpression(node, env)
             is ReturnStatement -> {
@@ -144,31 +149,37 @@ class Evaluator {
                 if (value is MError) return value
                 MReturnValue(value)
             }
+
             is LetStatement -> {
                 val value = eval(node.value, env)
                 if (value is MError) return value
                 env.set(node.name.value, value)
             }
+
             is Identifier -> {
                 evalIdentifier(node, env)
             }
+
             is FunctionLiteral -> {
                 MFunction(node.parameters, node.body, env)
             }
+
             is CallExpression -> {
-                if (node.function.tokenLiteral() == "quote") return quote(node.arguments[0])
+                if (node.function.tokenLiteral() == "quote") return quote(node.arguments[0], env)
                 val function = eval(node.function, env)
                 if (function is MError) return function
                 val args = evalExpressions(node.arguments, env)
                 if (args.size == 1 && args[0] is MError) args[0]
                 applyFunction(function, args)
             }
+
             is StringLiteral -> MString(node.value)
             is ArrayLiteral -> {
                 val elements = evalExpressions(node.elements, env)
                 if (elements.size == 1 && elements[0] is MError) elements[0]
                 MArray(elements)
             }
+
             is IndexExpression -> {
                 val left = eval(node.left, env)
                 if (left is MError) return left
@@ -176,6 +187,7 @@ class Evaluator {
                 if (index is MError) return index
                 evalIndexExpression(left, index)
             }
+
             is HashLiteral -> {
                 evalHashLiteral(node, env)
             }
@@ -371,5 +383,29 @@ class Evaluator {
 
     private fun hostBoolToMBoolean(input: Boolean): MBoolean = if (input) TRUE else FALSE
 
-    private fun quote(node: Node): MObject = MQuote(node)
+    private fun quote(node: Node, env: Environment): MObject {
+        val newNode = evalUnquoteCalls(node, env)
+        return MQuote(newNode)
+    }
+
+    private fun evalUnquoteCalls(quoted: Node, env: Environment): Node {
+        return modify(quoted) { node ->
+            if (node !is CallExpression) return@modify node
+            if (node.function.tokenLiteral() != "unquote") return@modify node
+            if (node.arguments.size != 1) return@modify node
+
+            val unquoted = eval(node.arguments[0], env)
+            convertObjectToAstNode(unquoted)
+        }
+    }
+
+    private fun convertObjectToAstNode(obj: MObject): Node {
+        return when (obj) {
+            is MInteger -> IntegerLiteral(Token("INT", "${obj.value}"), obj.value)
+            is MBoolean -> BooleanLiteral(Token(if (obj.value) "TRUE" else "FALSE", "${obj.value}"), obj.value)
+            is MQuote -> obj.node
+            else -> error("cannot convert ${obj::class.simpleName} to AST node")
+        }
+    }
+
 }
