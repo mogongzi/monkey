@@ -55,3 +55,25 @@ Goal: IRB-style behavior — Enter on incomplete input shows continuation prompt
 2. Create `MonkeyLineParser` implementing JLine's `Parser` — delegates to Monkey `Parser` for completeness check
 3. Replace `readlnOrNull()` with JLine `LineReader` (configured with `SECONDARY_PROMPT_PATTERN` = `".. "`)
 4. Remove `standardInput = System.in` workaround from `build.gradle.kts`
+
+## ast.Modify: Error Handling & Performance
+
+### Error Handling (Type Casts)
+
+- Go's `ast.Modify` uses `_` to ignore failed type assertions — silent failures the author acknowledges as a shortcut.
+- Kotlin's `as` (unsafe cast) throws `ClassCastException` on failure — fail-fast, which is preferable.
+- Safe cast (`as?`) with `?: error("...")` gives the same fail-fast with a descriptive message, but adds verbosity for little practical benefit here since the modifier contract ensures types are preserved.
+
+### Performance: Unnecessary Object Allocation
+
+- `modify` **visits every node** in the AST and **creates new objects for every node**, even when nothing changed.
+- Optimization: check if children actually changed; if not, return the original node (structural sharing).
+- Full traversal is unavoidable — `unquote` could appear anywhere in the tree, so every branch must be inspected.
+- Acceptable tradeoff for a learning interpreter with small ASTs; production systems handle macro expansion differently (e.g., during parsing).
+
+### quote / unquote Flow
+
+1. `quote(...)` hits `CallExpression` in the evaluator → dispatches to `quote()` method.
+2. `quote()` passes the AST node through `modify` before wrapping it in `MQuote`.
+3. The modifier function looks for `CallExpression` nodes named `"unquote"` — evaluates their argument and replaces the node with the result.
+4. All other nodes pass through unchanged (`else -> n`).

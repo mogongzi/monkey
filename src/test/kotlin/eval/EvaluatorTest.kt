@@ -161,7 +161,7 @@ class EvaluatorTest {
                 val evaluated = testEval(input)
                 assertInstanceOf(
                     MError::class.java, evaluated,
-                    "No error object returned for '$input'. got=${evaluated?.let { it::class.java }}($evaluated)"
+                    "No error object returned for '$input'. got=${evaluated.let { it::class.java }}($evaluated)"
                 )
                 assertEquals(expectedMsg, (evaluated as MError).message)
             }
@@ -262,7 +262,7 @@ class EvaluatorTest {
                     assertInstanceOf(
                         MError::class.java,
                         evaluated,
-                        "object is not Error. got=${evaluated?.let { it::class.java }} ($evaluated)"
+                        "object is not Error. got=${evaluated.let { it::class.java }} ($evaluated)"
                     )
                     assertEquals(expected, (evaluated as MError).message, "wrong error message.")
                 }
@@ -411,8 +411,14 @@ class EvaluatorTest {
         val tests = listOf(
             "quote(unquote(4))" to "4",
             "quote(unquote(4 + 4))" to "8",
-            "quote(8 + unquote(4 + 4))" to "8 + 8",
-            "quote(unquote(4 + 4) + 8)" to "8 + 8",
+            "quote(8 + unquote(4 + 4))" to "(8 + 8)",
+            "quote(unquote(4 + 4) + 8)" to "(8 + 8)",
+            "let foobar = 8;quote(foobar)" to "foobar",
+            "let foobar = 8;quote(unquote(foobar))" to "8",
+            "quote(unquote(true))" to "true",
+            "quote(unquote(true == false))" to "false",
+            "quote(unquote(quote(4 + 4)))" to "(4 + 4)",
+            "let quotedInfixExpression = quote(4 + 4);quote(unquote(4 + 4) + unquote(quotedInfixExpression))" to "(8 + (4 + 4))",
         )
 
         for ((input, expected) in tests) {
