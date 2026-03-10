@@ -406,6 +406,31 @@ class EvaluatorTest {
         }
     }
 
+    @Test
+    fun testQuoteUnQuote() {
+        val tests = listOf(
+            "quote(unquote(4))" to "4",
+            "quote(unquote(4 + 4))" to "8",
+            "quote(8 + unquote(4 + 4))" to "8 + 8",
+            "quote(unquote(4 + 4) + 8)" to "8 + 8",
+        )
+
+        for ((input, expected) in tests) {
+            val evaluated = testEval(input)
+            val quote = assertInstanceOf(
+                MQuote::class.java,
+                evaluated,
+                "expected MQuote. got=${evaluated::class.simpleName}"
+            )
+            assertNotNull(quote.node, "quote.node is null")
+            assertEquals(
+                expected,
+                quote.node.string(),
+                "not equal. got=${quote.node.string()}, want=${expected}"
+            )
+        }
+    }
+
     private fun testMNULLObject(obj: MObject) {
         assertEquals(MNULL, obj, "object is not NULL. got=${obj::class} ($obj)")
     }
