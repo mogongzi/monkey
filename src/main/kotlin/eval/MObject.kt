@@ -105,3 +105,11 @@ data class MHash(val pairs: Map<HashKey, HashPair>) : MObject {
 class MQuote(val node: Node) : MObject {
     override fun inspect(): String = "QUOTE(${node.string()})"
 }
+
+class MMacro(val parameters: List<Identifier>, val body: BlockStatement, val env: Environment) : MObject {
+    override fun inspect(): String = buildString {
+        append("macro(${parameters.joinToString(", ") { it.string() }}) {\n")
+        append(body.string())
+        append("\n}")
+    }
+}

@@ -69,6 +69,7 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(STRING, ::parseStringLiteral)
         registerPrefix(LBRACKET, ::parseArrayLiteral)
         registerPrefix(LBRACE, ::parseHashLiteral)
+        registerPrefix(MACRO, ::parseMacroLiteral)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
@@ -432,6 +433,15 @@ class Parser(private val lexer: Lexer) {
 
         if (!expectPeek(RBRACE)) return null
         return HashLiteral(token, pairs)
+    }
+
+    fun parseMacroLiteral(): Expression? {
+        val token = curToken
+        if (!expectPeek(LPAREN)) return null
+        val parameters = parseFunctionParameters() ?: return null
+        if (!expectPeek(LBRACE)) return null
+        val body = parseBlockStatment()
+        return MacroLiteral(token, parameters, body)
     }
 
     fun noPrefixParseFnError(tokenType: TokenType) {

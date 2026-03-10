@@ -1,5 +1,7 @@
 package me.ryan.interpreter.token
 
+import me.ryan.interpreter.eval.MArray
+
 typealias TokenType = String
 
 data class Token(val type: TokenType, val literal: String) {
@@ -13,7 +15,8 @@ data class Token(val type: TokenType, val literal: String) {
             "else" to ELSE,
             "return" to RETURN,
             "true" to TRUE,
-            "false" to FALSE
+            "false" to FALSE,
+            "macro" to MACRO,
         )
 
         fun lookupIdent(ident: String): TokenType {
@@ -29,6 +32,9 @@ const val EOF = "EOF"
 const val IDENT = "IDENT"
 const val INT = "INT"
 const val STRING = "STRING"
+
+// Marco
+const val MACRO = "MACRO"
 
 // Operators
 const val ASSIGN = "="

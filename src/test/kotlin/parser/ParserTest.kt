@@ -759,6 +759,57 @@ class ParserTest {
     }
 
     @Test
+    fun testMarcoLiteralParsing() {
+        val input = "macro(x, y) { x + y; }"
+
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        assertEquals(
+            1,
+            program.statements.size,
+            "program.statements does not contain 1 statement. got=${program.statements.size}"
+        )
+
+        val stmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            program.statements[0],
+            "stmt is not ExpressionStatement. got=${program.statements[0]::class}"
+        )
+
+        val macro = assertInstanceOf(
+            MacroLiteral::class.java,
+            stmt.expression,
+            "stmt.expression is not MacroLiteral. got=. got=${stmt.expression}"
+        )
+
+        assertEquals(
+            2,
+            macro.parameters.size,
+            "macro literal parameters wrong. want 2, got=${macro.parameters.size}"
+        )
+
+        testLiteralExpression(macro.parameters[0], "x")
+        testLiteralExpression(macro.parameters[1], "y")
+
+        assertEquals(
+            1,
+            macro.body.statements.size,
+            "macro.body.statements has not 1 statements. got=${macro.body.statements[0]::class}"
+        )
+
+        val bodyStmt = assertInstanceOf(
+            ExpressionStatement::class.java,
+            macro.body.statements[0],
+            "macro body stmt is not ExpressionStatement. got=${macro.body.statements[0]::class}"
+        )
+
+        testInfixExpression(bodyStmt.expression, "x", "+", "y")
+    }
+
+    @Test
     fun testDebug() {
         val lexer = Lexer("1 + 2 + 3")
         val parser = Parser(lexer)
