@@ -53,9 +53,9 @@ class MonkeyHighlighter : Highlighter {
     }
 
     private fun styleFor(tokenType: TokenType): AttributedStyle = when (tokenType) {
-        FUNCTION, LET, IF, ELSE, RETURN -> AttributedStyle.DEFAULT.foreground(AttributedStyle.MAGENTA).bold()
+        MACRO, QUOTE, UNQUOTE, FUNCTION, LET, IF, ELSE, RETURN -> AttributedStyle.DEFAULT.foreground(AttributedStyle.MAGENTA).bold()
         TRUE, FALSE -> AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN)
-        STRING -> AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN)
+        EXIT, STRING -> AttributedStyle.DEFAULT.foreground(AttributedStyle.GREEN)
         INT -> AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW)
         PLUS, MINUS, ASTERISK, SLASH, ASSIGN, BANG, LT, GT, EQ, NOT_EQ -> AttributedStyle.DEFAULT.foreground(AttributedStyle.RED)
         ILLEGAL -> AttributedStyle.DEFAULT.foreground(AttributedStyle.RED).bold()

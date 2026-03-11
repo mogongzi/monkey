@@ -17,6 +17,9 @@ data class Token(val type: TokenType, val literal: String) {
             "true" to TRUE,
             "false" to FALSE,
             "macro" to MACRO,
+            "quote" to QUOTE,
+            "unquote" to UNQUOTE,
+            "exit" to EXIT,
         )
 
         fun lookupIdent(ident: String): TokenType {
@@ -35,6 +38,8 @@ const val STRING = "STRING"
 
 // Marco
 const val MACRO = "MACRO"
+const val QUOTE = "QUOTE"
+const val UNQUOTE = "UNQUOTE"
 
 // Operators
 const val ASSIGN = "="
@@ -70,4 +75,5 @@ const val ELSE = "ELSE"
 const val RETURN = "RETURN"
 const val TRUE = "TRUE"
 const val FALSE = "FALSE"
+const val EXIT = "EXIT"
 
