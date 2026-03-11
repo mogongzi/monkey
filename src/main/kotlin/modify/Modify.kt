@@ -1,6 +1,5 @@
 package me.ryan.interpreter.modify
 
-import jdk.internal.org.commonmark.node.Block
 import me.ryan.interpreter.ast.ArrayLiteral
 import me.ryan.interpreter.ast.BlockStatement
 import me.ryan.interpreter.ast.Expression
