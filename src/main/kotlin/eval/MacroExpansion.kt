@@ -25,8 +25,11 @@ class MacroExpansion {
         }
 
         // Extracts the macro literal from a let statement and stores it in the environment
-        private fun addMacro(node: Statement) {
-
+        private fun addMacro(node: Statement, env: Environment) {
+            val letStatement = node as LetStatement
+            val macroLiteral = letStatement.value as MacroLiteral
+            val macro = MMacro(macroLiteral.parameters, macroLiteral.body, env)
+            env.set(letStatement.name.value, macro)
         }
 
         // Checks if a statement is a let statement whose value is a macro literal
