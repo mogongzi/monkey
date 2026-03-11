@@ -3,6 +3,7 @@ package eval
 import me.ryan.interpreter.ast.Program
 import me.ryan.interpreter.eval.Environment
 import me.ryan.interpreter.eval.MMacro
+import me.ryan.interpreter.eval.MacroExpansion
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
 import org.junit.jupiter.api.Assertions.*
@@ -20,7 +21,7 @@ class MacroExpansionTest {
         val env = Environment()
         val program = testParseProgram(input)
 
-        DefineMacros(program, env)
+        MacroExpansion.defineMacros(program, env)
 
         assertEquals(
             2, program.statements.size,
