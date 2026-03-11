@@ -55,6 +55,45 @@ class MacroExpansionTest {
         )
     }
 
+    @Test
+    fun testExpandMacros() {
+        val tests = mapOf(
+            """
+                let infixExpression = macro() { quote(1 + 2); };
+                infixExpression();
+            """.trimIndent() to "(1 + 2)",
+            """
+                let reverse = macro(a, b) { quote(unquote(b) - unquote(a)); };
+                reverse(2 + 2, 10 - 5);
+            """.trimIndent() to "(10 - 5) - (2 + 2)",
+            """
+                let unless = macro(condition, consequence, alternative) {
+                  quote(if (!(unquote(condition))) {
+                    unquote(consequence);
+                  } else {
+                    unquote(alternative);
+                  });
+                };
+                unless(10 > 5, puts("not greater"), puts("greater"));
+            """.trimIndent() to "if (!(10 > 5)) { puts(\"not greater\") } else { puts(\"greater\") }"
+        )
+
+        for (test in tests) {
+            val expected = testParseProgram(test.value)
+            val program = testParseProgram(test.key)
+
+            val env = Environment()
+            MacroExpansion.defineMacros(program, env)
+            val expanded = MacroExpansion.expandMacros(program, env)
+
+            assertEquals(
+                expected.string(),
+                expanded.string(),
+                "not equal. want=${expected.string()} got=${expanded.string()}"
+            )
+        }
+    }
+
     private fun testParseProgram(input: String): Program {
         val lexer = Lexer(input)
         val parser = Parser(lexer)

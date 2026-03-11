@@ -1,9 +1,13 @@
 package me.ryan.interpreter.eval
 
+import me.ryan.interpreter.ast.CallExpression
+import me.ryan.interpreter.ast.Identifier
 import me.ryan.interpreter.ast.LetStatement
 import me.ryan.interpreter.ast.MacroLiteral
+import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.ast.Program
 import me.ryan.interpreter.ast.Statement
+import me.ryan.interpreter.modify.modify
 
 class MacroExpansion {
     // companion object holds class-level methods (like Go's package-level functions).
@@ -36,6 +40,36 @@ class MacroExpansion {
         private fun isMacroDefinition(node: Statement): Boolean {
             val letStatement = node as? LetStatement ?: return false
             return letStatement.value is MacroLiteral
+        }
+
+        fun expandMacros(program: Program, env: Environment): Node {
+            return modify(program, { node ->
+                val exp = node as? CallExpression ?: return@modify node
+
+                val macro = isMacroCall(exp, env) ?: return@modify node
+
+                val args = quoteArgs(exp)
+                val evalEnv = extendMacroEnv(macro, args)
+                val evaluated = Evaluator().eval(macro.body, evalEnv)
+                val quote = evaluated as MQuote
+                quote.node
+            })
+        }
+
+        private fun isMacroCall(exp: CallExpression, env: Environment): MMacro? {
+            val identifier = exp.function as? Identifier ?: return null
+            val obj = env.get(identifier.value) ?: return null
+            return obj as? MMacro
+        }
+
+        private fun quoteArgs(exp: CallExpression): List<MQuote> {
+            return exp.arguments.map { arg -> MQuote(arg) }
+        }
+
+        private fun extendMacroEnv(macro: MMacro, args: List<MQuote>): Environment {
+            val extended = Environment(macro.env)
+            macro.parameters.forEachIndexed { index, identifier -> extended.set(identifier.value, args[index])}
+            return extended
         }
     }
 }

@@ -46,6 +46,7 @@ Once configured, the flow typically looks like:
 - [x] **REPL** — Interactive read-eval-print loop with JLine (syntax highlighting, multi-line input, auto-indentation)
 - [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
 - [x] **Extending the Interpreter** — String, built-in functions, array, and hashmap
+- [x] **Macro System** — Quote/unquote, macro definitions, and AST-level macro expansion
 
 ![Monkey Interpreter](screenshots/monkey_interpreter.png)
 
@@ -73,3 +74,4 @@ Once configured, the flow typically looks like:
 - [x] Array and index expressions (`[1, 2, 3]`, `arr[0]`)
 - [x] Hashmap (`{"key": "value"}`)
 - [x] Built-in functions (`puts`, `first`, `last`, `rest`, `push`)
+- [x] Macros (`let unless = macro(condition, body) { quote(if (!(unquote(condition))) { unquote(body) }); };`)

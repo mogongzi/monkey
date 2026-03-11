@@ -2,6 +2,7 @@ package me.ryan.interpreter.repl
 
 import me.ryan.interpreter.eval.Environment
 import me.ryan.interpreter.eval.Evaluator
+import me.ryan.interpreter.eval.MacroExpansion
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
 import me.ryan.interpreter.token.EOF
@@ -15,6 +16,7 @@ fun main(args: Array<String>) {
     val lexerMode = args.contains("--lexer")
     val parserMode = args.contains("--parser")
     val env = Environment()
+    val macroEnv = Environment()
 
     val reader = LineReaderBuilder.builder()
         .parser(MonkeyLineParser())
@@ -58,8 +60,11 @@ fun main(args: Array<String>) {
             println(program.string())
         }
 
+        MacroExpansion.defineMacros(program, macroEnv)
+        val expanded = MacroExpansion.expandMacros(program, macroEnv)
+
         if (parserMode) println("--- Evaluator ---")
-        val evaluated = Evaluator().eval(program, env)
+        val evaluated = Evaluator().eval(expanded, env)
         println(evaluated.inspect())
     }
 }
