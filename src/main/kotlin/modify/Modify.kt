@@ -1,21 +1,6 @@
 package me.ryan.interpreter.modify
 
-import me.ryan.interpreter.ast.ArrayLiteral
-import me.ryan.interpreter.ast.BlockStatement
-import me.ryan.interpreter.ast.Expression
-import me.ryan.interpreter.ast.ExpressionStatement
-import me.ryan.interpreter.ast.FunctionLiteral
-import me.ryan.interpreter.ast.HashLiteral
-import me.ryan.interpreter.ast.Identifier
-import me.ryan.interpreter.ast.IfExpression
-import me.ryan.interpreter.ast.IndexExpression
-import me.ryan.interpreter.ast.InfixExpression
-import me.ryan.interpreter.ast.LetStatement
-import me.ryan.interpreter.ast.Node
-import me.ryan.interpreter.ast.PrefixExpression
-import me.ryan.interpreter.ast.Program
-import me.ryan.interpreter.ast.ReturnStatement
-import me.ryan.interpreter.ast.Statement
+import me.ryan.interpreter.ast.*
 
 typealias ModifierFunc = (Node) -> Node
 
