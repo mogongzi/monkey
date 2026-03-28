@@ -70,6 +70,8 @@ class Parser(private val lexer: Lexer) {
         registerPrefix(LBRACKET, ::parseArrayLiteral)
         registerPrefix(LBRACE, ::parseHashLiteral)
         registerPrefix(MACRO, ::parseMacroLiteral)
+        registerPrefix(QUOTE, ::parseIdentifier)
+        registerPrefix(UNQUOTE, ::parseIdentifier)
 
         registerInfix(PLUS, ::parseInfixExpression)
         registerInfix(MINUS, ::parseInfixExpression)
