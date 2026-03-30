@@ -16,7 +16,38 @@ We need a bridge.
 
 This chapter is about building that bridge: a binary file format — `.mkc` — that the Kotlin compiler writes and the C VM reads. If the compiler-to-VM relationship in the book is a function call, ours is a file on disk. Think `javac` producing a `.class` file that `java` later executes. Same idea.
 
-## 1.1 — What Needs to Cross the Bridge?
+The Go book tests the compiler and VM together in a single process:
+
+```go
+func parse(input string) *ast.Program {
+    l := lexer.New(input)
+    p := parser.New(l)
+    return p.ParseProgram()
+}
+
+func testIntegerObject(expected int64, actual object.Object) error {
+    result, ok := actual.(*object.Integer)
+    if !ok {
+        return fmt.Errorf("object is not Integer. got=%T (%+v)", actual, actual)
+    }
+    if result.Value != expected {
+        return fmt.Errorf("object has wrong value. got=%d, want=%d",
+            result.Value, expected)
+    }
+    return nil
+}
+```
+
+We can't do that — our parser lives in Kotlin, our VM lives in C. But we can get close. Our testing pipeline works in two steps:
+
+1. **Kotlin compiles** Monkey source → `.mkc` file (a glue script automates this)
+2. **C tests load** the `.mkc` file → feed to VM → assert results
+
+The C tests mirror the Go tests conceptually — they verify that a Monkey program produces the expected result — but the "parse and compile" step happens externally, before the C code runs. A shell script ties the two halves together.
+
+---
+
+## 1 — What Needs to Cross the Bridge?
 
 Before we design anything, let's look at what we already have. Our `ByteCode` class holds everything the VM will need:
 
@@ -33,13 +64,17 @@ Right now, `constants` only contains `MInteger` values — 64-bit integers. Late
 
 So the question becomes: how do we serialize an `Instructions` byte array and a list of `MInteger` values into a binary file that C can read?
 
-> **🏁 Checkpoint 1:** Before writing any code, make sure you can answer these:
-> - What two things does `ByteCode` hold? (instructions and constants)
+> **🏁 Checkpoint 1:** Before writing any code, answer these without scrolling back:
+> - What two things does `ByteCode` hold?
 > - Why can't we just pass the `ByteCode` struct to the VM like the Go book does?
-> - What's the Kotlin type of `instructions`? (`UByteArray`)
-> - What's the only constant type we need to handle right now? (`MInteger`)
+> - What's the Kotlin type of `instructions`?
+> - What's the only constant type we need to handle right now?
+>
+> *(Answers: instructions and constants; because the compiler is Kotlin and the VM is C — different languages, different processes, no shared memory; `UByteArray`; `MInteger`.)*
 
-## 1.2 — Designing the Format
+---
+
+## 2 — Designing the Format
 
 We need a format that is:
 
@@ -52,10 +87,8 @@ Here's the layout:
 ```
 Offset   Size       Field
 ──────   ────────   ─────────────────────────────
-0        3 bytes    Magic number: "MKC"
-3        1 byte     Version: 0x01
 ── Constants Pool ──
-4        2 bytes    num_constants (uint16, big-endian)
+0        2 bytes    num_constants (uint16, big-endian)
   For each constant:
          1 byte     Type tag (0x01 = integer)
          N bytes    Payload (integer → 8 bytes, int64 big-endian)
@@ -66,31 +99,166 @@ Offset   Size       Field
 
 Let's walk through each piece.
 
-**The magic number** (`"MKC"`) is three ASCII bytes at the start of the file. Its job is identity — if you accidentally feed a JPEG to the VM, it won't silently try to execute pixel data. It'll see that the first three bytes aren't `M`, `K`, `C` and bail out immediately. This is a convention as old as file formats themselves: Java uses `0xCAFEBABE`, PNG uses `0x89504E47`, ELF uses `0x7F454C46`. Ours spells "MKC" for "Monkey Compiled."
+**The constants pool** begins with a 2-byte count. Why 2 bytes? A `uint16` gives us up to 65,535 constants, which is plenty for a learning language. That limit is part of the format, so the serializer should reject larger constant pools rather than silently wrapping. Each constant is then prefixed with a **type tag** — a single byte that tells the reader what follows. For integers, the tag is `0x01`, followed by 8 bytes of the value in big-endian. When we add strings later, we'll define tag `0x02`, followed by a length prefix and the string bytes. The tag-length-value pattern makes the format self-describing.
 
-**The version byte** (`0x01`) is forward-thinking. When we change the format later — and we will — the C reader can check this byte and reject versions it doesn't understand, instead of silently misinterpreting data. We start at version 1.
+**The instructions section** is the simplest part. We write a 4-byte length (how many bytes of instructions follow), then dump the raw bytecode verbatim. After those `N` bytes, the file should end; trailing junk is a format error. The bytecode is already in the correct format — the compiler's `make()` function encodes everything in big-endian, which is exactly what the C reader expects.
 
-**The constants pool** begins with a 2-byte count. Why 2 bytes? A `uint16` gives us up to 65,535 constants, which is plenty for a learning language. Each constant is then prefixed with a **type tag** — a single byte that tells the reader what follows. For integers, the tag is `0x01`, followed by 8 bytes of the value in big-endian. When we add strings later, we'll define tag `0x02`, followed by a length prefix and the string bytes. The tag-length-value pattern makes the format self-describing.
-
-**The instructions section** is the simplest part. We write a 4-byte length (how many bytes of instructions follow), then dump the raw bytecode verbatim. The bytecode is already in the correct format — the compiler's `make()` function encodes everything in big-endian, which is exactly what the C reader expects.
+**Why no magic number or version header?** Production formats like `.class` (Java's `0xCAFEBABE`) or ELF (`0x7F454C46`) use magic bytes for file identification and version fields for forward compatibility. We don't need either. Our `.mkc` files are ephemeral artifacts — generated by the Kotlin compiler, immediately consumed by the C VM, never shared or stored long-term. The glue script that ties the pipeline together already knows what it's producing and what it's feeding to the VM. Adding a header would be engineering for a problem we don't have. We can always add one later if the format needs to be self-identifying.
 
 **Why big-endian everywhere?** It's a deliberate choice. Big-endian is the network byte order convention and makes hex dumps readable (the number `256` appears as `0x01 0x00`, high byte first, just like you'd write it). More practically, Kotlin's `DataOutputStream` writes big-endian by default, and our `make()` function already encodes operands that way. Consistency across the entire file means fewer surprises.
 
-> **🏁 Checkpoint 2:** Draw the format on paper or a whiteboard. Given the input `1 + 2` (two integer constants, two `OpConstant` instructions), calculate the exact file size by hand:
-> - Header: 3 (magic) + 1 (version) = **4 bytes**
-> - Constants: 2 (count) + 2 × (1 tag + 8 value) = **20 bytes**
-> - Instructions: 4 (length) + 6 (two OpConstant instructions, 3 bytes each) = **10 bytes**
-> - **Total: 34 bytes**
+> **🏁 Checkpoint 2:** Draw the format on paper. Given the input `1 + 2` (two integer constants, two `OpConstant` instructions), **predict the exact file size** before reading further. Count each section. Write down your number.
 >
-> Keep this number in mind — you'll verify it in Checkpoint 4.
+> Then check: Constants: 2 (count) + 2 × (1 tag + 8 value) = 20. Instructions: 4 (length) + 6 (two OpConstant instructions, 3 bytes each) = 10. **Total: 30 bytes.** Keep this number — you'll verify it three more times.
 
-## 1.3 — The Kotlin Serializer
+### The `1 + 2` File, Byte by Byte
 
-Now let's write the code. We'll add a `writeTo()` extension function on `ByteCode` that writes the `.mkc` format to any `OutputStream`.
+Before writing any code, let's see what 30 bytes actually looks like. This is the complete `.mkc` file for the Monkey program `1 + 2`:
 
-Why an extension function instead of a method on `ByteCode`? Because serialization is a concern that lives at the boundary between the compiler and the outside world. `ByteCode` is a data structure — it shouldn't need to know about file formats. The extension function keeps that separation clean.
+```
+Offset  Hex                                        Decoded
+──────  ─────────────────────────────────────────  ─────────────────────────────
+ 0..1   00 02                                      2 constants
+ 2      01                                         constant[0]: tag=INTEGER
+ 3..10  00 00 00 00 00 00 00 01                    constant[0]: value=1
+11      01                                         constant[1]: tag=INTEGER
+12..19  00 00 00 00 00 00 00 02                    constant[1]: value=2
+20..23  00 00 00 06                                6 instruction bytes follow
+24..26  00 00 00                                   OpConstant 0  (push constants[0])
+27..29  00 00 01                                   OpConstant 1  (push constants[1])
+```
 
-Here's `Serializer.kt`:
+Walk through it:
+
+- **Bytes 0–1:** `00 02` — big-endian uint16. Two constants follow.
+- **Byte 2:** `01` — the type tag for `INTEGER`. This tells the reader: "the next 8 bytes are a signed 64-bit integer."
+- **Bytes 3–10:** `00 00 00 00 00 00 00 01` — the integer `1` in big-endian int64. Seven zero bytes, then `0x01`.
+- **Byte 11:** Another `01` tag. Second integer.
+- **Bytes 12–19:** `00 00 00 00 00 00 00 02` — the integer `2`.
+- **Bytes 20–23:** `00 00 00 06` — big-endian uint32. Six bytes of instructions follow.
+- **Bytes 24–26:** `00 00 00` — opcode `0x00` is `OpConstant`, followed by operand `0x0000` (index 0). Three bytes total because `OpConstant` has one 2-byte operand.
+- **Bytes 27–29:** `00 00 01` — `OpConstant` with operand `0x0001` (index 1).
+
+This is the artifact that crosses the bridge. The Kotlin serializer will produce exactly these bytes. The C reader will consume exactly these bytes. Both sides must agree on every offset, every width, every byte order. If your implementation produces a different sequence, something is wrong.
+
+> **🏁 Checkpoint 3:** Cover the hex column above. Given just the format table and the input `1 + 2`, reconstruct the byte sequence yourself on paper. Pay special attention to:
+> - How many zero bytes pad the integer `1`? (seven — it's int64, not int8)
+> - What's the big-endian encoding of `-42`? (Work it out: `~42 + 1` = `0xFFFFFFFFFFFFFFD6`)
+> - What byte does the instructions section start at? (byte 20 — after the constant count and two 9-byte constants)
+
+---
+
+## 3 — The Kotlin Serializer (Test First)
+
+We follow the same discipline we've used throughout both books: **write the test before writing the code**. The test tells us exactly what the serializer must produce. We read the bytes back with a `ByteBuffer` and verify every field.
+
+### 3.1 — The Test
+
+Create `src/test/kotlin/compiler/SerializerTest.kt`:
+
+```kotlin
+package compiler
+
+import me.ryan.interpreter.code.OpConstant
+import me.ryan.interpreter.code.make
+import me.ryan.interpreter.compiler.ByteCode
+import me.ryan.interpreter.compiler.TAG_INTEGER
+import me.ryan.interpreter.compiler.writeTo
+import me.ryan.interpreter.eval.MInteger
+import me.ryan.interpreter.eval.MObject
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+
+@OptIn(ExperimentalUnsignedTypes::class)
+class SerializerTest {
+
+    @Test
+    fun testSerializeIntegerConstants() {
+        val constants = mutableListOf<MObject>(
+            MInteger(1),
+            MInteger(2),
+        )
+        val instructions = make(OpConstant, 0) + make(OpConstant, 1)
+        val bc = ByteCode(instructions, constants)
+
+        val baos = ByteArrayOutputStream()
+        bc.writeTo(baos)
+        val bytes = baos.toByteArray()
+        val buf = ByteBuffer.wrap(bytes)  // big-endian by default
+
+        // Total file size: 20 (constants) + 10 (instructions) = 30
+        assertEquals(30, bytes.size, "total file size for '1 + 2'")
+
+        // --- Constants pool ---
+        assertEquals(2.toShort(), buf.getShort(), "num_constants")
+
+        assertEquals(TAG_INTEGER, buf.get(), "constant[0] tag")
+        assertEquals(1L, buf.getLong(), "constant[0] value")
+
+        assertEquals(TAG_INTEGER, buf.get(), "constant[1] tag")
+        assertEquals(2L, buf.getLong(), "constant[1] value")
+
+        // --- Instructions ---
+        val expectedInstructions = instructions.toByteArray()
+        assertEquals(expectedInstructions.size, buf.getInt(), "num_instruction_bytes")
+        val actualInstructions = ByteArray(expectedInstructions.size)
+        buf.get(actualInstructions)
+        assertArrayEquals(expectedInstructions, actualInstructions, "instruction bytes")
+
+        assertFalse(buf.hasRemaining(), "unexpected trailing bytes")
+    }
+
+    @Test
+    fun testSerializeEmptyProgram() {
+        val bc = ByteCode(ubyteArrayOf(), mutableListOf())
+        val baos = ByteArrayOutputStream()
+        bc.writeTo(baos)
+        val buf = ByteBuffer.wrap(baos.toByteArray())
+
+        // 0 constants, 0 instructions
+        assertEquals(0.toShort(), buf.getShort())
+        assertEquals(0, buf.getInt())
+        assertFalse(buf.hasRemaining())
+    }
+
+    @Test
+    fun testSerializeNegativeInteger() {
+        val bc = ByteCode(make(OpConstant, 0), mutableListOf(MInteger(-42)))
+        val baos = ByteArrayOutputStream()
+        bc.writeTo(baos)
+        val buf = ByteBuffer.wrap(baos.toByteArray())
+
+        assertEquals(1.toShort(), buf.getShort())
+        assertEquals(TAG_INTEGER, buf.get())
+        assertEquals(-42L, buf.getLong(), "negative integer round-trips")
+    }
+}
+```
+
+This is `ByteBuffer` acting as our test oracle. It wraps the raw bytes and lets us read them back in big-endian order — which is `ByteBuffer`'s default, and also what the format specifies. The final `assertFalse(buf.hasRemaining())` is a check that we consumed every byte — nothing extra was written.
+
+Notice how the test reads the file the same way the C code will: constant count, then each tagged constant, then instruction length and bytes. The test is essentially a Java implementation of the C reader, which gives us confidence that the C side will work.
+
+The three tests cover:
+
+1. **The happy path** — `1 + 2`, two constants, two instructions, 30 bytes total. The 30-byte assertion cross-references the hand calculation from Checkpoint 2.
+2. **The degenerate case** — empty program, zero constants, zero instructions. Six bytes total, and the C reader must handle it without crashing.
+3. **Two's complement** — negative integer `-42` must survive serialization. `DataOutputStream.writeLong(-42)` writes the 8-byte two's complement big-endian encoding, and the C reader's `read_i64()` interprets those same bits as a signed `int64_t`. On the two's-complement platforms we target, the representation is identical, so no extra conversion code is needed in practice.
+
+Run it now. It won't compile — `TAG_INTEGER` and `writeTo` don't exist yet:
+
+```
+$ ./gradlew test
+> Compilation failed: Unresolved reference: TAG_INTEGER
+```
+
+Good. Red. Now make it green.
+
+### 3.2 — The Implementation
+
+Create `src/main/kotlin/compiler/Serializer.kt`:
 
 ```kotlin
 package me.ryan.interpreter.compiler
@@ -99,18 +267,15 @@ import me.ryan.interpreter.eval.MInteger
 import java.io.DataOutputStream
 import java.io.OutputStream
 
-const val FORMAT_VERSION: Byte = 1
 const val TAG_INTEGER: Byte = 0x01
 
 @OptIn(ExperimentalUnsignedTypes::class)
 fun ByteCode.writeTo(out: OutputStream) {
-    val dos = DataOutputStream(out)
+    require(constants.size <= 0xFFFF) {
+        "Serializer: too many constants (${constants.size}); format supports at most 65535"
+    }
 
-    // --- Header ---
-    dos.writeByte('M'.code)
-    dos.writeByte('K'.code)
-    dos.writeByte('C'.code)
-    dos.writeByte(FORMAT_VERSION.toInt())
+    val dos = DataOutputStream(out)
 
     // --- Constants Pool ---
     dos.writeShort(constants.size)
@@ -135,127 +300,51 @@ fun ByteCode.writeTo(out: OutputStream) {
 }
 ```
 
-There's something nice about this code: it's almost a line-by-line transcription of the format table from section 1.2. The header is three character bytes and a version. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes. `DataOutputStream` handles big-endian encoding for us — `writeShort`, `writeInt`, and `writeLong` all produce big-endian output, which matches what our `make()` function does for operands. No manual bit-shifting needed on the Kotlin side.
+There's something nice about this code: it's almost a line-by-line transcription of the format table from section 2. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes.
 
-The `when` block on constant types currently only handles `MInteger`. That `else` branch with the exception is intentional — it's a loud failure that will tell us exactly what we forgot to handle when we add new constant types. Silent data corruption would be much worse.
+**Why an extension function?** Serialization is a concern that lives at the boundary between the compiler and the outside world. `ByteCode` is a data structure — it shouldn't need to know about file formats. The extension function keeps that separation clean.
 
-The `toByteArray()` call on `instructions` converts `UByteArray` to `ByteArray`. This is a Kotlin-specific detail — `DataOutputStream.write()` expects signed bytes, but the underlying bits are identical. A `UByte` of `0xFF` becomes a signed `Byte` of `-1`, but both are the same eight bits: `11111111`. The C reader sees the same bits regardless.
+**Why `DataOutputStream`?** It handles big-endian encoding for us — `writeShort`, `writeInt`, and `writeLong` all produce big-endian output, which matches what our `make()` function does for operands. No manual bit-shifting needed on the Kotlin side.
 
-> **🏁 Checkpoint 3 — Write it yourself:** Create `Serializer.kt` with `FORMAT_VERSION`, `TAG_INTEGER`, and the `writeTo()` extension function. Before moving on:
-> - Does it compile? Run `./gradlew compileKotlin`.
-> - Can you explain why we use `DataOutputStream` instead of writing raw bytes manually?
-> - What happens if you pass an `MString` constant? (It should throw — verify this by writing a quick test.)
+**The `require(constants.size <= 0xFFFF)` check** enforces the file format's 16-bit constant-count limit. Without it, `writeShort(constants.size)` would quietly write only the low 16 bits, producing a corrupt file instead of failing loudly.
 
-## 1.4 — Testing the Serializer
+**The `when` block** currently only handles `MInteger`. That `else` branch with the exception is intentional — it's a loud failure that will tell us exactly what we forgot to handle when we add new constant types. Silent data corruption would be much worse.
 
-Before we touch C, let's make sure the Kotlin side produces correct output. We'll read back the bytes with a `ByteBuffer` and verify every field:
+**The `toByteArray()` call** on `instructions` converts `UByteArray` to `ByteArray`. This is a Kotlin-specific detail — `DataOutputStream.write()` expects signed bytes, but the underlying bits are identical. A `UByte` of `0xFF` becomes a signed `Byte` of `-1`, but both are the same eight bits: `11111111`. The C reader sees the same bits regardless.
 
-```kotlin
-@Test
-fun testSerializeIntegerConstants() {
-    val constants = mutableListOf<MObject>(
-        MInteger(1),
-        MInteger(2),
-    )
-    val instructions = make(OpConstant, 0) + make(OpConstant, 1)
-    val bc = ByteCode(instructions, constants)
+Now run:
 
-    val baos = ByteArrayOutputStream()
-    bc.writeTo(baos)
-    val bytes = baos.toByteArray()
-    val buf = ByteBuffer.wrap(bytes)  // big-endian by default
-
-    // --- Header ---
-    assertEquals('M'.code.toByte(), buf.get(), "magic[0]")
-    assertEquals('K'.code.toByte(), buf.get(), "magic[1]")
-    assertEquals('C'.code.toByte(), buf.get(), "magic[2]")
-    assertEquals(FORMAT_VERSION, buf.get(), "version")
-
-    // --- Constants pool ---
-    assertEquals(2.toShort(), buf.getShort(), "num_constants")
-
-    assertEquals(TAG_INTEGER, buf.get(), "constant[0] tag")
-    assertEquals(1L, buf.getLong(), "constant[0] value")
-
-    assertEquals(TAG_INTEGER, buf.get(), "constant[1] tag")
-    assertEquals(2L, buf.getLong(), "constant[1] value")
-
-    // --- Instructions ---
-    val expectedInstructions = instructions.toByteArray()
-    assertEquals(expectedInstructions.size, buf.getInt(), "num_instruction_bytes")
-    val actualInstructions = ByteArray(expectedInstructions.size)
-    buf.get(actualInstructions)
-    assertArrayEquals(expectedInstructions, actualInstructions, "instruction bytes")
-
-    assertFalse(buf.hasRemaining(), "unexpected trailing bytes")
-}
+```
+$ ./gradlew test --tests "compiler.SerializerTest"
+BUILD SUCCESSFUL
 ```
 
-This is `ByteBuffer` acting as our test oracle. It wraps the raw bytes and lets us read them back in big-endian order — which is `ByteBuffer`'s default, and also what the format specifies. The final `assertFalse(buf.hasRemaining())` is a check that we consumed every byte — nothing extra was written.
+Green. Three tests pass. The Kotlin side is done.
 
-Notice how the test reads the file the same way the C code will: magic, version, constant count, then each tagged constant, then instruction length and bytes. The test is essentially a Java implementation of the C reader, which gives us confidence that the C side will work.
-
-We should also test edge cases:
-
-```kotlin
-@Test
-fun testSerializeEmptyProgram() {
-    val bc = ByteCode(ubyteArrayOf(), mutableListOf())
-    val baos = ByteArrayOutputStream()
-    bc.writeTo(baos)
-    val buf = ByteBuffer.wrap(baos.toByteArray())
-
-    // Header still present
-    assertEquals('M'.code.toByte(), buf.get())
-    assertEquals('K'.code.toByte(), buf.get())
-    assertEquals('C'.code.toByte(), buf.get())
-    assertEquals(FORMAT_VERSION, buf.get())
-
-    // 0 constants, 0 instructions
-    assertEquals(0.toShort(), buf.getShort())
-    assertEquals(0, buf.getInt())
-    assertFalse(buf.hasRemaining())
-}
-
-@Test
-fun testSerializeNegativeInteger() {
-    val bc = ByteCode(make(OpConstant, 0), mutableListOf(MInteger(-42)))
-    val baos = ByteArrayOutputStream()
-    bc.writeTo(baos)
-    val buf = ByteBuffer.wrap(baos.toByteArray())
-
-    buf.position(4)  // skip header
-    assertEquals(1.toShort(), buf.getShort())
-    assertEquals(TAG_INTEGER, buf.get())
-    assertEquals(-42L, buf.getLong(), "negative integer round-trips")
-}
-```
-
-> **🏁 Checkpoint 4 — Verify the byte count:** In `testSerializeIntegerConstants`, add a line after `bc.writeTo(baos)`:
-> ```kotlin
-> assertEquals(34, bytes.size, "total file size for '1 + 2'")
-> ```
-> This is the 34 bytes you calculated by hand in Checkpoint 2. If they match, your format implementation agrees with your format spec. If they don't — find the discrepancy before moving on.
-
-The empty program test ensures the format handles the degenerate case — header, zero constants, zero instruction bytes. Ten bytes total, and the C reader must handle it without crashing.
-
-The negative integer test verifies that two's complement representation survives the serialization round-trip. `DataOutputStream.writeLong(-42)` writes the 8-byte two's complement big-endian encoding, and the C reader's `read_i64()` interprets those same bits as a signed `int64_t`. The representation is identical — no conversion needed.
-
-> **🏁 Checkpoint 5 — Write the tests yourself:** Create `SerializerTest.kt` with at least these tests:
-> 1. `testSerializeIntegerConstants` — the "1 + 2" case with the 34-byte size assertion
-> 2. `testSerializeEmptyProgram` — zero constants, zero instructions
-> 3. `testSerializeNegativeInteger` — verify `-42` round-trips correctly
+> **🏁 Checkpoint 4:** Before running the test, **predict what would happen** if you removed the `dos.flush()` call at the end of `writeTo`. Would the test fail? Why or why not?
 >
-> Run `./gradlew test` and make sure all pass. **The Kotlin side is now done.** Everything from here on is C.
+> In this chapter's examples, probably not:
+> - `ByteArrayOutputStream` stores bytes in memory immediately.
+> - `FileOutputStream` writes directly to the file descriptor.
+> - In the end-to-end example, `.use { ... }` closes the stream, and `close()` flushes first.
+>
+> `flush()` matters when there's an actual buffering layer and you need bytes pushed through *before* the stream is closed, such as a `BufferedOutputStream` or a network stream. It's still fine to call here, but it's not the reason these tests pass.
+>
+> Run `./gradlew test --tests "compiler.SerializerTest"`. All three tests should pass, including the 30-byte size assertion — confirming your format spec from Checkpoint 2.
 
-## 1.5 — The C Reader
+---
+
+## 4 — The C Reader (Test First)
 
 Now we cross to the other side of the bridge. The C reader's job is to open an `.mkc` file and reconstruct the constants and instructions into C structures that the VM can use.
 
-First, the data structures. These mirror the Kotlin `ByteCode` class, but in C idiom:
+### 4.1 — Data Structures
+
+First, the data structures. These mirror the Kotlin `ByteCode` class, but in C idiom.
+
+Create `src/main/c/vm/mkc.h`:
 
 ```c
-/* mkc.h */
 #ifndef MKC_H
 #define MKC_H
 
@@ -263,7 +352,6 @@ First, the data structures. These mirror the Kotlin `ByteCode` class, but in C i
 #include <stddef.h>
 
 #define TAG_INTEGER 0x01
-#define MKC_VERSION 0x01
 
 typedef struct {
     uint8_t tag;
@@ -285,106 +373,201 @@ void mkc_free(MkcBytecode *bc);
 #endif
 ```
 
-If you're coming from Kotlin, almost every line here has something unfamiliar. Let's unpack it.
+If you're coming from Kotlin, several things here will be unfamiliar: include guards, `#define` vs `const val`, `typedef struct`, tagged unions, and pointers with heap allocation. These are all explained in [Appendix A](#appendix-a--c-primer) at the end of this chapter — refer to it whenever a C construct is unclear. The key idea for now: `MkcConstant` uses a tagged union (C's version of a Kotlin `sealed interface`) and `MkcBytecode` stores a count plus pointers to heap-allocated arrays. That's closer to "manual array management" than to `MutableList`: nothing resizes automatically, and you must free the memory yourself.
 
-### C Primer: Header Files and Include Guards
+### 4.2 — The Tests
 
-In C, code is split into **header files** (`.h`) and **source files** (`.c`). Headers declare *what exists* — types, function signatures — while source files define *how it works*. This is like having a Kotlin `interface` in one file and the `class` implementing it in another, except the separation is enforced by convention and the preprocessor, not by the language itself.
+We write the C tests **before** writing `mkc_read`. C has no JUnit. But TDD doesn't require a framework — it requires assertions. The C standard library gives us `<assert.h>`: `assert(expression)` does nothing if true, prints the failed expression with file/line and aborts if false. That's all we need.
 
-The `#ifndef MKC_H` / `#define MKC_H` / `#endif` triplet is called an **include guard**. C's `#include` is a literal text copy-paste — if two files both `#include "mkc.h"`, the compiler would see duplicate type definitions and complain. The include guard prevents this: the first time `mkc.h` is included, `MKC_H` is undefined, so the `#ifndef` passes and `#define MKC_H` marks it as seen. The second time, `MKC_H` is already defined, so everything between `#ifndef` and `#endif` is skipped. Every C header file you'll ever see has this pattern.
+Each test constructs a byte array that represents a specific `.mkc` file, writes it to a temp file, feeds it to `mkc_read`, and asserts the results. This forces you to think at the byte level — exactly the skill you need to debug binary format issues.
 
-`#include <stdint.h>` and `#include <stddef.h>` bring in standard fixed-width integer types (`uint8_t`, `int64_t`, `uint16_t`, etc.) and `size_t`. In Kotlin, `Long` is always 64 bits. In C, `int` and `long` have platform-dependent sizes — `int` might be 16, 32, or 64 bits depending on the architecture. The `stdint.h` types guarantee exact widths, which is essential when reading a binary format where every byte matters.
-
-### C Primer: `#define` vs `const val`
-
-`#define TAG_INTEGER 0x01` is a **preprocessor macro**. Before the compiler even sees your code, the preprocessor replaces every occurrence of `TAG_INTEGER` with `0x01` — literally a text substitution. It's not a variable; it has no type, no address, no runtime existence. This is different from Kotlin's `const val TAG_INTEGER: Byte = 0x01`, which is a typed compile-time constant. C has `const` too, but `#define` is the traditional way to define constants in headers because `const` variables in C have some surprising scoping issues across files. For our purposes, just read `#define TAG_INTEGER 0x01` as "wherever you see `TAG_INTEGER`, substitute `0x01`."
-
-### C Primer: `typedef struct`
+Create `src/main/c/vm/test_mkc.c`:
 
 ```c
-typedef struct {
-    uint8_t tag;
-    union { ... } as;
-} MkcConstant;
-```
+#include "mkc.h"
 
-In Kotlin, you'd write `data class MkcConstant(val tag: UByte, ...)`. In C, `struct` is the equivalent — a composite type that groups fields together. The `typedef ... MkcConstant;` part creates a type alias so we can write `MkcConstant` instead of `struct MkcConstant` everywhere. Without `typedef`, you'd have to type `struct MkcConstant` every time you declare a variable of this type.
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
 
-Structs in C are **value types** — they live on the stack by default and are copied when assigned, like Kotlin's `data class` with `copy()`, but implicit. This matters: when you pass a struct to a function, C copies the whole thing. For large structs, you pass a pointer instead (more on this below).
+/* ── Helper: write raw bytes to a temp file ── */
 
-### C Primer: Tagged Unions
-
-```c
-typedef struct {
-    uint8_t tag;
-    union {
-        int64_t integer;
-    } as;
-} MkcConstant;
-```
-
-A `union` in C is a type where all members **share the same memory**. If you have a union with an `int64_t` (8 bytes) and later a `char*` (8 bytes on 64-bit), the union itself is 8 bytes — not 16. Only one member is valid at a time. The `tag` field tells you which one.
-
-This is C's version of Kotlin's sealed interface with `when` dispatch:
-
-```kotlin
-// Kotlin approach
-sealed interface Constant {
-    data class IntConst(val value: Long) : Constant
-    data class StrConst(val value: String) : Constant
+static const char *write_tmp(const uint8_t *data, size_t len) {
+    static const char *path = "/tmp/test.mkc";
+    FILE *f = fopen(path, "wb");
+    fwrite(data, 1, len, f);
+    fclose(f);
+    return path;
 }
 
-when (constant) {
-    is IntConst -> constant.value
-    is StrConst -> constant.value
+/* ── Test 1: Empty program ── */
+
+static void test_empty_program(void) {
+    uint8_t data[] = {
+        0x00, 0x00,                 /* 0 constants */
+        0x00, 0x00, 0x00, 0x00      /* 0 instruction bytes */
+    };
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(bc.num_constants == 0);
+    assert(bc.constants == NULL);
+    assert(bc.num_instructions == 0);
+    assert(bc.instructions == NULL);
+    mkc_free(&bc);
+    printf("  PASS  test_empty_program\n");
+}
+
+/* ── Test 2: One integer constant ── */
+
+static void test_one_integer(void) {
+    uint8_t data[] = {
+        0x00, 0x01,                                  /* 1 constant */
+        TAG_INTEGER,                                 /* constant[0]: tag */
+        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x2A,   /* constant[0]: 42 */
+        0x00, 0x00, 0x00, 0x00                       /* 0 instructions */
+    };
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(bc.num_constants == 1);
+    assert(bc.constants[0].tag == TAG_INTEGER);
+    assert(bc.constants[0].as.integer == 42);
+    assert(bc.num_instructions == 0);
+    mkc_free(&bc);
+    printf("  PASS  test_one_integer\n");
+}
+
+/* ── Test 3: Negative integer (two's complement) ── */
+
+static void test_negative_integer(void) {
+    uint8_t data[] = {
+        0x00, 0x01,                                  /* 1 constant */
+        TAG_INTEGER,
+        0xFF,0xFF,0xFF,0xFF, 0xFF,0xFF,0xFF,0xD6,   /* -42 in two's complement */
+        0x00, 0x00, 0x00, 0x00
+    };
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(bc.constants[0].as.integer == -42);
+    mkc_free(&bc);
+    printf("  PASS  test_negative_integer\n");
+}
+
+/* ── Test 4: Two constants with instructions ("1 + 2") ── */
+
+static void test_two_constants_with_instructions(void) {
+    uint8_t data[] = {
+        0x00, 0x02,                                  /* 2 constants */
+        TAG_INTEGER,                                 /* constant[0]: tag */
+        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x01,   /* constant[0]: 1 */
+        TAG_INTEGER,                                 /* constant[1]: tag */
+        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x02,   /* constant[1]: 2 */
+        0x00, 0x00, 0x00, 0x06,                      /* 6 instruction bytes */
+        0x00, 0x00, 0x00,                            /* OpConstant 0 */
+        0x00, 0x00, 0x01                             /* OpConstant 1 */
+    };
+
+    /* Verify size matches Checkpoint 2 prediction */
+    assert(sizeof(data) == 30);
+
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+
+    /* Constants */
+    assert(bc.num_constants == 2);
+    assert(bc.constants[0].as.integer == 1);
+    assert(bc.constants[1].as.integer == 2);
+
+    /* Instructions */
+    assert(bc.num_instructions == 6);
+    assert(bc.instructions[0] == 0x00);  /* OpConstant opcode */
+    assert(bc.instructions[1] == 0x00);  /* operand high byte */
+    assert(bc.instructions[2] == 0x00);  /* operand low byte → index 0 */
+    assert(bc.instructions[3] == 0x00);  /* OpConstant opcode */
+    assert(bc.instructions[4] == 0x00);  /* operand high byte */
+    assert(bc.instructions[5] == 0x01);  /* operand low byte → index 1 */
+
+    mkc_free(&bc);
+    printf("  PASS  test_two_constants_with_instructions\n");
+}
+
+/* ── Test 5: Truncated file ── */
+
+static void test_truncated_constants(void) {
+    uint8_t data[] = {
+        0x00, 0x01,          /* claims 1 constant... */
+        TAG_INTEGER,
+        0x00, 0x00           /* ...but only 2 of 8 payload bytes */
+    };
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
+    printf("  PASS  test_truncated_constants\n");
+}
+
+/* ── Test 6: Reject trailing bytes ── */
+
+static void test_trailing_bytes(void) {
+    uint8_t data[] = {
+        0x00, 0x00,                 /* 0 constants */
+        0x00, 0x00, 0x00, 0x00,     /* 0 instruction bytes */
+        0xFF                        /* unexpected trailing garbage */
+    };
+    MkcBytecode bc;
+    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
+    printf("  PASS  test_trailing_bytes\n");
+}
+
+/* ── Runner ── */
+
+int main(void) {
+    printf("Running mkc tests...\n");
+    test_empty_program();
+    test_one_integer();
+    test_negative_integer();
+    test_two_constants_with_instructions();
+    test_truncated_constants();
+    test_trailing_bytes();
+    printf("All tests passed.\n");
+    return 0;
 }
 ```
 
+Let's trace the thinking behind a few of these tests:
+
+**Test 1 (empty program)** — zero constants, zero instructions. Six bytes total. `assert(bc.constants == NULL)` verifies that when `num_constants` is 0, the reader doesn't allocate anything — `constants` stays `NULL` (because we `memset` the struct to zero). `mkc_free` will call `free(NULL)`, which is a no-op by the C standard. Safe.
+
+**Test 2 (one integer)** — exercises the constants pool. The value `42` is `0x2A`, so the 8-byte big-endian encoding is `00 00 00 00 00 00 00 2A`. This is exactly what `DataOutputStream.writeLong(42)` produces.
+
+**Test 3 (negative integer)** — two's complement: `-42` is `~42 + 1`. `42` in binary is `00101010`. Flip: `11010101`. Add 1: `11010110` = `0xD6`. Leading bytes are `0xFF` because the sign bit propagates. On the mainstream platforms we're targeting, Java/Kotlin's `Long` and C's `int64_t` use the same two's-complement bit pattern, so the bytes round-trip cleanly.
+
+**Test 4 (full case)** — the 30-byte `1 + 2` file from Checkpoint 2. The `assert(sizeof(data) == 30)` is a runtime check — `assert` is always a runtime mechanism in C (and can be disabled entirely by defining `NDEBUG`). However, `sizeof(data)` itself is computed by the compiler, so if the array literal has the wrong number of bytes, the mismatch will show up the moment you run the test. If you wanted a true compile-time guarantee, C11 provides `_Static_assert(sizeof(data) == 30, "wrong size")`, which fails the build rather than waiting for runtime. We use `assert` here because it's consistent with the rest of the test, but it's worth knowing the distinction.
+
+**Test 5 (truncated)** — the file claims 1 constant but provides only 2 of 8 payload bytes. The reader must fail gracefully, not crash. This is the kind of test you can't easily write on the Kotlin side — there, `DataOutputStream` always writes complete data. But the C reader must handle *any* input.
+
+**Test 6 (trailing bytes)** — the file is otherwise valid, but has one extra byte after the declared instruction payload. The reader should reject it. Binary formats are much easier to debug when the parser is strict: if the format says the file ends here, then any extra bytes mean the producer and consumer disagree.
+
+> **🏁 Checkpoint 5:** Before reading the implementation:
+> - The `test_truncated_constants` test feeds a file that claims 1 constant but provides only 2 of 8 payload bytes. **Predict what must happen** inside `mkc_read` for this to not crash. What cleanup is needed? What if the constants array was already allocated?
+> - This won't compile yet — `mkc_read` and `mkc_free` are declared but not defined. Create an empty `mkc.c` with `#include "mkc.h"` and try building. You'll get linker errors. Good — red. Now write the implementation.
+
+### 4.3 — The Implementation
+
+Create `src/main/c/vm/mkc.c`:
+
+#### Helpers
+
+Three helper functions for reading big-endian integers from a byte buffer, plus a wrapper around `fread`:
+
 ```c
-// C approach
-switch (constant.tag) {
-    case TAG_INTEGER: constant.as.integer; break;
-    case TAG_STRING:  constant.as.string;  break;
+#include "mkc.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int read_exact(FILE *f, uint8_t *buf, size_t n) {
+    return fread(buf, 1, n, f) == n ? 0 : -1;
 }
-```
 
-The Kotlin compiler checks exhaustiveness for you. In C, if you forget a `case`, nothing warns you (unless you add compiler flags). The tradeoff is performance — tagged unions have zero overhead, no vtable, no heap allocation.
-
-### C Primer: Pointers
-
-```c
-MkcConstant *constants;    /* pointer to heap-allocated array */
-uint8_t     *instructions; /* pointer to heap-allocated byte array */
-```
-
-A **pointer** is a variable that holds a memory address. `MkcConstant *constants` means "`constants` holds the address of an `MkcConstant` somewhere in memory." In Kotlin terms, every object reference is implicitly a pointer — when you write `val list: MutableList<Int>`, `list` doesn't contain the list, it contains a reference (pointer) to the list on the heap. C just makes this explicit.
-
-The `*` in a declaration means "pointer to." The `*` in an expression means "dereference" (follow the pointer to the value). The `->` operator is shorthand for dereferencing and accessing a field: `bc->constants` is equivalent to `(*bc).constants`.
-
-Why pointers here? Because we don't know how many constants a program has until we read the file. In Kotlin, you'd use a `MutableList` that grows dynamically. In C, there are no dynamic lists built in. Instead, you ask the operating system for a chunk of memory at runtime:
-
-```c
-out->constants = calloc(out->num_constants, sizeof(MkcConstant));
-```
-
-`calloc(count, size)` allocates `count × size` bytes of zeroed memory on the heap and returns a pointer to it. It's like `Array(count) { MkcConstant() }` in Kotlin, except you must manually free it later with `free(out->constants)`. There is no garbage collector. If you forget to free, the memory leaks. If you free twice, the program may crash or corrupt memory. This manual memory management is the defining characteristic of C.
-
-`sizeof(MkcConstant)` returns the size in bytes of the `MkcConstant` struct. The compiler computes this at compile time — it's not a runtime call.
-
-`MkcBytecode` uses **heap-allocated arrays** (pointers + counts) rather than fixed-size arrays. We don't know how many constants or instructions a program will have until we read the file, so we `calloc` the right amount after reading the counts. The caller is responsible for calling `mkc_free()` when done — C doesn't have destructors or garbage collection.
-
-> **🏁 Checkpoint 6 — Set up the C project:** Before writing the reader logic:
-> 1. Create the directory `src/main/c/vm/`
-> 2. Create `mkc.h` with the struct definitions, `#define` constants, and function declarations shown above
-> 3. Create an empty `mkc.c` with just `#include "mkc.h"`
-> 4. Create a `Makefile` (you can copy the one shown in section 1.6)
-> 5. Run `make` — it won't build yet (no `test_mkc.c`), but it verifies your toolchain works. Try `cc --version` if it fails.
->
-> This is scaffolding. Get it compiling before writing any logic.
-
-Now the reader itself. We need three helper functions for reading big-endian integers from a byte buffer:
-
-```c
 static uint16_t read_u16(const uint8_t *buf) {
     return (uint16_t)((buf[0] << 8) | buf[1]);
 }
@@ -405,81 +588,25 @@ static int64_t read_i64(const uint8_t *buf) {
 }
 ```
 
-### C Primer: `static` Functions
+These helpers are the inverse of what `DataOutputStream` does on the Kotlin side — same bit manipulation your `make()` function uses for encoding operands, just in reverse. The `static` keyword makes them file-private (like Kotlin's `private` at file scope). See [Appendix A](#appendix-a--c-primer) for details on bit shifting, `fread`, and `static`.
 
-The `static` keyword before a function in C means **file-private** — the function is only visible within this `.c` file. It's like Kotlin's `private` at file scope. Without `static`, every function in C is globally visible to the linker, which means another `.c` file could call `read_u16` and you'd have naming conflicts. We mark helper functions `static` because they're implementation details, not part of the public API.
+#### The Reader
 
-### C Primer: `const uint8_t *buf`
-
-The `const` in `const uint8_t *buf` means "this function promises not to modify the data that `buf` points to." It's a read-only contract — the compiler will reject any attempt to write through this pointer. In Kotlin, this is roughly the difference between `List<Int>` (read-only view) and `MutableList<Int>`. The `const` doesn't change behavior; it prevents bugs by making intent explicit.
-
-### C Primer: Bit Shifting for Big-Endian Reading
-
-These functions are the inverse of what `DataOutputStream` does on the Kotlin side. Let's trace `read_u16` with a concrete example. Suppose the file contains the bytes `0x01 0x00` (the big-endian encoding of 256):
-
-```
-buf[0] = 0x01       →  0x01 << 8  = 0x0100  (256)
-buf[1] = 0x00       →  0x0100 | 0x00 = 0x0100  (256)
-```
-
-`<<` is left-shift (multiply by power of 2), `|` is bitwise OR (combine bits). The first byte is the "high" byte — it represents the 256s place — so we shift it left by 8 bits to put it in the right position, then OR in the second byte (the "low" byte, the 1s place). This is the same bit manipulation your Kotlin `make()` function uses for encoding operands, just in reverse.
-
-`read_i64` uses the same idea in a loop: start with 0, shift left by 8 to make room, OR in the next byte, repeat 8 times. The final cast from `uint64_t` to `int64_t` preserves the bit pattern — C's two's complement representation matches Java/Kotlin's.
-
-We also need a small wrapper around `fread` that treats a short read as an error:
-
-```c
-static int read_exact(FILE *f, uint8_t *buf, size_t n) {
-    return fread(buf, 1, n, f) == n ? 0 : -1;
-}
-```
-
-### C Primer: File I/O
-
-C's file I/O is lower-level than Kotlin's. There's no `FileInputStream` class — instead you get an opaque `FILE *` pointer from `fopen()` and pass it to functions like `fread()`, `fwrite()`, and `fclose()`.
-
-`fread(buf, 1, n, f)` means "read `n` items of size 1 byte each from file `f` into buffer `buf`." It returns how many items were actually read. If the file ends early, `fread` returns less than `n` — it doesn't throw an exception like Kotlin would. Our `read_exact` wrapper checks for this and returns `-1` (error) if we got fewer bytes than expected.
-
-The `"rb"` flag in `fopen(path, "rb")` means "read, binary." The `b` is important — without it, on some systems (mainly Windows), the C runtime translates newline characters, which would corrupt our binary data.
-
-> **🏁 Checkpoint 7 — Write the helpers yourself:** Add `read_u16`, `read_u32`, `read_i64`, and `read_exact` to `mkc.c`. Test them in isolation before moving on — write a small `main()` in a scratch file:
-> ```c
-> #include <stdio.h>
-> #include <stdint.h>
-> // paste your read_u16 here
-> int main(void) {
->     uint8_t buf[] = {0x01, 0x00};
->     printf("%u\n", read_u16(buf));  // should print 256
->     return 0;
-> }
-> ```
-> Compile with `cc -o scratch scratch.c && ./scratch`. If you get 256, your bit shifting is correct. Try other values: `{0x00, 0x01}` → 1, `{0xFF, 0xFF}` → 65535.
-
-With these helpers, the main `mkc_read()` function reads the file section by section, exactly following the format layout:
+The main `mkc_read()` function reads the file section by section, exactly following the format layout:
 
 ```c
 int mkc_read(const char *path, MkcBytecode *out) {
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "mkc: cannot open '%s'\n", path);
+    if (!out) {
+        fprintf(stderr, "mkc: output pointer is NULL\n");
         return -1;
     }
 
     memset(out, 0, sizeof(*out));
-    uint8_t header[4];
 
-    /* ── Header ── */
-    if (read_exact(f, header, 4) != 0) {
-        fprintf(stderr, "mkc: truncated header\n");
-        goto fail;
-    }
-    if (header[0] != 'M' || header[1] != 'K' || header[2] != 'C') {
-        fprintf(stderr, "mkc: bad magic (expected MKC)\n");
-        goto fail;
-    }
-    if (header[3] != MKC_VERSION) {
-        fprintf(stderr, "mkc: unsupported version %d\n", header[3]);
-        goto fail;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "mkc: cannot open '%s'\n", path);
+        return -1;
     }
 
     /* ── Constants pool ── */
@@ -542,6 +669,16 @@ int mkc_read(const char *path, MkcBytecode *out) {
         }
     }
 
+    int extra = fgetc(f);
+    if (extra != EOF) {
+        fprintf(stderr, "mkc: trailing bytes after instructions\n");
+        goto fail;
+    }
+    if (ferror(f)) {
+        fprintf(stderr, "mkc: read error after instructions\n");
+        goto fail;
+    }
+
     fclose(f);
     return 0;
 
@@ -550,62 +687,7 @@ fail:
     mkc_free(out);
     return -1;
 }
-```
 
-### C Primer: `goto fail` — Error Handling Without Exceptions
-
-The `goto fail` pattern deserves a moment, because it solves a problem that doesn't exist in Kotlin.
-
-In Kotlin, if something goes wrong during deserialization, you throw an exception. The runtime unwinds the stack, `use { }` blocks close resources, and the garbage collector cleans up any allocated objects. You don't think about it.
-
-C has none of this. No exceptions. No `try`/`finally`. No garbage collector. If you've already `calloc`'d the constants array and then the instructions read fails, you need to manually free that array *and* close the file before returning. With multiple failure points, this quickly turns into a mess of duplicated cleanup code:
-
-```c
-// WITHOUT goto — repetitive and error-prone:
-if (read_exact(f, header, 4) != 0) {
-    fclose(f);
-    return -1;
-}
-// ... allocate constants ...
-if (read_exact(f, buf, 2) != 0) {
-    free(out->constants);   // must remember to free!
-    fclose(f);
-    return -1;
-}
-```
-
-The `goto fail` pattern centralizes cleanup at the bottom of the function:
-
-```c
-fail:
-    fclose(f);
-    mkc_free(out);
-    return -1;
-```
-
-Every error site just says `goto fail;` — one line, and all cleanup happens in one place. This pattern is idiomatic C and appears everywhere in the Linux kernel. It's the closest C gets to `finally`.
-
-`goto` has a bad reputation (Dijkstra's "Go To Statement Considered Harmful"), but this specific pattern — jumping forward to a cleanup label at the end of a function — is universally accepted as good C style. It's jumping *backwards* (creating loops) that's the problem.
-
-### C Primer: `memset` — Zeroing Memory
-
-The `memset(out, 0, sizeof(*out))` at the top is important. `memset(pointer, value, num_bytes)` fills `num_bytes` of memory starting at `pointer` with the byte `value`. Here it zeroes the entire output struct.
-
-Why? Because of `goto fail`. If we jump to the cleanup label before allocating anything, `mkc_free()` will call `free(out->constants)`. If `constants` contained garbage (uninitialized memory), `free` would try to free a random address and crash. But because we zeroed everything first, `constants` is `NULL`, and `free(NULL)` is defined by the C standard to be a no-op. Safe.
-
-`sizeof(*out)` means "the size of whatever `out` points to" — in this case, `sizeof(MkcBytecode)`. The `*` dereferences the pointer at compile time to get the type, not at runtime to get the value.
-
-> **🏁 Checkpoint 8 — Write `mkc_read` yourself:** This is the hardest part. Build it **incrementally**:
-> 1. **First**, write only the header validation — open the file, read 4 bytes, check magic and version, close, return 0. Compile and test with a hand-crafted 4-byte file: `printf 'MKC\x01' > test.mkc`.
-> 2. **Second**, add the constants pool reading. Test with an empty constants pool (the empty program from your Kotlin test — write it with a quick Kotlin main).
-> 3. **Third**, add the instructions reading.
-> 4. **Last**, add `mkc_free()` and the `goto fail` cleanup.
->
-> At each step, make sure it compiles and doesn't crash. If you get a segfault, run with `lldb ./test_mkc` and type `run test.mkc` — it'll show you exactly which line crashed.
-
-The cleanup function itself is straightforward:
-
-```c
 void mkc_free(MkcBytecode *bc) {
     free(bc->constants);
     free(bc->instructions);
@@ -613,277 +695,15 @@ void mkc_free(MkcBytecode *bc) {
 }
 ```
 
-The `memset` at the end zeros the struct again, so if someone accidentally uses a freed `MkcBytecode`, they'll get zeroed pointers (which will segfault predictably) rather than dangling pointers (which corrupt memory silently). Defensive, but cheap.
+Two patterns in this code deserve a note:
 
-## 1.6 — Testing the C Reader (TDD Style)
+- **`goto fail`** centralizes cleanup (closing the file, freeing memory) at one label instead of duplicating it at every error site. This is idiomatic C — it appears everywhere in the Linux kernel. It's the closest C gets to `finally`. See [Appendix A](#a5--goto-fail--error-handling-without-exceptions) for the full explanation.
+- **`memset(out, 0, ...)`** zeroes the struct before we even try `fopen()`, so the caller can safely call `mkc_free(out)` after *any* failure path. If we later `goto fail` before allocating, `mkc_free()` calls `free(NULL)` — which is a safe no-op by the C standard. See [Appendix A](#a6--memset--zeroing-memory).
+- **The `fgetc()` check at the end** makes the reader strict: after the declared instruction bytes, we expect EOF. That catches trailing junk early instead of silently accepting malformed files.
 
-On the Kotlin side, we tested by reading bytes back with `ByteBuffer`. On the C side, we'll do the inverse — **construct** the bytes by hand and feed them to `mkc_read`. If you can build a valid `.mkc` byte array from memory, you understand the format.
+### 4.4 — Build and Run
 
-C has no built-in test framework. No `@Test` annotation, no JUnit, no test runner. But TDD doesn't require a framework — it requires assertions. The C standard library gives us `<assert.h>`, which provides a single macro: `assert(expression)`. If the expression is true, nothing happens. If it's false, the program prints the failed expression, the file name, and the line number, then aborts. That's all we need.
-
-### C Primer: `assert()` — The Simplest Test Framework
-
-```c
-#include <assert.h>
-
-assert(1 + 1 == 2);    // passes silently
-assert(1 + 1 == 3);    // prints: "test_mkc.c:7: assertion failed: 1 + 1 == 3" and aborts
-```
-
-`assert` is a **macro**, not a function. The preprocessor expands it to something like:
-
-```c
-if (!(expression)) {
-    fprintf(stderr, "%s:%d: assertion failed: %s\n", __FILE__, __LINE__, "expression");
-    abort();
-}
-```
-
-`__FILE__` and `__LINE__` are special preprocessor tokens that expand to the current file name and line number. This is why `assert` can tell you *where* the failure happened — information that's baked in at compile time.
-
-In Kotlin, `assertEquals(expected, actual)` throws an `AssertionError` with a diff. C's `assert` is cruder — it just shows the expression that failed. But it's enough. When `assert(bc.num_constants == 2)` fails, you know exactly what went wrong.
-
-One important detail: `assert` can be disabled by defining `NDEBUG` before including `<assert.h>`. Production code sometimes does this for performance. We'll never do this — our asserts *are* the tests.
-
-### Building Test Data by Hand
-
-Here's the key pedagogical insight: to test the C reader, we need to construct `.mkc` bytes manually. This forces you to think at the byte level — exactly the skill you need to debug binary format issues.
-
-We'll write a helper that takes a raw byte array and writes it to a temp file, since `mkc_read` expects a file path:
-
-```c
-static const char *write_tmp(const uint8_t *data, size_t len) {
-    static const char *path = "/tmp/test.mkc";
-    FILE *f = fopen(path, "wb");
-    fwrite(data, 1, len, f);
-    fclose(f);
-    return path;
-}
-```
-
-### C Primer: `static` Local Variables
-
-The `static const char *path` inside the function is a **static local variable**. Unlike normal local variables (which live on the stack and die when the function returns), a `static` local lives for the entire program. It's initialized once, and every call to `write_tmp` reuses the same `path`. This is different from `static` at file scope (which means "file-private") — same keyword, different meaning depending on context. In Kotlin, you'd achieve this with a companion object property.
-
-Now the tests. Each one constructs a byte array that represents a specific `.mkc` file, feeds it to `mkc_read`, and asserts the results:
-
-```c
-/* test_mkc.c */
-#include "mkc.h"
-
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-
-static const char *write_tmp(const uint8_t *data, size_t len) {
-    static const char *path = "/tmp/test.mkc";
-    FILE *f = fopen(path, "wb");
-    fwrite(data, 1, len, f);
-    fclose(f);
-    return path;
-}
-```
-
-**Test 1: Reject bad magic.** The very first thing `mkc_read` checks. If the first three bytes aren't `MKC`, it should fail immediately. This is the simplest possible test — write it first:
-
-```c
-static void test_bad_magic(void) {
-    uint8_t data[] = {
-        'X','Y','Z', 0x01,         /* wrong magic, correct version */
-        0x00, 0x00,                 /* 0 constants */
-        0x00, 0x00, 0x00, 0x00      /* 0 instructions */
-    };
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
-    printf("  PASS  test_bad_magic\n");
-}
-```
-
-Notice what we're testing: the *return value*. `mkc_read` returns `0` on success and `-1` on failure. We assert that it returns non-zero — we don't care about the exact error, just that it rejected the input. The error message goes to `stderr` (which we'll see on the terminal), and the test checks the return code.
-
-**Test 2: Empty program.** Header, zero constants, zero instructions — the degenerate case. This is the same empty program we tested on the Kotlin side in `testSerializeEmptyProgram`:
-
-```c
-static void test_empty_program(void) {
-    uint8_t data[] = {
-        'M','K','C', 0x01,         /* header */
-        0x00, 0x00,                 /* 0 constants */
-        0x00, 0x00, 0x00, 0x00      /* 0 instruction bytes */
-    };
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
-    assert(bc.num_constants == 0);
-    assert(bc.constants == NULL);
-    assert(bc.num_instructions == 0);
-    assert(bc.instructions == NULL);
-    mkc_free(&bc);
-    printf("  PASS  test_empty_program\n");
-}
-```
-
-Count the bytes: 4 (header) + 2 (constant count) + 4 (instruction length) = **10 bytes**. The same 10 bytes your Kotlin `testSerializeEmptyProgram` produces. If the C reader can parse these 10 bytes and produce an empty `MkcBytecode`, the format is working.
-
-The `assert(bc.constants == NULL)` check is worth highlighting. When `num_constants` is 0, `mkc_read` doesn't allocate anything — `constants` stays `NULL` (because we `memset` the struct to zero at the top). This is intentional: `mkc_free` will call `free(NULL)`, which is a no-op. Clean.
-
-**Test 3: One integer constant.** Now we exercise the constants pool parsing. We'll encode the integer `42` by hand:
-
-```c
-static void test_one_integer(void) {
-    uint8_t data[] = {
-        'M','K','C', 0x01,                          /* header */
-        0x00, 0x01,                                  /* 1 constant */
-        TAG_INTEGER,                                 /* constant[0]: tag */
-        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x2A,   /* constant[0]: 42 */
-        0x00, 0x00, 0x00, 0x00                       /* 0 instructions */
-    };
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
-    assert(bc.num_constants == 1);
-    assert(bc.constants[0].tag == TAG_INTEGER);
-    assert(bc.constants[0].as.integer == 42);
-    assert(bc.num_instructions == 0);
-    mkc_free(&bc);
-    printf("  PASS  test_one_integer\n");
-}
-```
-
-Let's verify the byte encoding of `42`. In big-endian int64: the value `42` is `0x2A`, so the 8-byte encoding is `00 00 00 00 00 00 00 2A`. This is exactly what `DataOutputStream.writeLong(42)` produces on the Kotlin side. If you're unsure, open a Kotlin REPL: `42.toString(16)` gives `"2a"`.
-
-**Test 4: Negative integer.** Two's complement must survive the crossing. This matches `testSerializeNegativeInteger` from the Kotlin side:
-
-```c
-static void test_negative_integer(void) {
-    uint8_t data[] = {
-        'M','K','C', 0x01,
-        0x00, 0x01,                                  /* 1 constant */
-        TAG_INTEGER,
-        0xFF,0xFF,0xFF,0xFF, 0xFF,0xFF,0xFF,0xD6,   /* -42 in two's complement */
-        0x00, 0x00, 0x00, 0x00
-    };
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
-    assert(bc.constants[0].as.integer == -42);
-    mkc_free(&bc);
-    printf("  PASS  test_negative_integer\n");
-}
-```
-
-Where does `FF FF FF FF FF FF FF D6` come from? Two's complement: `-42` is `~42 + 1`. `42` in binary is `00101010`. Flip all bits: `11010101`. Add 1: `11010110` = `0xD6`. The leading bytes are all `0xFF` because the sign bit propagates. This is identical on both sides — Java/Kotlin's `Long` and C's `int64_t` both use two's complement.
-
-**Test 5: Two constants with instructions.** The full "1 + 2" case — our 34-byte file from Checkpoint 2:
-
-```c
-static void test_two_constants_with_instructions(void) {
-    uint8_t data[] = {
-        'M','K','C', 0x01,                          /* header: 4 bytes */
-        0x00, 0x02,                                  /* 2 constants */
-        TAG_INTEGER,                                 /* constant[0]: tag */
-        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x01,   /* constant[0]: 1 */
-        TAG_INTEGER,                                 /* constant[1]: tag */
-        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x02,   /* constant[1]: 2 */
-        0x00, 0x00, 0x00, 0x06,                      /* 6 instruction bytes */
-        0x00, 0x00, 0x00,                            /* OpConstant 0 */
-        0x00, 0x00, 0x01                             /* OpConstant 1 */
-    };
-
-    /* Verify size matches Checkpoint 2 prediction */
-    assert(sizeof(data) == 34);
-
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
-
-    /* Constants */
-    assert(bc.num_constants == 2);
-    assert(bc.constants[0].as.integer == 1);
-    assert(bc.constants[1].as.integer == 2);
-
-    /* Instructions */
-    assert(bc.num_instructions == 6);
-    assert(bc.instructions[0] == 0x00);  /* OpConstant opcode */
-    assert(bc.instructions[1] == 0x00);  /* operand high byte */
-    assert(bc.instructions[2] == 0x00);  /* operand low byte → index 0 */
-    assert(bc.instructions[3] == 0x00);  /* OpConstant opcode */
-    assert(bc.instructions[4] == 0x00);  /* operand high byte */
-    assert(bc.instructions[5] == 0x01);  /* operand low byte → index 1 */
-
-    mkc_free(&bc);
-    printf("  PASS  test_two_constants_with_instructions\n");
-}
-```
-
-The `assert(sizeof(data) == 34)` line is a nice trick — it verifies at the C level the same 34-byte prediction you made in Checkpoint 2 and validated in Kotlin's Checkpoint 4. Three independent confirmations: hand calculation, Kotlin serializer, C test data. If they all agree, the format is correct.
-
-**Test 6: Truncated file.** What happens when the file ends mid-read? The reader must fail gracefully, not crash or read garbage:
-
-```c
-static void test_truncated_constants(void) {
-    uint8_t data[] = {
-        'M','K','C', 0x01,
-        0x00, 0x01,          /* claims 1 constant... */
-        TAG_INTEGER,
-        0x00, 0x00           /* ...but only 2 of 8 payload bytes */
-    };
-    MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
-    printf("  PASS  test_truncated_constants\n");
-}
-```
-
-This is the kind of test you can't easily write on the Kotlin side — there, `DataOutputStream` always writes complete data. But the C reader must handle *any* input, including malformed files. This test verifies that the `read_exact` wrapper catches the short read and `goto fail` cleans up properly.
-
-### The Test Runner
-
-C doesn't have a test runner. We build one in three lines:
-
-```c
-int main(void) {
-    printf("Running mkc tests...\n");
-    test_bad_magic();
-    test_empty_program();
-    test_one_integer();
-    test_negative_integer();
-    test_two_constants_with_instructions();
-    test_truncated_constants();
-    printf("All tests passed.\n");
-    return 0;
-}
-```
-
-If any `assert` fails, the program aborts immediately — you'll see which assertion on which line failed. If all pass, you get a clean "All tests passed." This is the entire test infrastructure. No framework, no annotations, no XML configuration. Just functions that abort on failure.
-
-Compare this with Kotlin's JUnit: there, the framework discovers test methods via `@Test`, runs each one independently, catches exceptions, and reports results. C's approach is manual but transparent — there's no magic, and you can see exactly what happens. The tradeoff: if `test_one_integer` fails, the tests after it don't run. In practice, this is fine for a small test suite. Fix the first failure, re-run, repeat.
-
-### C Primer: `printf` Format Specifiers
-
-C's `printf` uses **format specifiers** — placeholders in a string that get replaced with values. This is very different from Kotlin's string templates (`"value = $x"`). In C, the type of each value *must* match its specifier, or you get garbage output (or worse, undefined behavior):
-
-| Specifier | Meaning | Kotlin equivalent |
-|-----------|---------|-------------------|
-| `%u` | unsigned integer | `"$x"` where x is `UInt` |
-| `%d` | signed integer | `"$x"` where x is `Int` |
-| `%lld` | signed long long (64-bit) | `"$x"` where x is `Long` |
-| `%02x` | hexadecimal, zero-padded to 2 digits | `"%02x".format(x)` |
-| `%s` | string (`char*`) | `"$s"` where s is `String` |
-| `\n` | newline | `"\n"` (same) |
-
-### C Primer: `&bc` — The Address-Of Operator
-
-In `mkc_read(write_tmp(...), &bc)`, the `&` takes the **address** of the local variable `bc` and passes it as a pointer. This lets `mkc_read` fill in the struct directly. Without `&`, C would copy the struct into the function, and any modifications would be lost when the function returns (since structs are value types). Passing a pointer is like passing by reference in Kotlin — the function can modify the original.
-
-> **🏁 Checkpoint 9 — Write the tests yourself (TDD style):**
->
-> Build `test_mkc.c` **incrementally**, one test at a time:
->
-> 1. Start with just `test_bad_magic` and `main`. Compile, run, see `PASS`.
-> 2. Add `test_empty_program`. This is where you first construct valid `.mkc` bytes by hand. Count the bytes — should be 10.
-> 3. Add `test_one_integer`. Encode `42` as big-endian int64 yourself. If you get it wrong, the assert will tell you.
-> 4. Add `test_negative_integer`. Work out the two's complement of `-42` by hand before writing the bytes.
-> 5. Add `test_two_constants_with_instructions`. Verify `sizeof(data) == 34`.
-> 6. Add `test_truncated_constants`. This tests the error path — make sure the reader doesn't crash.
->
-> At each step: `make clean && make && ./test_mkc`. If any assert fires, you have a bug — either in your test data (wrong bytes) or in `mkc_read`. Both are worth finding.
-
-Build with a simple Makefile:
+Create `src/main/c/vm/Makefile`:
 
 ```makefile
 CC      = cc
@@ -895,66 +715,69 @@ test_mkc: test_mkc.o mkc.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
-	rm -f *.o test_mkc
+	rm -f *.o test_mkc dump_mkc
 
 .PHONY: all clean
 ```
 
-### C Primer: The Makefile
+If you haven't used `make` before, see [Appendix A](#a7--the-makefile). The short version: `-Wall -Wextra` turns on warnings, `-std=c11` gives us modern C, `-g` adds debug symbols. `$@` is the target name, `$^` is all dependencies.
 
-If Gradle is Kotlin's build system, `make` is C's. A Makefile defines **targets** (things to build), their **dependencies** (what they need), and **recipes** (how to build them).
+Build and run:
 
-- `CC = cc` — the C compiler to use (`cc` is usually a symlink to `gcc` or `clang`).
-- `CFLAGS` — compiler flags:
-  - `-Wall` — enable most warnings ("Warning all"). C compilers are silent about many problems by default. Turn this on always.
-  - `-Wextra` — even more warnings. Together with `-Wall`, these catch most common mistakes.
-  - `-std=c11` — use the C11 standard (from 2011). This gives us features like declaring variables mid-block, which older C standards don't allow.
-  - `-g` — include debug symbols so you can use `gdb` or `lldb` to step through the code.
-- `test_mkc: test_mkc.o mkc.o` — "to build `test_mkc`, we need `test_mkc.o` and `mkc.o` (object files)."
-- `$(CC) $(CFLAGS) -o $@ $^` — link the object files into the final executable. `$@` is the target name (`test_mkc`), `$^` is all dependencies (`test_mkc.o mkc.o`). These are Make's automatic variables.
-- `.PHONY: all clean` — tells Make that `all` and `clean` aren't real files. Without this, if you happened to have a file called `clean` in the directory, `make clean` would say "nothing to do."
+```
+$ cd src/main/c/vm
+$ make clean && make && ./test_mkc
+Running mkc tests...
+  PASS  test_empty_program
+  PASS  test_one_integer
+  PASS  test_negative_integer
+  PASS  test_two_constants_with_instructions
+  PASS  test_truncated_constants
+  PASS  test_trailing_bytes
+All tests passed.
+```
 
-C compilation happens in two stages: **compile** (`.c` → `.o` object file) and **link** (`.o` files → executable). The Makefile handles both. `make` is smart enough to only recompile files that changed — if you edit `vm.c` but not `mkc.c`, only `vm.o` gets rebuilt.
+Green. The C side is done.
 
-> **🏁 Checkpoint 10 — Compile and verify the C side builds cleanly:**
-> ```
-> $ cd src/main/c/vm
-> $ make clean && make
-> $ ./test_mkc
-> Running mkc tests...
->   PASS  test_bad_magic
->   PASS  test_empty_program
->   PASS  test_one_integer
->   PASS  test_negative_integer
->   PASS  test_two_constants_with_instructions
->   PASS  test_truncated_constants
-> All tests passed.
-> ```
-> You should see no warnings from `make` and no assertion failures from `./test_mkc`. If you get warnings, fix them — `-Wall -Wextra` is there to help you. If an assert fires, read the file and line number it prints — that's your failing test.
+> **🏁 Checkpoint 6:** Before running the tests, **predict which test will fail first** if you accidentally swap the byte order in `read_u16` (i.e., `buf[1] << 8 | buf[0]` instead of `buf[0] << 8 | buf[1]`). Which test's assertion would catch it? Why?
+>
+> Then build and run. You should see no warnings from `make` and no assertion failures. If you get warnings, fix them. If an assert fires, read the file and line number it prints — that's your failing test.
 
-## 1.7 — End-to-End: Across the Bridge
+---
 
-The TDD tests proved that `mkc_read` correctly parses hand-crafted byte arrays. But there's one thing they *don't* prove: that the Kotlin serializer and the C reader agree on the format. The tests on each side were written by the same person looking at the same spec — what if both sides have the same misunderstanding?
+## 5 — End-to-End: Across the Bridge
 
-The end-to-end test closes that gap. We compile real Monkey code with the Kotlin compiler, serialize it to a `.mkc` file, and read it with the C reader. If the bytes that Kotlin writes are the same bytes that C expects, the bridge is proven.
+The TDD tests proved that each side works in isolation. But there's one thing they don't prove: that the Kotlin serializer and the C reader agree on the format. Both sides were written by the same person looking at the same spec — what if both have the same misunderstanding?
 
-On the Kotlin side, add a quick main function (or a test) that writes the file:
+The end-to-end test closes that gap. We compile real Monkey code with the Kotlin compiler, serialize it to a `.mkc` file, and read it with the C reader.
+
+### 5.1 — Write the File (Kotlin)
+
+Add a test to `src/test/kotlin/compiler/SerializerTest.kt` that writes a `.mkc` file to disk. This is throwaway scaffolding — we only need it once to produce the file. After verifying, you can delete it:
 
 ```kotlin
-val input = "1 + 2"
-val lexer = Lexer(input)
-val parser = Parser(lexer)
-val program = parser.parseProgram()
+@Test
+fun writeTestFile() {
+    val input = "1 + 2"
+    val lexer = Lexer(input)
+    val parser = Parser(lexer)
+    val program = parser.parseProgram()
 
-val compiler = Compiler()
-compiler.compile(program)
+    val compiler = Compiler()
+    compiler.compile(program)
 
-FileOutputStream("test.mkc").use { fos ->
-    compiler.byteCode().writeTo(fos)
+    // Writes to the project root. Adjust the path if needed.
+    FileOutputStream("test.mkc").use { fos ->
+        compiler.byteCode().writeTo(fos)
+    }
 }
 ```
 
-Then verify on the C side. For this one-time check, we'll add a small `dump_mkc` tool — a separate program that reads a `.mkc` file and prints its contents for human inspection:
+Run it with `./gradlew test --tests "compiler.SerializerTest.writeTestFile"`. This produces `test.mkc` in the project root.
+
+### 5.2 — Read the File (C)
+
+Add a `dump_mkc` tool — a separate program that reads a `.mkc` file and prints its contents:
 
 ```c
 /* dump_mkc.c */
@@ -995,24 +818,14 @@ int main(int argc, char **argv) {
 }
 ```
 
-### C Primer: `fprintf(stderr, ...)` vs `printf`
-
-`printf(...)` writes to **stdout** (standard output). `fprintf(stderr, ...)` writes to **stderr** (standard error). Error messages go to `stderr` so they don't get mixed into the program's actual output — if you pipe `./dump_mkc file.mkc > output.txt`, the errors still appear on your terminal while the normal output goes to the file. In Kotlin, this is `System.err.println()` vs `println()`.
-
-### C Primer: `main(int argc, char **argv)`
-
-Every C program starts at `main`. `argc` is the argument count, and `argv` is the argument vector — an array of strings. `argv[0]` is the program name itself, `argv[1]` is the first argument, etc. So `argc != 2` means "the user didn't provide exactly one argument."
-
-`char **argv` reads as "pointer to pointer to char" — an array of C strings, where each C string is itself a `char*` (pointer to a sequence of characters terminated by a `'\0'` byte). In Kotlin terms, it's `Array<String>`.
-
-Add a target to the Makefile for the dump tool:
+Add to the Makefile:
 
 ```makefile
 dump_mkc: dump_mkc.o mkc.o
 	$(CC) $(CFLAGS) -o $@ $^
 ```
 
-Then run the end-to-end:
+### 5.3 — Verify
 
 ```
 $ cd src/main/c/vm
@@ -1027,22 +840,229 @@ instructions: 6 bytes
 
 The `00` opcode is `OpConstant`. The two bytes after each are the big-endian operand — `00 00` is constant index 0 (the integer `1`), and `00 01` is constant index 1 (the integer `2`). The constants survived the journey from Kotlin `MInteger` objects → binary bytes on disk → C `int64_t` values. The instructions survived as a verbatim copy.
 
+You can also hexdump the file directly:
+
+```
+$ xxd test.mkc
+```
+
+You should be able to identify every byte against the format table from section 2.
+
 The bridge works.
 
-> **🏁 Checkpoint 11 — The final test:** Do the end-to-end yourself:
-> 1. Write a Kotlin `main()` (or test) that compiles `1 + 2` and writes `test.mkc`
-> 2. Run it: `./gradlew run` (or execute your test)
-> 3. Verify the file size: `ls -la test.mkc` — should be **34 bytes** (your Checkpoint 2 prediction)
-> 4. Hexdump it: `xxd test.mkc` — you should be able to identify every byte against the format table from section 1.2
-> 5. Build and run the dump tool: `make dump_mkc && ./dump_mkc ../../../../test.mkc`
-> 6. Verify the output shows constants `1` and `2`, and 6 bytes of instructions
+> **🏁 Checkpoint 7:** Before running `xxd test.mkc`, **write down the first 4 bytes you expect to see** in hex. Then run it and compare. If your prediction matches, you understand the format at the byte level — which is the whole point of this chapter.
 >
-> If all six steps pass, **congratulations — the bridge is built.** You wrote a binary file format, a serializer, and a deserializer in two different languages, and they agree on every byte.
+> Also verify `ls -la test.mkc` shows **30 bytes**. Four independent confirmations: hand calculation (Checkpoint 2), byte-level walkthrough (Checkpoint 3), Kotlin test assertion, and now the actual file on disk.
 
-## 1.8 — What's Next
+---
+
+## 6 — What's Next
 
 We now have the infrastructure to get bytecode from the Kotlin compiler to the C VM. But `vm.h` and `vm.c` are still empty. The actual VM — the stack, the instruction pointer, the dispatch loop — is the subject of the next chapter, where we'll follow the book's `VM` struct and `Run()` method, translated into C.
+
+### The Testing Pipeline
+
+When we start testing the VM, we'll mirror the Go book's test structure — but across the language boundary. The Go book tests look like this:
+
+```go
+tests := []struct {
+    input    string
+    expected int64
+}{
+    {"1", 1},
+    {"2", 2},
+    {"1 + 2", 3},
+}
+for _, tt := range tests {
+    program := parse(tt.input)
+    comp := compiler.New()
+    comp.Compile(program)
+    vm := vm.New(comp.Bytecode())
+    vm.Run()
+    testIntegerObject(tt.expected, vm.LastPoppedStackElem())
+}
+```
+
+We can't call `parse()` from C, but a glue script can orchestrate the same pipeline:
+
+1. For each test case, the script invokes the Kotlin compiler to compile the Monkey source into a `.mkc` file.
+2. The C test loads the `.mkc` file, feeds it to the VM, and asserts the result on the stack.
+
+The script ties the two halves together — Kotlin handles `parse → compile → serialize`, C handles `deserialize → execute → assert`. Same coverage as the Go tests, just split across a process boundary.
 
 We'll also come back to the serializer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch`. The tagged-union format makes this mechanical.
 
 But for now, constants and instructions can cross the bridge. That's enough to power on the machine.
+
+---
+
+## Appendix A — C Primer
+
+This appendix collects the C-specific concepts referenced throughout the chapter. If you're comfortable with C, skip it. If you're coming from Kotlin/Java, read the sections as needed — they're cross-referenced from the main text.
+
+### A.1 — Header Files and Include Guards
+
+In C, code is split into **header files** (`.h`) and **source files** (`.c`). Headers declare *what exists* — types, function signatures — while source files define *how it works*. This is like having a Kotlin `interface` in one file and the `class` implementing it in another, except the separation is enforced by convention and the preprocessor, not by the language itself.
+
+The `#ifndef MKC_H` / `#define MKC_H` / `#endif` triplet is called an **include guard**. C's `#include` is a literal text copy-paste — if two files both `#include "mkc.h"`, the compiler would see duplicate type definitions and complain. The include guard prevents this: the first time `mkc.h` is included, `MKC_H` is undefined, so the `#ifndef` passes and `#define MKC_H` marks it as seen. The second time, `MKC_H` is already defined, so everything between `#ifndef` and `#endif` is skipped.
+
+### A.2 — `#define` vs `const val`
+
+`#define TAG_INTEGER 0x01` is a **preprocessor macro**. Before the compiler even sees your code, the preprocessor replaces every occurrence of `TAG_INTEGER` with `0x01` — literally a text substitution. It's not a variable; it has no type, no address, no runtime existence. This is different from Kotlin's `const val TAG_INTEGER: Byte = 0x01`, which is a typed compile-time constant. C has `const` too, but header-level constants are a little trickier: if you put a definition like `const int TAG_INTEGER = 1;` in a header and include it from multiple `.c` files, you can run into linkage problems unless you use `extern` declarations carefully. For small integer tags like this, `#define` (or an `enum`) is the traditional lightweight choice.
+
+### A.3 — `typedef struct` and Tagged Unions
+
+```c
+typedef struct {
+    uint8_t tag;
+    union {
+        int64_t integer;
+    } as;
+} MkcConstant;
+```
+
+In Kotlin, you'd write `data class MkcConstant(val tag: UByte, ...)`. In C, `struct` groups fields together. The `typedef` creates a type alias so we can write `MkcConstant` instead of `struct MkcConstant` everywhere.
+
+A `union` in C is a type where all members **share the same memory**. If you have a union with an `int64_t` (8 bytes) and later a `char*` (8 bytes on 64-bit), the union itself is 8 bytes — not 16. Only one member is valid at a time. The `tag` field tells you which one. This is C's version of Kotlin's `sealed interface` with `when` dispatch:
+
+```kotlin
+// Kotlin
+sealed interface Constant {
+    data class IntConst(val value: Long) : Constant
+    data class StrConst(val value: String) : Constant
+}
+when (constant) {
+    is IntConst -> constant.value
+    is StrConst -> constant.value
+}
+```
+
+```c
+// C
+switch (constant.tag) {
+    case TAG_INTEGER: constant.as.integer; break;
+    case TAG_STRING:  constant.as.string;  break;
+}
+```
+
+The Kotlin compiler checks exhaustiveness for you. In C, if you forget a `case`, nothing warns you (unless you add compiler flags like `-Wswitch-enum`).
+
+### A.4 — Pointers and Heap Allocation
+
+```c
+MkcConstant *constants;    /* pointer to heap-allocated array */
+uint8_t     *instructions; /* pointer to heap-allocated byte array */
+```
+
+A **pointer** is a variable that holds a memory address. `MkcConstant *constants` means "`constants` holds the address of an `MkcConstant` somewhere in memory." In Kotlin terms, every object reference is implicitly a pointer — when you write `val list: MutableList<Int>`, `list` doesn't contain the list, it contains a reference (pointer) to the list on the heap. C just makes this explicit.
+
+The `*` in a declaration means "pointer to." The `*` in an expression means "dereference" (follow the pointer to the value). The `->` operator is shorthand: `bc->constants` is equivalent to `(*bc).constants`.
+
+We use pointers here because we don't know how many constants a program has until we read the file. In Kotlin, you might reach for a `MutableList`, which owns its storage and resizes automatically. In C, there is no built-in dynamic list here. What we have is a pointer plus a count, and we manage the backing array ourselves:
+
+```c
+out->constants = calloc(out->num_constants, sizeof(MkcConstant));
+```
+
+`calloc(count, size)` allocates `count × size` bytes of zeroed memory on the heap and returns a pointer to it. You must manually free it later with `free()`. There is no garbage collector. If you forget to free, the memory leaks. If you free twice, the program may crash or corrupt memory.
+
+The `&` operator takes the **address** of a variable. In `mkc_read(path, &bc)`, `&bc` passes a pointer to the local variable `bc`, letting `mkc_read` fill in the struct directly. Without `&`, C would copy the struct into the function, and modifications would be lost on return.
+
+### A.5 — `goto fail` — Error Handling Without Exceptions
+
+The `goto fail` pattern solves a problem that doesn't exist in Kotlin. In Kotlin, if something goes wrong during deserialization, you throw an exception. The runtime unwinds the stack, `use { }` blocks close resources, and the garbage collector cleans up. C has none of this.
+
+If you've already `calloc`'d the constants array and then the instructions read fails, you need to manually free that array *and* close the file. With multiple failure points, this quickly turns into a mess of duplicated cleanup code:
+
+```c
+// WITHOUT goto — repetitive and error-prone:
+if (read_exact(f, buf2, 2) != 0) {
+    fclose(f);
+    return -1;
+}
+// ... allocate constants ...
+if (read_exact(f, buf, 2) != 0) {
+    free(out->constants);   // must remember to free!
+    fclose(f);
+    return -1;
+}
+```
+
+The `goto fail` pattern centralizes cleanup at the bottom of the function:
+
+```c
+fail:
+    fclose(f);
+    mkc_free(out);
+    return -1;
+```
+
+Every error site just says `goto fail;` — one line, and all cleanup happens in one place. This pattern is idiomatic C and appears everywhere in the Linux kernel. It's the closest C gets to `finally`.
+
+`goto` has a bad reputation (Dijkstra's "Go To Statement Considered Harmful"), but this specific pattern — jumping forward to a cleanup label at the end of a function — is universally accepted as good C style. It's jumping *backwards* (creating loops) that's the problem.
+
+### A.6 — `memset` — Zeroing Memory
+
+`memset(pointer, value, num_bytes)` fills `num_bytes` of memory starting at `pointer` with the byte `value`. In `mkc_read`, we use `memset(out, 0, sizeof(*out))` to zero the entire output struct before opening the file or allocating anything.
+
+Why? Because of `goto fail`. If we jump to the cleanup label before allocating anything, `mkc_free()` will call `free(out->constants)`. If `constants` contained garbage (uninitialized memory), `free` would try to free a random address and crash. But because we zeroed everything first, `constants` is `NULL`, and `free(NULL)` is defined by the C standard to be a no-op. Safe.
+
+`sizeof(*out)` means "the size of whatever `out` points to" — in this case, `sizeof(MkcBytecode)`. The `*` dereferences the pointer at compile time to get the type, not at runtime to get the value.
+
+The `memset` at the end of `mkc_free` zeroes the struct again, so if someone accidentally uses a freed `MkcBytecode`, they'll get zeroed pointers (which will segfault predictably) rather than dangling pointers (which corrupt memory silently). Defensive, but cheap.
+
+### A.7 — The Makefile
+
+If Gradle is Kotlin's build system, `make` is C's. A Makefile defines **targets** (things to build), their **dependencies** (what they need), and **recipes** (how to build them).
+
+- `CC = cc` — the C compiler to use (`cc` is usually a symlink to `gcc` or `clang`).
+- `CFLAGS` — compiler flags:
+  - `-Wall` — enable most warnings ("Warning all"). C compilers are silent about many problems by default. Turn this on always.
+  - `-Wextra` — even more warnings. Together with `-Wall`, these catch most common mistakes.
+  - `-std=c11` — use the C11 standard (from 2011). This gives us features like declaring variables mid-block, which older C standards don't allow.
+  - `-g` — include debug symbols so you can use `gdb` or `lldb` to step through the code.
+- `test_mkc: test_mkc.o mkc.o` — "to build `test_mkc`, we need `test_mkc.o` and `mkc.o` (object files)."
+- `$(CC) $(CFLAGS) -o $@ $^` — link the object files into the final executable. `$@` is the target name (`test_mkc`), `$^` is all dependencies (`test_mkc.o mkc.o`). These are Make's automatic variables.
+- `.PHONY: all clean` — tells Make that `all` and `clean` aren't real files. Without this, if you happened to have a file called `clean` in the directory, `make clean` would say "nothing to do."
+
+C compilation happens in two stages: **compile** (`.c` → `.o` object file) and **link** (`.o` files → executable). The Makefile handles both. `make` is smart enough to only recompile files that changed.
+
+### A.8 — `static` Functions
+
+The `static` keyword before a function in C means **file-private** — the function is only visible within this `.c` file. It's like Kotlin's `private` at file scope. Without `static`, every function in C is globally visible to the linker, which means another `.c` file could call `read_u16` and you'd have naming conflicts. We mark helper functions `static` because they're implementation details, not part of the public API.
+
+When `static` appears on a *local variable* inside a function (like `static const char *path` in `write_tmp`), it means something different: the variable lives for the entire program rather than being destroyed when the function returns. Same keyword, different meaning depending on context.
+
+### A.9 — Bit Shifting for Big-Endian Reading
+
+The `read_u16`, `read_u32`, and `read_i64` helpers are the inverse of what `DataOutputStream` does on the Kotlin side. Let's trace `read_u16` with a concrete example. Suppose the buffer contains `0x01 0x00` (the big-endian encoding of 256):
+
+```
+buf[0] = 0x01       →  0x01 << 8  = 0x0100  (256)
+buf[1] = 0x00       →  0x0100 | 0x00 = 0x0100  (256)
+```
+
+`<<` is left-shift (multiply by power of 2), `|` is bitwise OR (combine bits). The first byte is the "high" byte — it represents the 256s place — so we shift it left by 8 bits to put it in the right position, then OR in the second byte (the "low" byte, the 1s place). This is the same bit manipulation your Kotlin `make()` function uses for encoding operands, just in reverse.
+
+`read_i64` uses the same idea in a loop: start with 0, shift left by 8 to make room, OR in the next byte, repeat 8 times. On the two's-complement platforms we target, the final cast from `uint64_t` to `int64_t` preserves the bit pattern we want, matching Java/Kotlin's `Long` representation.
+
+### A.10 — File I/O
+
+C's file I/O is lower-level than Kotlin's. There's no `FileInputStream` class — instead you get an opaque `FILE *` pointer from `fopen()` and pass it to functions like `fread()`, `fwrite()`, and `fclose()`.
+
+`fread(buf, 1, n, f)` means "read `n` items of size 1 byte each from file `f` into buffer `buf`." It returns how many items were actually read. If the file ends early, `fread` returns less than `n` — it doesn't throw an exception like Kotlin would. Our `read_exact` wrapper checks for this and returns `-1` (error) if we got fewer bytes than expected.
+
+The `"rb"` flag in `fopen(path, "rb")` means "read, binary." The `b` is important — without it, on some systems (mainly Windows), the C runtime translates newline characters, which would corrupt our binary data.
+
+### A.11 — `assert()` vs JUnit
+
+C's `assert` (from `<assert.h>`) is a **macro**, not a function. If the expression is false, it prints the failed expression, file name, and line number, then aborts:
+
+```c
+assert(1 + 1 == 2);    // passes silently
+assert(1 + 1 == 3);    // prints: "test_mkc.c:7: assertion failed: 1 + 1 == 3" and aborts
+```
+
+In Kotlin, `assertEquals(expected, actual)` throws an `AssertionError` with a diff. C's `assert` is cruder — it just shows the expression. But when `assert(bc.num_constants == 2)` fails, you know exactly what went wrong.
+
+One important detail: `assert` can be **disabled** by defining `NDEBUG` before including `<assert.h>`. Production code sometimes does this for performance. We never do this — our asserts *are* the tests. If you want a check that **cannot** be disabled and fails at build time rather than runtime, C11 provides `_Static_assert(expr, "message")`.
