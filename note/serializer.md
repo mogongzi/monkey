@@ -115,6 +115,8 @@ Let's walk through each piece.
 
 Before writing any code, let's see what 30 bytes actually looks like. This is the complete `.mkc` file for the Monkey program `1 + 2`:
 
+> **Note:** Our compiler doesn't emit `OpAdd` yet — it only compiles integer literals to `OpConstant` instructions. The `+` operator is parsed but the compiler's `InfixExpression` handler just compiles both operands without emitting an arithmetic opcode. We'll add `OpAdd` (and other arithmetic opcodes) in a later chapter. For now, the bytecode for `1 + 2` simply pushes two constants onto the stack.
+
 ```
 Offset  Hex                                        Decoded
 ──────  ─────────────────────────────────────────  ─────────────────────────────
@@ -154,10 +156,10 @@ We follow the same discipline we've used throughout both books: **write the test
 
 ### 3.1 — The Test
 
-Create `src/test/kotlin/compiler/SerializerTest.kt`:
+Create `src/test/kotlin/me/ryan/interpreter/compiler/SerializerTest.kt`:
 
 ```kotlin
-package compiler
+package me.ryan.interpreter.compiler
 
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.make
@@ -258,7 +260,7 @@ Good. Red. Now make it green.
 
 ### 3.2 — The Implementation
 
-Create `src/main/kotlin/compiler/Serializer.kt`:
+Create `src/main/kotlin/me/ryan/interpreter/compiler/Serializer.kt`:
 
 ```kotlin
 package me.ryan.interpreter.compiler
