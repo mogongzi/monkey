@@ -14,7 +14,13 @@ But we made a different architectural choice. Our compiler is written in Kotlin.
 
 We need a bridge.
 
-This chapter is about building that bridge: a binary file format — `.mkc` — that the Kotlin compiler writes and the C VM reads. If the compiler-to-VM relationship in the book is a function call, ours is a file on disk. Think `javac` producing a `.class` file that `java` later executes. Same idea.
+This chapter is about building that bridge: a binary format — `.mkc` — that the Kotlin compiler writes to stdout and the C VM reads from stdin. The compiler-to-VM relationship in the book is a function call; ours is a Unix pipe. Think of it like a shell pipeline — one process's output becomes another's input, no intermediate file needed:
+
+```bash
+./monkey-compiler "1 + 2" | ./vm
+```
+
+The Kotlin compiler (compiled to a native executable via GraalVM) writes the `.mkc` bytes to stdout. The C VM reads them from stdin. Same bytes, same format — just flowing through a pipe instead of sitting on disk.
 
 The Go book tests the compiler and VM together in a single process:
 
@@ -38,12 +44,12 @@ func testIntegerObject(expected int64, actual object.Object) error {
 }
 ```
 
-We can't do that — our parser lives in Kotlin, our VM lives in C. But we can get close. Our testing pipeline works in two steps:
+We can't do that — our parser lives in Kotlin, our VM lives in C. But we can get close. Our testing pipeline uses a pipe:
 
-1. **Kotlin compiles** Monkey source → `.mkc` file (a glue script automates this)
-2. **C tests load** the `.mkc` file → feed to VM → assert results
+1. **Kotlin compiler** reads Monkey source, emits `.mkc` bytes to stdout
+2. **C VM** reads `.mkc` bytes from stdin, executes, and asserts results
 
-The C tests mirror the Go tests conceptually — they verify that a Monkey program produces the expected result — but the "parse and compile" step happens externally, before the C code runs. A shell script ties the two halves together.
+A one-line shell command ties the two halves together. This is also how real toolchains work — `gcc` pipes between preprocessor → compiler → assembler → linker internally.
 
 ---
 
@@ -338,7 +344,7 @@ Green. Three tests pass. The Kotlin side is done.
 
 ## 4 — The C Reader (Test First)
 
-Now we cross to the other side of the bridge. The C reader's job is to open an `.mkc` file and reconstruct the constants and instructions into C structures that the VM can use.
+Now we cross to the other side of the bridge. The C reader's job is to read `.mkc` bytes from a `FILE *` stream (typically `stdin`) and reconstruct the constants and instructions into C structures that the VM can use.
 
 ### 4.1 — Data Structures
 
@@ -350,6 +356,7 @@ Create `src/main/c/vm/mkc.h`:
 #ifndef MKC_H
 #define MKC_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -369,7 +376,7 @@ typedef struct {
     uint8_t     *instructions;
 } MkcBytecode;
 
-int  mkc_read(const char *path, MkcBytecode *out);
+int  mkc_read(FILE *f, MkcBytecode *out);
 void mkc_free(MkcBytecode *bc);
 
 #endif
@@ -377,11 +384,13 @@ void mkc_free(MkcBytecode *bc);
 
 If you're coming from Kotlin, several things here will be unfamiliar: include guards, `#define` vs `const val`, `typedef struct`, tagged unions, and pointers with heap allocation. These are all explained in [Appendix A](#appendix-a--c-primer) at the end of this chapter — refer to it whenever a C construct is unclear. The key idea for now: `MkcConstant` uses a tagged union (C's version of a Kotlin `sealed interface`) and `MkcBytecode` stores a count plus pointers to heap-allocated arrays. That's closer to "manual array management" than to `MutableList`: nothing resizes automatically, and you must free the memory yourself.
 
+Note that `mkc_read` takes a `FILE *` instead of a file path. This is the key design choice that enables piping: the caller decides where bytes come from. In production, the VM passes `stdin`. In tests, we pass a `FILE *` opened from a temp file. The reader doesn't care — it just calls `fread`.
+
 ### 4.2 — The Tests
 
 We write the C tests **before** writing `mkc_read`. C has no JUnit. But TDD doesn't require a framework — it requires assertions. The C standard library gives us `<assert.h>`: `assert(expression)` does nothing if true, prints the failed expression with file/line and aborts if false. That's all we need.
 
-Each test constructs a byte array that represents a specific `.mkc` file, writes it to a temp file, feeds it to `mkc_read`, and asserts the results. This forces you to think at the byte level — exactly the skill you need to debug binary format issues.
+Each test constructs a byte array that represents a specific `.mkc` stream, wraps it in a `FILE *` via a temp file, feeds it to `mkc_read`, and asserts the results. This forces you to think at the byte level — exactly the skill you need to debug binary format issues.
 
 Create `src/main/c/vm/test_mkc.c`:
 
@@ -392,14 +401,14 @@ Create `src/main/c/vm/test_mkc.c`:
 #include <stdio.h>
 #include <string.h>
 
-/* ── Helper: write raw bytes to a temp file ── */
+/* ── Helper: wrap raw bytes in a FILE * via temp file ── */
 
-static const char *write_tmp(const uint8_t *data, size_t len) {
+static FILE *bytes_to_stream(const uint8_t *data, size_t len) {
     static const char *path = "/tmp/test.mkc";
     FILE *f = fopen(path, "wb");
     fwrite(data, 1, len, f);
     fclose(f);
-    return path;
+    return fopen(path, "rb");
 }
 
 /* ── Test 1: Empty program ── */
@@ -409,8 +418,9 @@ static void test_empty_program(void) {
         0x00, 0x00,                 /* 0 constants */
         0x00, 0x00, 0x00, 0x00      /* 0 instruction bytes */
     };
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(mkc_read(f, &bc) == 0);
     assert(bc.num_constants == 0);
     assert(bc.constants == NULL);
     assert(bc.num_instructions == 0);
@@ -428,8 +438,9 @@ static void test_one_integer(void) {
         0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x2A,   /* constant[0]: 42 */
         0x00, 0x00, 0x00, 0x00                       /* 0 instructions */
     };
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(mkc_read(f, &bc) == 0);
     assert(bc.num_constants == 1);
     assert(bc.constants[0].tag == TAG_INTEGER);
     assert(bc.constants[0].as.integer == 42);
@@ -447,8 +458,9 @@ static void test_negative_integer(void) {
         0xFF,0xFF,0xFF,0xFF, 0xFF,0xFF,0xFF,0xD6,   /* -42 in two's complement */
         0x00, 0x00, 0x00, 0x00
     };
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(mkc_read(f, &bc) == 0);
     assert(bc.constants[0].as.integer == -42);
     mkc_free(&bc);
     printf("  PASS  test_negative_integer\n");
@@ -471,8 +483,9 @@ static void test_two_constants_with_instructions(void) {
     /* Verify size matches Checkpoint 2 prediction */
     assert(sizeof(data) == 30);
 
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) == 0);
+    assert(mkc_read(f, &bc) == 0);
 
     /* Constants */
     assert(bc.num_constants == 2);
@@ -500,8 +513,9 @@ static void test_truncated_constants(void) {
         TAG_INTEGER,
         0x00, 0x00           /* ...but only 2 of 8 payload bytes */
     };
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
+    assert(mkc_read(f, &bc) != 0);
     printf("  PASS  test_truncated_constants\n");
 }
 
@@ -513,8 +527,9 @@ static void test_trailing_bytes(void) {
         0x00, 0x00, 0x00, 0x00,     /* 0 instruction bytes */
         0xFF                        /* unexpected trailing garbage */
     };
+    FILE *f = bytes_to_stream(data, sizeof(data));
     MkcBytecode bc;
-    assert(mkc_read(write_tmp(data, sizeof(data)), &bc) != 0);
+    assert(mkc_read(f, &bc) != 0);
     printf("  PASS  test_trailing_bytes\n");
 }
 
@@ -535,7 +550,7 @@ int main(void) {
 
 Let's trace the thinking behind a few of these tests:
 
-**Test 1 (empty program)** — zero constants, zero instructions. Six bytes total. `assert(bc.constants == NULL)` verifies that when `num_constants` is 0, the reader doesn't allocate anything — `constants` stays `NULL` (because we `memset` the struct to zero). `mkc_free` will call `free(NULL)`, which is a no-op by the C standard. Safe.
+**Test 1 (empty program)** — zero constants, zero instructions. Six bytes total. `assert(bc.constants == NULL)` verifies that when `num_constants` is 0, the reader doesn't allocate anything — `constants` stays `NULL` (because we `memset` the struct to zero). `mkc_free` will call `free(NULL)`, which is a no-op by the C standard. Safe. Note that `mkc_read` closes the `FILE *` it receives — the caller doesn't need to close it.
 
 **Test 2 (one integer)** — exercises the constants pool. The value `42` is `0x2A`, so the 8-byte big-endian encoding is `00 00 00 00 00 00 00 2A`. This is exactly what `DataOutputStream.writeLong(42)` produces.
 
@@ -548,7 +563,7 @@ Let's trace the thinking behind a few of these tests:
 **Test 6 (trailing bytes)** — the file is otherwise valid, but has one extra byte after the declared instruction payload. The reader should reject it. Binary formats are much easier to debug when the parser is strict: if the format says the file ends here, then any extra bytes mean the producer and consumer disagree.
 
 > **🏁 Checkpoint 5:** Before reading the implementation:
-> - The `test_truncated_constants` test feeds a file that claims 1 constant but provides only 2 of 8 payload bytes. **Predict what must happen** inside `mkc_read` for this to not crash. What cleanup is needed? What if the constants array was already allocated?
+> - The `test_truncated_constants` test feeds a stream that claims 1 constant but provides only 2 of 8 payload bytes. **Predict what must happen** inside `mkc_read` for this to not crash. What cleanup is needed? What if the constants array was already allocated?
 > - This won't compile yet — `mkc_read` and `mkc_free` are declared but not defined. Create an empty `mkc.c` with `#include "mkc.h"` and try building. You'll get linker errors. Good — red. Now write the implementation.
 
 ### 4.3 — The Implementation
@@ -594,22 +609,16 @@ These helpers are the inverse of what `DataOutputStream` does on the Kotlin side
 
 #### The Reader
 
-The main `mkc_read()` function reads the file section by section, exactly following the format layout:
+The main `mkc_read()` function reads from a `FILE *` stream section by section, exactly following the format layout. The caller provides the stream — `stdin` for the pipe, or an `fopen`'d file for tests:
 
 ```c
-int mkc_read(const char *path, MkcBytecode *out) {
-    if (!out) {
-        fprintf(stderr, "mkc: output pointer is NULL\n");
+int mkc_read(FILE *f, MkcBytecode *out) {
+    if (!f || !out) {
+        fprintf(stderr, "mkc: NULL file or output pointer\n");
         return -1;
     }
 
     memset(out, 0, sizeof(*out));
-
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "mkc: cannot open '%s'\n", path);
-        return -1;
-    }
 
     /* ── Constants pool ── */
     uint8_t buf2[2];
@@ -699,8 +708,8 @@ void mkc_free(MkcBytecode *bc) {
 
 Two patterns in this code deserve a note:
 
-- **`goto fail`** centralizes cleanup (closing the file, freeing memory) at one label instead of duplicating it at every error site. This is idiomatic C — it appears everywhere in the Linux kernel. It's the closest C gets to `finally`. See [Appendix A](#a5--goto-fail--error-handling-without-exceptions) for the full explanation.
-- **`memset(out, 0, ...)`** zeroes the struct before we even try `fopen()`, so the caller can safely call `mkc_free(out)` after *any* failure path. If we later `goto fail` before allocating, `mkc_free()` calls `free(NULL)` — which is a safe no-op by the C standard. See [Appendix A](#a6--memset--zeroing-memory).
+- **`goto fail`** centralizes cleanup (closing the stream, freeing memory) at one label instead of duplicating it at every error site. This is idiomatic C — it appears everywhere in the Linux kernel. It's the closest C gets to `finally`. See [Appendix A](#a5--goto-fail--error-handling-without-exceptions) for the full explanation.
+- **`memset(out, 0, ...)`** zeroes the struct before we start reading, so the caller can safely call `mkc_free(out)` after *any* failure path. If we later `goto fail` before allocating, `mkc_free()` calls `free(NULL)` — which is a safe no-op by the C standard. See [Appendix A](#a6--memset--zeroing-memory).
 - **The `fgetc()` check at the end** makes the reader strict: after the declared instruction bytes, we expect EOF. That catches trailing junk early instead of silently accepting malformed files.
 
 ### 4.4 — Build and Run
@@ -751,16 +760,15 @@ Green. The C side is done.
 
 The TDD tests proved that each side works in isolation. But there's one thing they don't prove: that the Kotlin serializer and the C reader agree on the format. Both sides were written by the same person looking at the same spec — what if both have the same misunderstanding?
 
-The end-to-end test closes that gap. We compile real Monkey code with the Kotlin compiler, serialize it to a `.mkc` file, and read it with the C reader.
+The end-to-end test closes that gap. We compile real Monkey code with the Kotlin compiler (native executable via GraalVM), pipe the output directly to a C `dump_mkc` tool, and verify.
 
-### 5.1 — Write the File (Kotlin)
+### 5.1 — The Kotlin Compiler CLI
 
-Add a test to `src/test/kotlin/compiler/SerializerTest.kt` that writes a `.mkc` file to disk. This is throwaway scaffolding — we only need it once to produce the file. After verifying, you can delete it:
+The compiler's `main` function takes Monkey source as an argument, compiles it, and writes the `.mkc` bytes to stdout:
 
 ```kotlin
-@Test
-fun writeTestFile() {
-    val input = "1 + 2"
+fun main(args: Array<String>) {
+    val input = args[0]
     val lexer = Lexer(input)
     val parser = Parser(lexer)
     val program = parser.parseProgram()
@@ -768,18 +776,15 @@ fun writeTestFile() {
     val compiler = Compiler()
     compiler.compile(program)
 
-    // Writes to the project root. Adjust the path if needed.
-    FileOutputStream("test.mkc").use { fos ->
-        compiler.byteCode().writeTo(fos)
-    }
+    compiler.byteCode().writeTo(System.out)
 }
 ```
 
-Run it with `./gradlew test --tests "compiler.SerializerTest.writeTestFile"`. This produces `test.mkc` in the project root.
+Build the native image with GraalVM: `./gradlew nativeCompile` (or however your GraalVM build is configured). This produces the `monkey-compiler` executable.
 
-### 5.2 — Read the File (C)
+### 5.2 — The C Dump Tool
 
-Add a `dump_mkc` tool — a separate program that reads a `.mkc` file and prints its contents:
+Add a `dump_mkc` tool — a separate program that reads `.mkc` bytes from stdin and prints their contents:
 
 ```c
 /* dump_mkc.c */
@@ -807,13 +812,9 @@ static void dump(const MkcBytecode *bc) {
     printf("\n");
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s <file.mkc>\n", argv[0]);
-        return 1;
-    }
+int main(void) {
     MkcBytecode bc;
-    if (mkc_read(argv[1], &bc) != 0) return 1;
+    if (mkc_read(stdin, &bc) != 0) return 1;
     dump(&bc);
     mkc_free(&bc);
     return 0;
@@ -830,9 +831,8 @@ dump_mkc: dump_mkc.o mkc.o
 ### 5.3 — Verify
 
 ```
-$ cd src/main/c/vm
-$ make dump_mkc
-$ ./dump_mkc ../../../../test.mkc
+$ cd src/main/c/vm && make dump_mkc
+$ ./monkey-compiler "1 + 2" | ./dump_mkc
 constants: 2
   [0] INTEGER 1
   [1] INTEGER 2
@@ -840,21 +840,21 @@ instructions: 6 bytes
   00 00 00 00 00 01
 ```
 
-The `00` opcode is `OpConstant`. The two bytes after each are the big-endian operand — `00 00` is constant index 0 (the integer `1`), and `00 01` is constant index 1 (the integer `2`). The constants survived the journey from Kotlin `MInteger` objects → binary bytes on disk → C `int64_t` values. The instructions survived as a verbatim copy.
+The `00` opcode is `OpConstant`. The two bytes after each are the big-endian operand — `00 00` is constant index 0 (the integer `1`), and `00 01` is constant index 1 (the integer `2`). The constants survived the journey from Kotlin `MInteger` objects → pipe → C `int64_t` values. The instructions survived as a verbatim copy.
 
-You can also hexdump the file directly:
+You can also capture the raw bytes to inspect:
 
 ```
-$ xxd test.mkc
+$ ./monkey-compiler "1 + 2" | xxd
 ```
 
 You should be able to identify every byte against the format table from section 2.
 
 The bridge works.
 
-> **🏁 Checkpoint 7:** Before running `xxd test.mkc`, **write down the first 4 bytes you expect to see** in hex. Then run it and compare. If your prediction matches, you understand the format at the byte level — which is the whole point of this chapter.
+> **🏁 Checkpoint 7:** Before running the `xxd` pipe, **write down the first 4 bytes you expect to see** in hex. Then run it and compare. If your prediction matches, you understand the format at the byte level — which is the whole point of this chapter.
 >
-> Also verify `ls -la test.mkc` shows **30 bytes**. Four independent confirmations: hand calculation (Checkpoint 2), byte-level walkthrough (Checkpoint 3), Kotlin test assertion, and now the actual file on disk.
+> The output should be exactly **30 bytes**. Four independent confirmations: hand calculation (Checkpoint 2), byte-level walkthrough (Checkpoint 3), Kotlin test assertion, and now the actual piped output.
 
 ---
 
@@ -885,12 +885,13 @@ for _, tt := range tests {
 }
 ```
 
-We can't call `parse()` from C, but a glue script can orchestrate the same pipeline:
+We can't call `parse()` from C, but a one-line pipe gives us the same end-to-end coverage:
 
-1. For each test case, the script invokes the Kotlin compiler to compile the Monkey source into a `.mkc` file.
-2. The C test loads the `.mkc` file, feeds it to the VM, and asserts the result on the stack.
+```bash
+./monkey-compiler "1 + 2" | ./vm
+```
 
-The script ties the two halves together — Kotlin handles `parse → compile → serialize`, C handles `deserialize → execute → assert`. Same coverage as the Go tests, just split across a process boundary.
+A shell test script can automate this for every test case — pipe the Monkey source through the compiler, feed the bytes to the VM, and check the exit code or output. Kotlin handles `parse → compile → serialize to stdout`, C handles `read from stdin → execute → assert`. Same coverage as the Go tests, just split across a process boundary connected by a pipe.
 
 We'll also come back to the serializer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch`. The tagged-union format makes this mechanical.
 
@@ -1050,11 +1051,13 @@ buf[1] = 0x00       →  0x0100 | 0x00 = 0x0100  (256)
 
 ### A.10 — File I/O
 
-C's file I/O is lower-level than Kotlin's. There's no `FileInputStream` class — instead you get an opaque `FILE *` pointer from `fopen()` and pass it to functions like `fread()`, `fwrite()`, and `fclose()`.
+C's file I/O is lower-level than Kotlin's. There's no `FileInputStream` class — instead you get an opaque `FILE *` pointer and pass it to functions like `fread()`, `fwrite()`, and `fclose()`.
 
-`fread(buf, 1, n, f)` means "read `n` items of size 1 byte each from file `f` into buffer `buf`." It returns how many items were actually read. If the file ends early, `fread` returns less than `n` — it doesn't throw an exception like Kotlin would. Our `read_exact` wrapper checks for this and returns `-1` (error) if we got fewer bytes than expected.
+A `FILE *` can come from different sources: `fopen()` opens a file on disk, but `stdin` is also a `FILE *` — it's a global variable provided by `<stdio.h>`. This is what makes piping work: `fread(buf, 1, n, stdin)` reads bytes the same way whether they come from a file or from a pipe. Our `mkc_read` takes a `FILE *` parameter, so it works with both.
 
-The `"rb"` flag in `fopen(path, "rb")` means "read, binary." The `b` is important — without it, on some systems (mainly Windows), the C runtime translates newline characters, which would corrupt our binary data.
+`fread(buf, 1, n, f)` means "read `n` items of size 1 byte each from stream `f` into buffer `buf`." It returns how many items were actually read. If the stream ends early, `fread` returns less than `n` — it doesn't throw an exception like Kotlin would. Our `read_exact` wrapper checks for this and returns `-1` (error) if we got fewer bytes than expected.
+
+When opening files for tests, the `"rb"` flag in `fopen(path, "rb")` means "read, binary." The `b` is important — without it, on some systems (mainly Windows), the C runtime translates newline characters, which would corrupt our binary data.
 
 ### A.11 — `assert()` vs JUnit
 
