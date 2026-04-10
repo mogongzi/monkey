@@ -50,3 +50,6 @@ bin/
 ### Claude ###
 .claude
 devlog/
+
+### Generated fixtures ###
+*.mkc

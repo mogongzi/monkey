@@ -33,6 +33,7 @@ Once configured, the flow typically looks like:
 
 ```bash
 ./gradlew test
+./gradlew generateFixtures   # Generate .mkc bytecode fixtures for C VM tests
 ```
 
 ## Phases

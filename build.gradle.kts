@@ -48,6 +48,6 @@ tasks.register("compile") {
 }
 
 tasks.register<JavaExec>("generateFixtures") {
-    mainClass.set("compiler.FixtureGeneratorKt")
-    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ryan.interpreter.compiler.FixtureGeneratorKt")
+    classpath = sourceSets["main"].runtimeClasspath
 }

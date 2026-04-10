@@ -20,12 +20,12 @@ fun main() {
         val program = parse(source)
         val compiler = Compiler()
         compiler.compile(program)
-        val bc = compiler.byteCode()
+        val byteCodes = compiler.byteCode()
 
         DataOutputStream(File(path).outputStream()).use { dos ->
             // Constants pool
-            dos.writeShort(bc.constants.size)
-            for (obj in bc.constants) {
+            dos.writeShort(byteCodes.constants.size)
+            for (obj in byteCodes.constants) {
                 when (obj) {
                     is MInteger -> {
                         dos.writeByte(TAG_INTEGER.toInt())
@@ -35,7 +35,7 @@ fun main() {
                 }
             }
             // Instructions
-            val bytes = bc.instructions.toByteArray()
+            val bytes = byteCodes.instructions.toByteArray()
             dos.writeInt(bytes.size)
             dos.write(bytes)
         }
