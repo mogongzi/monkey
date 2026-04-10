@@ -46,3 +46,8 @@ tasks.named<JavaExec>("run") {
 tasks.register("compile") {
     dependsOn("compileKotlin")
 }
+
+tasks.register<JavaExec>("generateFixtures") {
+    mainClass.set("compiler.FixtureGeneratorKt")
+    classpath = sourceSets["test"].runtimeClasspath
+}

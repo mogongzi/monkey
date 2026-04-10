@@ -156,189 +156,108 @@ This is the artifact that crosses the bridge. The Kotlin serializer will produce
 
 ---
 
-## 3 — The Kotlin Serializer (Test First)
+## 3 — The Kotlin Serializer (Fixture Generator)
 
-We follow the same discipline we've used throughout both books: **write the test before writing the code**. The test tells us exactly what the serializer must produce. We read the bytes back with a `ByteBuffer` and verify every field.
+Rather than creating a separate `Serializer.kt` with an extension function, we embed serialization directly in a **fixture generator** — a standalone Kotlin `main()` that compiles Monkey source strings and writes the resulting `.mkc` files to `src/test/fixtures/`. These fixtures are what the C VM tests will read.
 
-### 3.1 — The Test
+This keeps things simple: serialization is only needed at the boundary between the Kotlin compiler and the C VM tests, so there's no reason to give `ByteCode` a `writeTo` method or create a separate serializer class. The fixture generator is the only consumer.
 
-Create `src/test/kotlin/me/ryan/interpreter/compiler/SerializerTest.kt`:
+### 3.1 — The Fixture Generator
 
-```kotlin
-package me.ryan.interpreter.compiler
-
-import me.ryan.interpreter.code.OpConstant
-import me.ryan.interpreter.code.make
-import me.ryan.interpreter.compiler.ByteCode
-import me.ryan.interpreter.compiler.TAG_INTEGER
-import me.ryan.interpreter.compiler.writeTo
-import me.ryan.interpreter.eval.MInteger
-import me.ryan.interpreter.eval.MObject
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-
-@OptIn(ExperimentalUnsignedTypes::class)
-class SerializerTest {
-
-    @Test
-    fun testSerializeIntegerConstants() {
-        val constants = mutableListOf<MObject>(
-            MInteger(1),
-            MInteger(2),
-        )
-        val instructions = make(OpConstant, 0) + make(OpConstant, 1)
-        val bc = ByteCode(instructions, constants)
-
-        val baos = ByteArrayOutputStream()
-        bc.writeTo(baos)
-        val bytes = baos.toByteArray()
-        val buf = ByteBuffer.wrap(bytes)  // big-endian by default
-
-        // Total file size: 20 (constants) + 10 (instructions) = 30
-        assertEquals(30, bytes.size, "total file size for '1 + 2'")
-
-        // --- Constants pool ---
-        assertEquals(2.toShort(), buf.getShort(), "num_constants")
-
-        assertEquals(TAG_INTEGER, buf.get(), "constant[0] tag")
-        assertEquals(1L, buf.getLong(), "constant[0] value")
-
-        assertEquals(TAG_INTEGER, buf.get(), "constant[1] tag")
-        assertEquals(2L, buf.getLong(), "constant[1] value")
-
-        // --- Instructions ---
-        val expectedInstructions = instructions.toByteArray()
-        assertEquals(expectedInstructions.size, buf.getInt(), "num_instruction_bytes")
-        val actualInstructions = ByteArray(expectedInstructions.size)
-        buf.get(actualInstructions)
-        assertArrayEquals(expectedInstructions, actualInstructions, "instruction bytes")
-
-        assertFalse(buf.hasRemaining(), "unexpected trailing bytes")
-    }
-
-    @Test
-    fun testSerializeEmptyProgram() {
-        val bc = ByteCode(ubyteArrayOf(), mutableListOf())
-        val baos = ByteArrayOutputStream()
-        bc.writeTo(baos)
-        val buf = ByteBuffer.wrap(baos.toByteArray())
-
-        // 0 constants, 0 instructions
-        assertEquals(0.toShort(), buf.getShort())
-        assertEquals(0, buf.getInt())
-        assertFalse(buf.hasRemaining())
-    }
-
-    @Test
-    fun testSerializeNegativeInteger() {
-        val bc = ByteCode(make(OpConstant, 0), mutableListOf(MInteger(-42)))
-        val baos = ByteArrayOutputStream()
-        bc.writeTo(baos)
-        val buf = ByteBuffer.wrap(baos.toByteArray())
-
-        assertEquals(1.toShort(), buf.getShort())
-        assertEquals(TAG_INTEGER, buf.get())
-        assertEquals(-42L, buf.getLong(), "negative integer round-trips")
-    }
-}
-```
-
-This is `ByteBuffer` acting as our test oracle. It wraps the raw bytes and lets us read them back in big-endian order — which is `ByteBuffer`'s default, and also what the format specifies. The final `assertFalse(buf.hasRemaining())` is a check that we consumed every byte — nothing extra was written.
-
-Notice how the test reads the file the same way the C code will: constant count, then each tagged constant, then instruction length and bytes. The test is essentially a Java implementation of the C reader, which gives us confidence that the C side will work.
-
-The three tests cover:
-
-1. **The happy path** — `1 + 2`, two constants, two instructions, 30 bytes total. The 30-byte assertion cross-references the hand calculation from Checkpoint 2.
-2. **The degenerate case** — empty program, zero constants, zero instructions. Six bytes total, and the C reader must handle it without crashing.
-3. **Two's complement** — negative integer `-42` must survive serialization. `DataOutputStream.writeLong(-42)` writes the 8-byte two's complement big-endian encoding, and the C reader's `read_i64()` interprets those same bits as a signed `int64_t`. On the two's-complement platforms we target, the representation is identical, so no extra conversion code is needed in practice.
-
-Run it now. It won't compile — `TAG_INTEGER` and `writeTo` don't exist yet:
-
-```
-$ ./gradlew test
-> Compilation failed: Unresolved reference: TAG_INTEGER
-```
-
-Good. Red. Now make it green.
-
-### 3.2 — The Implementation
-
-Create `src/main/kotlin/me/ryan/interpreter/compiler/Serializer.kt`:
+Create `src/main/kotlin/compiler/FixtureGenerator.kt`:
 
 ```kotlin
 package me.ryan.interpreter.compiler
 
+import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.eval.MInteger
+import me.ryan.interpreter.lexer.Lexer
+import me.ryan.interpreter.parser.Parser
 import java.io.DataOutputStream
-import java.io.OutputStream
+import java.io.File
 
-const val TAG_INTEGER: Byte = 0x01
+private const val TAG_INTEGER: Byte = 0x01
 
 @OptIn(ExperimentalUnsignedTypes::class)
-fun ByteCode.writeTo(out: OutputStream) {
-    require(constants.size <= 0xFFFF) {
-        "Serializer: too many constants (${constants.size}); format supports at most 65535"
-    }
+fun main() {
+    val cases = listOf(
+        "src/test/fixtures/one_plus_two.mkc" to "1 + 2",
+        "src/test/fixtures/just_42.mkc" to "42",
+    )
 
-    val dos = DataOutputStream(out)
+    for ((path, source) in cases) {
+        val program = parse(source)
+        val compiler = Compiler()
+        compiler.compile(program)
+        val bc = compiler.byteCode()
 
-    // --- Constants Pool ---
-    dos.writeShort(constants.size)
-    for (obj in constants) {
-        when (obj) {
-            is MInteger -> {
-                dos.writeByte(TAG_INTEGER.toInt())
-                dos.writeLong(obj.value)
+        DataOutputStream(File(path).outputStream()).use { dos ->
+            // Constants pool
+            dos.writeShort(bc.constants.size)
+            for (obj in bc.constants) {
+                when (obj) {
+                    is MInteger -> {
+                        dos.writeByte(TAG_INTEGER.toInt())
+                        dos.writeLong(obj.value)
+                    }
+                    else -> error("Unsupported constant type: ${obj::class.simpleName}")
+                }
             }
-            else -> throw IllegalArgumentException(
-                "Serializer: unsupported constant type ${obj::class.simpleName}"
-            )
+            // Instructions
+            val bytes = bc.instructions.toByteArray()
+            dos.writeInt(bytes.size)
+            dos.write(bytes)
         }
+        println("  generated: $path")
     }
+    println("Done. ${cases.size} fixture(s) generated.")
+}
 
-    // --- Instructions ---
-    val bytes = instructions.toByteArray()
-    dos.writeInt(bytes.size)
-    dos.write(bytes)
-
-    dos.flush()
+private fun parse(input: String): Node {
+    val lexer = Lexer(input)
+    val parser = Parser(lexer)
+    return parser.parseProgram()
 }
 ```
 
-There's something nice about this code: it's almost a line-by-line transcription of the format table from section 2. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes.
-
-**Why an extension function?** Serialization is a concern that lives at the boundary between the compiler and the outside world. `ByteCode` is a data structure — it shouldn't need to know about file formats. The extension function keeps that separation clean.
+The serialization logic is inline — a line-by-line transcription of the format table from section 2. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes.
 
 **Why `DataOutputStream`?** It handles big-endian encoding for us — `writeShort`, `writeInt`, and `writeLong` all produce big-endian output, which matches what our `make()` function does for operands. No manual bit-shifting needed on the Kotlin side.
 
-**The `require(constants.size <= 0xFFFF)` check** enforces the file format's 16-bit constant-count limit. Without it, `writeShort(constants.size)` would quietly write only the low 16 bits, producing a corrupt file instead of failing loudly.
-
-**The `when` block** currently only handles `MInteger`. That `else` branch with the exception is intentional — it's a loud failure that will tell us exactly what we forgot to handle when we add new constant types. Silent data corruption would be much worse.
+**The `when` block** currently only handles `MInteger`. The `else` branch with `error()` is intentional — it's a loud failure that will tell us exactly what we forgot to handle when we add new constant types. Silent data corruption would be much worse.
 
 **The `toByteArray()` call** on `instructions` converts `UByteArray` to `ByteArray`. This is a Kotlin-specific detail — `DataOutputStream.write()` expects signed bytes, but the underlying bits are identical. A `UByte` of `0xFF` becomes a signed `Byte` of `-1`, but both are the same eight bits: `11111111`. The C reader sees the same bits regardless.
 
-Now run:
+### 3.2 — Running the Generator
+
+Add a Gradle task to invoke it:
+
+```kotlin
+// build.gradle.kts
+tasks.register<JavaExec>("generateFixtures") {
+    mainClass.set("me.ryan.interpreter.compiler.FixtureGeneratorKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+```
+
+Then run:
 
 ```
-$ ./gradlew test --tests "compiler.SerializerTest"
-BUILD SUCCESSFUL
+$ ./gradlew generateFixtures
+  generated: src/test/fixtures/one_plus_two.mkc
+  generated: src/test/fixtures/just_42.mkc
+Done. 2 fixture(s) generated.
 ```
 
-Green. Three tests pass. The Kotlin side is done.
+You can verify the output with `xxd`:
 
-> **🏁 Checkpoint 4:** Before running the test, **predict what would happen** if you removed the `dos.flush()` call at the end of `writeTo`. Would the test fail? Why or why not?
->
-> In this chapter's examples, probably not:
-> - `ByteArrayOutputStream` stores bytes in memory immediately.
-> - `FileOutputStream` writes directly to the file descriptor.
-> - In the end-to-end example, `.use { ... }` closes the stream, and `close()` flushes first.
->
-> `flush()` matters when there's an actual buffering layer and you need bytes pushed through *before* the stream is closed, such as a `BufferedOutputStream` or a network stream. It's still fine to call here, but it's not the reason these tests pass.
->
-> Run `./gradlew test --tests "compiler.SerializerTest"`. All three tests should pass, including the 30-byte size assertion — confirming your format spec from Checkpoint 2.
+```
+$ xxd src/test/fixtures/one_plus_two.mkc
+```
+
+You should see exactly the 30 bytes from the format walkthrough in section 2. The fixture files are generated artifacts — add `src/test/fixtures/*.mkc` to `.gitignore`.
+
+> **🏁 Checkpoint 4:** Before running `xxd`, **predict the first 4 bytes** you expect to see in `one_plus_two.mkc`. Then run it and compare. If your prediction matches (`00 02 01 00`), you understand the format at the byte level.
 
 ---
 
@@ -760,31 +679,20 @@ Green. The C side is done.
 
 The TDD tests proved that each side works in isolation. But there's one thing they don't prove: that the Kotlin serializer and the C reader agree on the format. Both sides were written by the same person looking at the same spec — what if both have the same misunderstanding?
 
-The end-to-end test closes that gap. We compile real Monkey code with the Kotlin compiler (native executable via GraalVM), pipe the output directly to a C `dump_mkc` tool, and verify.
+The end-to-end test closes that gap. We use the fixture generator from section 3 to compile real Monkey source, then feed the resulting `.mkc` files to a C `dump_mkc` tool and verify.
 
-### 5.1 — The Kotlin Compiler CLI
+### 5.1 — Generate the Fixtures
 
-The compiler's `main` function takes Monkey source as an argument, compiles it, and writes the `.mkc` bytes to stdout:
-
-```kotlin
-fun main(args: Array<String>) {
-    val input = args[0]
-    val lexer = Lexer(input)
-    val parser = Parser(lexer)
-    val program = parser.parseProgram()
-
-    val compiler = Compiler()
-    compiler.compile(program)
-
-    compiler.byteCode().writeTo(System.out)
-}
 ```
-
-Build the native image with GraalVM: `./gradlew nativeCompile` (or however your GraalVM build is configured). This produces the `monkey-compiler` executable.
+$ ./gradlew generateFixtures
+  generated: src/test/fixtures/one_plus_two.mkc
+  generated: src/test/fixtures/just_42.mkc
+Done. 2 fixture(s) generated.
+```
 
 ### 5.2 — The C Dump Tool
 
-Add a `dump_mkc` tool — a separate program that reads `.mkc` bytes from stdin and prints their contents:
+Add a `dump_mkc` tool — a separate program that reads `.mkc` bytes from a file (or stdin) and prints their contents:
 
 ```c
 /* dump_mkc.c */
@@ -832,7 +740,7 @@ dump_mkc: dump_mkc.o mkc.o
 
 ```
 $ cd src/main/c/vm && make dump_mkc
-$ ./monkey-compiler "1 + 2" | ./dump_mkc
+$ ./dump_mkc < ../../../../src/test/fixtures/one_plus_two.mkc
 constants: 2
   [0] INTEGER 1
   [1] INTEGER 2
@@ -840,21 +748,19 @@ instructions: 6 bytes
   00 00 00 00 00 01
 ```
 
-The `00` opcode is `OpConstant`. The two bytes after each are the big-endian operand — `00 00` is constant index 0 (the integer `1`), and `00 01` is constant index 1 (the integer `2`). The constants survived the journey from Kotlin `MInteger` objects → pipe → C `int64_t` values. The instructions survived as a verbatim copy.
+The `00` opcode is `OpConstant`. The two bytes after each are the big-endian operand — `00 00` is constant index 0 (the integer `1`), and `00 01` is constant index 1 (the integer `2`). The constants survived the journey from Kotlin `MInteger` objects → `.mkc` file → C `int64_t` values. The instructions survived as a verbatim copy.
 
-You can also capture the raw bytes to inspect:
+You can also inspect the raw bytes:
 
 ```
-$ ./monkey-compiler "1 + 2" | xxd
+$ xxd src/test/fixtures/one_plus_two.mkc
 ```
 
 You should be able to identify every byte against the format table from section 2.
 
 The bridge works.
 
-> **🏁 Checkpoint 7:** Before running the `xxd` pipe, **write down the first 4 bytes you expect to see** in hex. Then run it and compare. If your prediction matches, you understand the format at the byte level — which is the whole point of this chapter.
->
-> The output should be exactly **30 bytes**. Four independent confirmations: hand calculation (Checkpoint 2), byte-level walkthrough (Checkpoint 3), Kotlin test assertion, and now the actual piped output.
+> **🏁 Checkpoint 5:** The output should be exactly **30 bytes**. Three independent confirmations: hand calculation (Checkpoint 2), byte-level walkthrough (Checkpoint 3), and now the actual fixture file read by C.
 
 ---
 
@@ -885,15 +791,37 @@ for _, tt := range tests {
 }
 ```
 
-We can't call `parse()` from C, but a one-line pipe gives us the same end-to-end coverage:
+We can't call `parse()` from C, but **pre-generated fixture files** give us the same end-to-end coverage. The workflow:
 
-```bash
-./monkey-compiler "1 + 2" | ./vm
+1. Add test cases to the fixture generator (`src/main/kotlin/compiler/FixtureGenerator.kt`)
+2. Run `./gradlew generateFixtures` to produce `.mkc` files in `src/test/fixtures/`
+3. C VM tests load those fixtures, execute, and assert results
+
+```c
+// test_vm.c
+typedef struct {
+    const char *mkc_path;
+    int64_t     expected;
+} VmTestCase;
+
+static void run_vm_tests(VmTestCase *tests, int count) {
+    for (int i = 0; i < count; i++) {
+        FILE *f = fopen(tests[i].mkc_path, "rb");
+        assert(f != NULL);
+        MkcBytecode bc;
+        assert(mkc_read(f, &bc) == 0);
+        // VM *vm = vm_new(&bc);
+        // assert(vm_run(vm) == 0);
+        // assert(vm_stack_top(vm)->as.integer == tests[i].expected);
+        // vm_free(vm);
+        mkc_free(&bc);
+    }
+}
 ```
 
-A shell test script can automate this for every test case — pipe the Monkey source through the compiler, feed the bytes to the VM, and check the exit code or output. Kotlin handles `parse → compile → serialize to stdout`, C handles `read from stdin → execute → assert`. Same coverage as the Go tests, just split across a process boundary connected by a pipe.
+The Kotlin fixture generator handles `parse → compile → serialize to file`. The C test handles `read from file → execute → assert`. Same coverage as the Go tests, just split across two languages connected by `.mkc` fixture files.
 
-We'll also come back to the serializer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch`. The tagged-union format makes this mechanical.
+We'll also come back to the serializer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch` in the fixture generator. The tagged-union format makes this mechanical.
 
 But for now, constants and instructions can cross the bridge. That's enough to power on the machine.
 
