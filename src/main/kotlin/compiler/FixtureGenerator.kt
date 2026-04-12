@@ -1,13 +1,9 @@
 package me.ryan.interpreter.compiler
 
 import me.ryan.interpreter.ast.Node
-import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
-import java.io.DataOutputStream
 import java.io.File
-
-private const val TAG_INTEGER: Byte = 0x01
 
 @OptIn(ExperimentalUnsignedTypes::class)
 fun main() {
@@ -20,24 +16,10 @@ fun main() {
         val program = parse(source)
         val compiler = Compiler()
         compiler.compile(program)
-        val byteCodes = compiler.byteCode()
+        val bytecode = compiler.bytecode()
 
-        DataOutputStream(File(path).outputStream()).use { dos ->
-            // Constants pool
-            dos.writeShort(byteCodes.constants.size)
-            for (obj in byteCodes.constants) {
-                when (obj) {
-                    is MInteger -> {
-                        dos.writeByte(TAG_INTEGER.toInt())
-                        dos.writeLong(obj.value)
-                    }
-                    else -> error("Unsupported constant type: ${obj::class.simpleName}")
-                }
-            }
-            // Instructions
-            val bytes = byteCodes.instructions.toByteArray()
-            dos.writeInt(bytes.size)
-            dos.write(bytes)
+        File(path).outputStream().use { out ->
+            BytecodeWriter.write(bytecode, out)
         }
         println("  generated: $path")
     }

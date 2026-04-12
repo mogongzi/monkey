@@ -9,7 +9,7 @@ import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
 
 @OptIn(ExperimentalUnsignedTypes::class)
-class ByteCode(val instructions: Instructions, val constants: MutableList<MObject>)
+class Bytecode(val instructions: Instructions, val constants: MutableList<MObject>)
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Compiler() {
@@ -32,8 +32,8 @@ class Compiler() {
         }
     }
 
-    fun byteCode(): ByteCode {
-        return ByteCode(instructions, constants)
+    fun bytecode(): Bytecode {
+        return Bytecode(instructions, constants)
     }
 
     fun addConstant(obj: MObject): Int {

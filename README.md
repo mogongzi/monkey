@@ -57,7 +57,7 @@ Once configured, the flow typically looks like:
 
 - [ ] **Bytecode format** — Define opcodes, operand encoding, and serialization format (the contract between Kotlin and C)
 - [ ] **Compiler** (Kotlin) — Walk the AST and emit bytecode
-- [ ] **Serializer** (Kotlin) — Write bytecode to a binary file/stream
+- [ ] **BytecodeWriter** (Kotlin) — Write bytecode to a binary file/stream
 - [ ] **Virtual Machine** (C) — Read and execute bytecode
 - [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
 

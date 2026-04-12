@@ -1,4 +1,4 @@
-# The Bridge: Serializing Bytecode
+# The Bridge: Compiler to VM
 
 In Thorsten Ball's *Writing a Compiler in Go*, the compiler and the VM live in the same Go process. The compiler produces a `Bytecode` struct, the VM receives it directly in memory, and that's that:
 
@@ -55,10 +55,10 @@ A one-line shell command ties the two halves together. This is also how real too
 
 ## 1 — What Needs to Cross the Bridge?
 
-Before we design anything, let's look at what we already have. Our `ByteCode` class holds everything the VM will need:
+Before we design anything, let's look at what we already have. Our `Bytecode` class holds everything the VM will need:
 
 ```kotlin
-class ByteCode(val instructions: Instructions, val constants: MutableList<MObject>)
+class Bytecode(val instructions: Instructions, val constants: MutableList<MObject>)
 ```
 
 Two things:
@@ -71,12 +71,62 @@ Right now, `constants` only contains `MInteger` values — 64-bit integers. Late
 So the question becomes: how do we serialize an `Instructions` byte array and a list of `MInteger` values into a binary file that C can read?
 
 > **🏁 Checkpoint 1:** Before writing any code, answer these without scrolling back:
-> - What two things does `ByteCode` hold?
-> - Why can't we just pass the `ByteCode` struct to the VM like the Go book does?
+> - What two things does `Bytecode` hold?
+> - Why can't we just pass the `Bytecode` struct to the VM like the Go book does?
 > - What's the Kotlin type of `instructions`?
 > - What's the only constant type we need to handle right now?
 >
 > *(Answers: instructions and constants; because the compiler is Kotlin and the VM is C — different languages, different processes, no shared memory; `UByteArray`; `MInteger`.)*
+
+### 1.1 — Binary Format vs Native Memory Layout
+
+At this point, it's worth clearing up a subtle but important distinction:
+
+- Different languages **can** share the same binary format on disk or over a pipe.
+- Different languages usually **cannot assume** they share the same native in-memory layout.
+
+Our `.mkc` file is the first kind. Kotlin can write the bytes `00 02 01 ...`, and C can read those exact same bytes. That's fine because the format is a deliberate contract that we define byte by byte.
+
+What we cannot do is hand C the Kotlin `Bytecode` object and say "just interpret these bytes." Why not? Because the object's layout is chosen by the Kotlin/JVM runtime, not by us. `MutableList<MObject>` is not a C array. Each `MObject` is itself a JVM-managed object. The runtime may add object headers, store references instead of inline values, and move objects during garbage collection. None of that has a stable C meaning.
+
+If you've heard the term **ABI** — **Application Binary Interface** — this is where it matters. An ABI is the low-level binary contract for compiled code. It defines things like:
+
+- how function arguments are passed
+- how struct fields are laid out in memory
+- how values are aligned and padded
+- how return values come back
+
+C structs live close to the ABI, but even they are not automatically a portable file format. For example:
+
+```c
+typedef struct {
+    uint8_t tag;
+    int64_t value;
+} IntegerObject;
+```
+
+At first glance, that looks like 9 bytes. On many 64-bit systems it's actually 16 bytes in memory:
+
+```text
+offset 0   : tag   (1 byte)
+offset 1-7 : padding
+offset 8-15: value (8 bytes)
+```
+
+The ABI inserts those 7 padding bytes so `int64_t` starts on an 8-byte boundary. If you dumped that struct to disk with `fwrite(&obj, sizeof obj, 1, f)`, the file would contain host-specific padding and host endianness. That's not a good cross-language contract.
+
+Kotlin objects are even less suitable for raw dumping because their layout is managed by the JVM rather than expressed as plain fields in a C ABI.
+
+So the safe rule is:
+
+- **Native memory layout** is private to a runtime/compiler.
+- **Serialized binary format** is a public contract between programs.
+
+That's why `.mkc` exists. It takes a runtime-specific `Bytecode` object and turns it into bytes whose offsets, widths, and byte order we define explicitly.
+
+> **🏁 Checkpoint 1.5:** Which of these is portable across Kotlin and C: a raw `Bytecode` object in memory, or a documented stream of bytes like `.mkc`?
+>
+> *(Answer: the documented byte stream. The in-memory object layout is runtime-specific.)*
 
 ---
 
@@ -105,7 +155,7 @@ Offset   Size       Field
 
 Let's walk through each piece.
 
-**The constants pool** begins with a 2-byte count. Why 2 bytes? A `uint16` gives us up to 65,535 constants, which is plenty for a learning language. That limit is part of the format, so the serializer should reject larger constant pools rather than silently wrapping. Each constant is then prefixed with a **type tag** — a single byte that tells the reader what follows. For integers, the tag is `0x01`, followed by 8 bytes of the value in big-endian. When we add strings later, we'll define tag `0x02`, followed by a length prefix and the string bytes. The tag-length-value pattern makes the format self-describing.
+**The constants pool** begins with a 2-byte count. Why 2 bytes? A `uint16` gives us up to 65,535 constants, which is plenty for a learning language. That limit is part of the format, so the writer should reject larger constant pools rather than silently wrapping. Each constant is then prefixed with a **type tag** — a single byte that tells the reader what follows. For integers, the tag is `0x01`, followed by 8 bytes of the value in big-endian. When we add strings later, we'll define tag `0x02`, followed by a length prefix and the string bytes. The tag-length-value pattern makes the format self-describing.
 
 **The instructions section** is the simplest part. We write a 4-byte length (how many bytes of instructions follow), then dump the raw bytecode verbatim. After those `N` bytes, the file should end; trailing junk is a format error. The bytecode is already in the correct format — the compiler's `make()` function encodes everything in big-endian, which is exactly what the C reader expects.
 
@@ -147,7 +197,7 @@ Walk through it:
 - **Bytes 24–26:** `00 00 00` — opcode `0x00` is `OpConstant`, followed by operand `0x0000` (index 0). Three bytes total because `OpConstant` has one 2-byte operand.
 - **Bytes 27–29:** `00 00 01` — `OpConstant` with operand `0x0001` (index 1).
 
-This is the artifact that crosses the bridge. The Kotlin serializer will produce exactly these bytes. The C reader will consume exactly these bytes. Both sides must agree on every offset, every width, every byte order. If your implementation produces a different sequence, something is wrong.
+This is the artifact that crosses the bridge. The Kotlin `BytecodeWriter` will produce exactly these bytes. The C reader will consume exactly these bytes. Both sides must agree on every offset, every width, every byte order. If your implementation produces a different sequence, something is wrong.
 
 > **🏁 Checkpoint 3:** Cover the hex column above. Given just the format table and the input `1 + 2`, reconstruct the byte sequence yourself on paper. Pay special attention to:
 > - How many zero bytes pad the integer `1`? (seven — it's int64, not int8)
@@ -156,71 +206,54 @@ This is the artifact that crosses the bridge. The Kotlin serializer will produce
 
 ---
 
-## 3 — The Kotlin Serializer (Fixture Generator)
+## 3 — The Kotlin BytecodeWriter
 
-Rather than creating a separate `Serializer.kt` with an extension function, we embed serialization directly in a **fixture generator** — a standalone Kotlin `main()` that compiles Monkey source strings and writes the resulting `.mkc` files to `src/test/fixtures/`. These fixtures are what the C VM tests will read.
+Rather than leaving the format logic inline inside the fixture generator, we extract it into a small `BytecodeWriter`. That gives the binary format a clear home: the writer owns "how `.mkc` bytes are laid out," while the fixture generator owns "which Monkey programs should be compiled for tests."
 
-This keeps things simple: serialization is only needed at the boundary between the Kotlin compiler and the C VM tests, so there's no reason to give `ByteCode` a `writeTo` method or create a separate serializer class. The fixture generator is the only consumer.
+This is still intentionally small. We are **not** building a general-purpose serialization framework. `BytecodeWriter` is just a focused boundary object: it takes a `Bytecode` and writes the `.mkc` stream to an `OutputStream`. The fixture generator is the first consumer, and a future CLI compiler that writes to `stdout` can reuse the same writer unchanged.
 
-### 3.1 — The Fixture Generator
+### 3.1 — The Writer
 
-Create `src/main/kotlin/compiler/FixtureGenerator.kt`:
+Create `src/main/kotlin/compiler/BytecodeWriter.kt`:
 
 ```kotlin
 package me.ryan.interpreter.compiler
 
-import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.eval.MInteger
-import me.ryan.interpreter.lexer.Lexer
-import me.ryan.interpreter.parser.Parser
 import java.io.DataOutputStream
-import java.io.File
+import java.io.OutputStream
 
 private const val TAG_INTEGER: Byte = 0x01
 
 @OptIn(ExperimentalUnsignedTypes::class)
-fun main() {
-    val cases = listOf(
-        "src/test/fixtures/one_plus_two.mkc" to "1 + 2",
-        "src/test/fixtures/just_42.mkc" to "42",
-    )
+object BytecodeWriter {
+    fun write(bytecode: Bytecode, out: OutputStream) {
+        val dos = DataOutputStream(out)
 
-    for ((path, source) in cases) {
-        val program = parse(source)
-        val compiler = Compiler()
-        compiler.compile(program)
-        val bc = compiler.byteCode()
-
-        DataOutputStream(File(path).outputStream()).use { dos ->
-            // Constants pool
-            dos.writeShort(bc.constants.size)
-            for (obj in bc.constants) {
-                when (obj) {
-                    is MInteger -> {
-                        dos.writeByte(TAG_INTEGER.toInt())
-                        dos.writeLong(obj.value)
-                    }
-                    else -> error("Unsupported constant type: ${obj::class.simpleName}")
+        // Constants pool
+        dos.writeShort(bytecode.constants.size)
+        for (obj in bytecode.constants) {
+            when (obj) {
+                is MInteger -> {
+                    dos.writeByte(TAG_INTEGER.toInt())
+                    dos.writeLong(obj.value)
                 }
+                else -> error("Unsupported constant type: ${obj::class.simpleName}")
             }
-            // Instructions
-            val bytes = bc.instructions.toByteArray()
-            dos.writeInt(bytes.size)
-            dos.write(bytes)
         }
-        println("  generated: $path")
-    }
-    println("Done. ${cases.size} fixture(s) generated.")
-}
 
-private fun parse(input: String): Node {
-    val lexer = Lexer(input)
-    val parser = Parser(lexer)
-    return parser.parseProgram()
+        // Instructions
+        val bytes = bytecode.instructions.toByteArray()
+        dos.writeInt(bytes.size)
+        dos.write(bytes)
+        dos.flush()
+    }
 }
 ```
 
-The serialization logic is inline — a line-by-line transcription of the format table from section 2. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes.
+The write logic is a line-by-line transcription of the format table from section 2. The constants are a count followed by tagged values. The instructions are a length followed by raw bytes.
+
+`BytecodeWriter` deliberately takes an `OutputStream` rather than a file path. That's the Kotlin-side mirror of the C reader taking a `FILE *`: the caller decides where the bytes go. In tests, the fixture generator passes a file output stream. In a later CLI, the compiler can pass `System.out`.
 
 **Why `DataOutputStream`?** It handles big-endian encoding for us — `writeShort`, `writeInt`, and `writeLong` all produce big-endian output, which matches what our `make()` function does for operands. No manual bit-shifting needed on the Kotlin side.
 
@@ -228,7 +261,23 @@ The serialization logic is inline — a line-by-line transcription of the format
 
 **The `toByteArray()` call** on `instructions` converts `UByteArray` to `ByteArray`. This is a Kotlin-specific detail — `DataOutputStream.write()` expects signed bytes, but the underlying bits are identical. A `UByte` of `0xFF` becomes a signed `Byte` of `-1`, but both are the same eight bits: `11111111`. The C reader sees the same bits regardless.
 
-### 3.2 — Running the Generator
+### 3.2 — Using It in the Fixture Generator
+
+Now the fixture generator becomes a thin orchestration layer:
+
+```kotlin
+val compiler = Compiler()
+compiler.compile(program)
+val bytecode = compiler.bytecode()
+
+File(path).outputStream().use { out ->
+    BytecodeWriter.write(bytecode, out)
+}
+```
+
+This split is a good teaching tradeoff. `BytecodeWriter` isolates the byte-level contract in one place, but the generator still shows the full pipeline: parse, compile, write fixture.
+
+### 3.3 — Running the Generator
 
 Add a Gradle task to invoke it:
 
@@ -267,7 +316,7 @@ Now we cross to the other side of the bridge. The C reader's job is to read `.mk
 
 ### 4.1 — Data Structures
 
-First, the data structures. These mirror the Kotlin `ByteCode` class, but in C idiom.
+First, the data structures. These mirror the Kotlin `Bytecode` class, but in C idiom.
 
 Create `src/main/c/vm/mkc.h`:
 
@@ -677,7 +726,7 @@ Green. The C side is done.
 
 ## 5 — End-to-End: Across the Bridge
 
-The TDD tests proved that each side works in isolation. But there's one thing they don't prove: that the Kotlin serializer and the C reader agree on the format. Both sides were written by the same person looking at the same spec — what if both have the same misunderstanding?
+The TDD tests proved that each side works in isolation. But there's one thing they don't prove: that the Kotlin `BytecodeWriter` and the C reader agree on the format. Both sides were written by the same person looking at the same spec — what if both have the same misunderstanding?
 
 The end-to-end test closes that gap. We use the fixture generator from section 3 to compile real Monkey source, then feed the resulting `.mkc` files to a C `dump_mkc` tool and verify.
 
@@ -821,7 +870,7 @@ static void run_vm_tests(VmTestCase *tests, int count) {
 
 The Kotlin fixture generator handles `parse → compile → serialize to file`. The C test handles `read from file → execute → assert`. Same coverage as the Go tests, just split across two languages connected by `.mkc` fixture files.
 
-We'll also come back to the serializer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch` in the fixture generator. The tagged-union format makes this mechanical.
+We'll also come back to the writer when we add new constant types. Adding strings will require a `TAG_STRING` with a length-prefixed payload. Adding compiled functions will require a `TAG_FUNCTION` containing its own instruction slice and metadata. Each time, the pattern is the same: add a tag, define the payload layout, update the Kotlin `when` and the C `switch`. The tagged-union format makes this mechanical.
 
 But for now, constants and instructions can cross the bridge. That's enough to power on the machine.
 
@@ -875,6 +924,8 @@ switch (constant.tag) {
     case TAG_STRING:  constant.as.string;  break;
 }
 ```
+
+One subtle point: a C `struct`'s layout follows the platform ABI, not your intuition. A struct like `struct { uint8_t tag; int64_t value; }` often occupies 16 bytes, not 9, because the compiler inserts padding before `value` to satisfy alignment rules. That's why we do **not** serialize structs by dumping raw memory with `fwrite(&obj, sizeof obj, 1, f)`. Our `.mkc` format writes each field explicitly with fixed widths and byte order, so the bytes mean the same thing everywhere.
 
 The Kotlin compiler checks exhaustiveness for you. In C, if you forget a `case`, nothing warns you (unless you add compiler flags like `-Wswitch-enum`).
 

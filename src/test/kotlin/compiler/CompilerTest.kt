@@ -44,10 +44,10 @@ class CompilerTest {
             val program = parse(test.input)
             val compiler = Compiler()
             compiler.compile(program)
-            val byteCode = compiler.byteCode()
+            val bytecode = compiler.bytecode()
 
-            testInstructions(test.expectedInstructions, byteCode.instructions)
-            testConstants(test.expectedConstants, byteCode.constants)
+            testInstructions(test.expectedInstructions, bytecode.instructions)
+            testConstants(test.expectedConstants, bytecode.constants)
         }
     }
 
