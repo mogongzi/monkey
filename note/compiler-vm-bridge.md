@@ -589,12 +589,12 @@ int mkc_read(FILE *f, MkcBytecode *out) {
     memset(out, 0, sizeof(*out));
 
     /* ── Constants pool ── */
-    uint8_t buf2[2];
-    if (read_exact(f, buf2, 2) != 0) {
+    uint8_t const_count_bytes[2];
+    if (read_exact(f, const_count_bytes, 2) != 0) {
         fprintf(stderr, "mkc: truncated constant count\n");
         goto fail;
     }
-    out->num_constants = read_u16(buf2);
+    out->num_constants = read_u16(const_count_bytes);
 
     if (out->num_constants > 0) {
         out->constants = calloc(out->num_constants, sizeof(MkcConstant));
@@ -614,12 +614,12 @@ int mkc_read(FILE *f, MkcBytecode *out) {
 
         switch (tag) {
             case TAG_INTEGER: {
-                uint8_t buf8[8];
-                if (read_exact(f, buf8, 8) != 0) {
+                uint8_t int_bytes[8];
+                if (read_exact(f, int_bytes, 8) != 0) {
                     fprintf(stderr, "mkc: truncated integer at index %u\n", i);
                     goto fail;
                 }
-                out->constants[i].as.integer = read_i64(buf8);
+                out->constants[i].as.integer = read_i64(int_bytes);
                 break;
             }
             default:
@@ -629,12 +629,12 @@ int mkc_read(FILE *f, MkcBytecode *out) {
     }
 
     /* ── Instructions ── */
-    uint8_t buf4[4];
-    if (read_exact(f, buf4, 4) != 0) {
+    uint8_t insn_len_bytes[4];
+    if (read_exact(f, insn_len_bytes, 4) != 0) {
         fprintf(stderr, "mkc: truncated instruction length\n");
         goto fail;
     }
-    out->num_instructions = read_u32(buf4);
+    out->num_instructions = read_u32(insn_len_bytes);
 
     if (out->num_instructions > 0) {
         out->instructions = malloc(out->num_instructions);
