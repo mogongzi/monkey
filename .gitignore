@@ -53,3 +53,10 @@ devlog/
 
 ### Generated fixtures ###
 *.mkc
+
+### C build artifacts ###
+*.o
+*.dSYM/
+src/main/c/**/test_*
+!src/main/c/**/*.c
+!src/main/c/**/*.h

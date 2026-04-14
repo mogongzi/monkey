@@ -1,0 +1,153 @@
+#include "../../../main/c/vm/mkc.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static FILE *bytes_to_stream(const uint8_t *data, size_t len)
+{
+  static const char *path = "/tmp/test.mkc";
+  FILE *f = fopen(path, "wb");
+  if (!f)
+  {
+    perror(path);
+    abort();
+  }
+  fwrite(data, 1, len, f);
+  fclose(f);
+  return fopen(path, "rb");
+}
+
+// test1: empty program
+static void test_empty_program(void)
+{
+  uint8_t data[] = {
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00};
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) == 0);
+  assert(bc.num_constants == 0);
+  assert(bc.constants == NULL);
+  assert(bc.num_instructions == 0);
+  assert(bc.instructions == NULL);
+  mkc_free(&bc);
+  printf("  PASS test_empty_program\n");
+}
+
+// test2: one integer constant
+static void test_one_integer(void)
+{
+  uint8_t data[] = {
+      0x00, 0x01,
+      TAG_INTEGER,                                    // constant - tag
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, // constant[0]: 42
+      0x00, 0x00, 0x00, 0x00};
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) == 0);
+  assert(bc.num_constants == 1);
+  assert(bc.constants[0].tag == TAG_INTEGER);
+  assert(bc.constants[0].as.integer == 42);
+  assert(bc.num_instructions == 0);
+  mkc_free(&bc);
+  printf("  PASS test_one_integer\n");
+}
+
+// test3: negative integer
+static void test_negative_integer(void)
+{
+  uint8_t data[] = {
+      0x00, 0x01,
+      TAG_INTEGER,
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xD6, // -42 in two's complement
+      0x00, 0x00, 0x00, 0x00};
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) == 0);
+  assert(bc.constants[0].as.integer == -42);
+  mkc_free(&bc);
+  printf("  PASS test_negative_integer\n");
+}
+
+// test4: 2 constants with instructions - ("1 + 2")
+static void test_two_constants_with_instructions(void)
+{
+  uint8_t data[] = {
+      0x00, 0x02,
+      TAG_INTEGER,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+      TAG_INTEGER,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+      0x00, 0x00, 0x00, 0x06, // 6 instructions bytes
+      0x00, 0x00, 0x00,
+      0x00, 0x00, 0x01};
+
+  // verify size matches
+  assert(sizeof(data) == 30);
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) == 0);
+  // constants
+  assert(bc.num_constants == 2);
+  assert(bc.constants[0].as.integer == 1);
+  assert(bc.constants[1].as.integer == 2);
+
+  // instructions
+  assert(bc.num_instructions == 6);
+  assert(bc.instructions[0] == 0x00);
+  assert(bc.instructions[1] == 0x00);
+  assert(bc.instructions[2] == 0x00);
+  assert(bc.instructions[3] == 0x00);
+  assert(bc.instructions[4] == 0x00);
+  assert(bc.instructions[5] == 0x01);
+
+  mkc_free(&bc);
+  printf("  PASS test_two_constants_with_instructions\n");
+}
+
+// test5 : truncated file
+static void test_truncated_constants(void)
+{
+  uint8_t data[] = {
+      0x00, 0x01,
+      TAG_INTEGER,
+      0x00, 0x00 // only 2 of 8 payload bytes
+  };
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) != 0);
+  printf("  PASS test_truncated_constants\n");
+}
+
+// test6: reject trailing bytes
+static void test_trailing_bytes(void)
+{
+  uint8_t data[] = {
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00,
+      0xFF};
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  MkcBytecode bc;
+  assert(mkc_read(f, &bc) != 0);
+  printf("  PASS test_trailing_bytes\n");
+}
+
+int main(void)
+{
+  printf("Running mkc tests...\n");
+  test_empty_program();
+  test_one_integer();
+  test_negative_integer();
+  test_two_constants_with_instructions();
+  test_truncated_constants();
+  test_trailing_bytes();
+  printf("All tests passed.\n");
+  return 0;
+}

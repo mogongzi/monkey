@@ -314,6 +314,15 @@ You should see exactly the 30 bytes from the format walkthrough in section 2. Th
 
 Now we cross to the other side of the bridge. The C reader's job is to read `.mkc` bytes from a `FILE *` stream (typically `stdin`) and reconstruct the constants and instructions into C structures that the VM can use.
 
+The C code lives under a `vm/` subfolder on both sides of the Gradle `src/main` / `src/test` split, mirroring how the Kotlin sources are organized:
+
+```
+src/main/c/vm/    ← VM source (mkc.h, mkc.c, and later vm.h, vm.c)
+src/test/c/vm/    ← VM tests  (test_mkc.c, vm_test.c)
+```
+
+Keeping source and tests in parallel trees means Gradle-style tooling stays happy, and the `vm/` subfolder gives us room to grow: a future `parser/` or `object/` module can slot in beside it without cluttering the top of `src/main/c`.
+
 ### 4.1 — Data Structures
 
 First, the data structures. These mirror the Kotlin `Bytecode` class, but in C idiom.
@@ -360,13 +369,14 @@ We write the C tests **before** writing `mkc_read`. C has no JUnit. But TDD does
 
 Each test constructs a byte array that represents a specific `.mkc` stream, wraps it in a `FILE *` via a temp file, feeds it to `mkc_read`, and asserts the results. This forces you to think at the byte level — exactly the skill you need to debug binary format issues.
 
-Create `src/main/c/vm/test_mkc.c`:
+Create `src/test/c/vm/test_mkc.c`. Because the test lives in a sibling tree to the source, the include uses a relative path up to `src/` and back down into `main/c/vm/`:
 
 ```c
-#include "mkc.h"
+#include "../../../main/c/vm/mkc.h"
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* ── Helper: wrap raw bytes in a FILE * via temp file ── */
@@ -374,9 +384,12 @@ Create `src/main/c/vm/test_mkc.c`:
 static FILE *bytes_to_stream(const uint8_t *data, size_t len) {
     static const char *path = "/tmp/test.mkc";
     FILE *f = fopen(path, "wb");
+    if (!f) { perror(path); abort(); }
     fwrite(data, 1, len, f);
     fclose(f);
-    return fopen(path, "rb");
+    f = fopen(path, "rb");
+    if (!f) { perror(path); abort(); }
+    return f;
 }
 
 /* ── Test 1: Empty program ── */
@@ -515,6 +528,10 @@ int main(void) {
     return 0;
 }
 ```
+
+**Why the `if (!f) { perror(path); abort(); }` guards in `bytes_to_stream`?** `fopen` returns `NULL` on failure — a missing directory, a permission error, a typo in the path. Without the guard, the next call (`fwrite(data, 1, len, NULL)`) is undefined behavior and usually segfaults several lines away from the real bug, leaving you staring at a useless stack trace. `perror(path)` prints the offending path followed by a human-readable error from `errno` (declared in `<stdio.h>`, no extra include needed), and `abort()` stops the test immediately with a clear message. The rule generalizes: anywhere libc can hand you a `NULL` or `-1`, check it at the point of the call, not three lines downstream. Shifting the failure *earlier* makes every subsequent test easier to debug.
+
+> **Note on `tmpfile()`:** The standard library also offers `tmpfile()`, which returns a `FILE *` to an anonymous temp file that vanishes automatically on `fclose`. It sidesteps path typos and parallel-test collisions entirely. We stick with a named path here because it lets you inspect `/tmp/test.mkc` with `xxd` when a test fails — but `tmpfile()` is the better default for production-grade test helpers.
 
 Let's trace the thinking behind a few of these tests:
 
@@ -682,16 +699,17 @@ Two patterns in this code deserve a note:
 
 ### 4.4 — Build and Run
 
-Create `src/main/c/vm/Makefile`:
+Create `src/main/c/vm/Makefile`. Because the tests live under `src/test/c/vm/`, the Makefile reaches across the tree with a `TEST_DIR` variable pointing at the sibling test folder. The test file already uses an explicit relative `#include` for `mkc.h`, so no extra `-I` flag is needed — the compiler just resolves the path from wherever `test_mkc.c` sits:
 
 ```makefile
-CC      = cc
-CFLAGS  = -Wall -Wextra -std=c11 -g
+CC       = cc
+CFLAGS   = -Wall -Wextra -std=c11 -g
+TEST_DIR = ../../../test/c/vm
 
 all: test_mkc
 
-test_mkc: test_mkc.o mkc.o
-	$(CC) $(CFLAGS) -o $@ $^
+test_mkc: $(TEST_DIR)/test_mkc.c mkc.c mkc.h
+	$(CC) $(CFLAGS) -o $@ $(TEST_DIR)/test_mkc.c mkc.c
 
 clean:
 	rm -f *.o test_mkc dump_mkc
@@ -699,7 +717,7 @@ clean:
 .PHONY: all clean
 ```
 
-If you haven't used `make` before, see [Appendix A](#a7--the-makefile). The short version: `-Wall -Wextra` turns on warnings, `-std=c11` gives us modern C, `-g` adds debug symbols. `$@` is the target name, `$^` is all dependencies.
+If you haven't used `make` before, see [Appendix A](#a7--the-makefile). The short version: `-Wall -Wextra` turns on warnings, `-std=c11` gives us modern C, `-g` adds debug symbols. `$@` is the target name, `$^` is all dependencies. `TEST_DIR` is our own variable — it points at the sibling test tree so the recipe can pick up `test_mkc.c` without hard-coding the long relative path twice.
 
 Build and run:
 

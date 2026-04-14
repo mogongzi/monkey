@@ -1,4 +1,4 @@
-#include "../../main/c/mkc.h"
+#include "../../../main/c/vm/mkc.h"
 #include <assert.h>
 #include <stdio.h>
 
