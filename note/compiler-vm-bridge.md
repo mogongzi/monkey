@@ -318,7 +318,7 @@ The C code lives under a `vm/` subfolder on both sides of the Gradle `src/main` 
 
 ```
 src/main/c/vm/    ← VM source (mkc.h, mkc.c, and later vm.h, vm.c)
-src/test/c/vm/    ← VM tests  (test_mkc.c, vm_test.c)
+src/test/c/vm/    ← VM tests  (test_mkc.c, test_vm.c)
 ```
 
 Keeping source and tests in parallel trees means Gradle-style tooling stays happy, and the `vm/` subfolder gives us room to grow: a future `parser/` or `object/` module can slot in beside it without cluttering the top of `src/main/c`.
