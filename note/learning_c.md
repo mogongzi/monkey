@@ -221,3 +221,161 @@ For a **C VM** this pain is the price of admission — you're building something
 ### One-line takeaway
 
 > **`extern` lets you tell the compiler a name exists without defining it, so the linker can resolve every use of that name to a single definition living in exactly one translation unit.**
+
+---
+
+## Why `case` labels need braces to hold declarations
+
+Context — this compiler warning in `src/main/c/vm/vm.c`:
+
+```
+vm.c:38:7: warning: label followed by a declaration is a C23 extension [-Wc23-extensions]
+   38 |       uint16_t idx = (vm->bc->instructions[ip + 1] << 8) | ...
+      |       ^
+```
+
+triggered by a `case` body that declares a variable without wrapping the body in braces:
+
+```c
+switch (op) {
+case OP_CONSTANT:
+    uint16_t idx = read_u16(&vm->bc->instructions[ip + 1]);  // ← warning here
+    vm->stack[vm->sp++] = vm->bc->constants[idx];
+    ip += 2;
+    break;
+}
+```
+
+The warning is confusingly worded. It's not about the *type* `uint16_t` — it's about the grammatical role of what comes after `case OP_CONSTANT:`.
+
+### The grammar rule (C11 §6.8)
+
+A `case` label is officially a **labeled statement**:
+
+```
+labeled-statement:
+    case constant-expression : statement
+```
+
+So `case OP_CONSTANT:` must be followed by a **statement**, not a declaration. That distinction matters because C's grammar has two top-level categories inside a function body:
+
+| Category | Examples |
+|---|---|
+| **Statement** | `if (...)`, `while (...)`, `x = 1;`, `{ ... }`, `break;`, `return;` |
+| **Declaration** | `uint16_t idx = 0;`, `int x;`, `struct Foo f;` |
+
+Pre-C23, declarations are **not** statements — they're a separate grammar production. C++ merged them decades ago; C23 finally catches up. That's why the warning says "C23 extension" — compilers allow it as a forward-compatibility freebie, but strictly speaking it was illegal in C11.
+
+### Why a switch body normally allows mixing — but a `case` doesn't
+
+The body of a `switch` is a compound statement `{ ... }`. Inside `{ }` the grammar permits a **block-item-list**, where each item is *either* a declaration or a statement:
+
+```
+block-item:
+    declaration | statement
+```
+
+So declarations and statements can intermix freely inside `{ }`. But the moment you write `case X:`, you've entered a labeled-statement, which demands a *single* statement right after the colon. A bare declaration can't satisfy that rule.
+
+### Why `{ ... }` fixes it
+
+A compound statement `{ ... }` is itself classified as a statement (grammar rule `statement: compound-statement`). So wrapping the case body in braces satisfies the labeled-statement rule — and inside the braces, you're back in block-item-list land where declarations are legal:
+
+```c
+case OP_CONSTANT: {                                         // label attached to { } — a statement ✓
+    uint16_t idx = read_u16(&vm->bc->instructions[ip + 1]); // inside { }, declarations are legal ✓
+    vm->stack[vm->sp++] = vm->bc->constants[idx];
+    ip += 2;
+    break;
+}
+```
+
+The mental model: **`case X:` is a name tag on exactly one statement.** Without braces, you're tagging a single line — and that line had better grammatically be a statement. With braces, you're tagging a whole block that can contain whatever you want.
+
+### Bonus benefit — per-case scope
+
+Without braces, all case labels share the switch's outer scope. Two cases declaring `uint16_t idx` would collide at the same scope level:
+
+```c
+switch (op) {
+case OP_CONSTANT:
+    uint16_t idx = ...;   // if this were legal
+    ...
+    break;
+case OP_JUMP:
+    uint16_t idx = ...;   // error: redeclaration of 'idx' in same scope
+    ...
+    break;
+}
+```
+
+With braces, each `idx` lives in its own nested scope. So even once C23 lets you drop the braces for the grammar reason, you'll still want them for this reason. **Per-case braces are almost always what you mean.**
+
+### A footgun to remember
+
+The fall-through semantics of `switch` make brace discipline extra important. A `case` without braces that declares `idx`, forgets `break`, and falls into the next `case` would leave `idx` in scope for the next label's body — creating an invisible dependency between cases. Per-case `{ }` makes that impossible: `idx` is dead the moment control leaves the block.
+
+---
+
+## How Go and Kotlin handle the same situation
+
+### Go: no braces needed, and fall-through is opt-in
+
+```go
+switch op {
+case OpConstant:
+    idx := readU16(ins[ip+1:])   // declaration — no braces required
+    vm.stack[vm.sp] = vm.constants[idx]
+    vm.sp++
+    ip += 2
+case OpJump:
+    idx := readU16(ins[ip+1:])   // legal — each case has its own implicit scope
+    ip = int(idx)
+}
+```
+
+Go makes two design choices that eliminate C's pain:
+
+1. **Each `case` has an implicit scope.** You don't need `{ }` to declare locals; the language gives you a fresh scope per case automatically. The same name `idx` can appear in every case without collision.
+2. **No fall-through by default.** Go's `case` ends at the next `case` — you write explicit `fallthrough` if you want C-style fall-in. That removes the footgun of accidentally using a name from the previous case.
+
+Under the hood, Go still implements `switch` as a jump table just like C, but the surface syntax hides the labeled-statement machinery entirely.
+
+### Kotlin: `when` is an expression, not a statement
+
+```kotlin
+val result = when (op) {
+    OpConstant -> {
+        val idx = readU16(instructions, ip + 1)
+        vm.stack[vm.sp++] = vm.constants[idx]
+        ip += 2
+    }
+    OpJump -> {
+        val idx = readU16(instructions, ip + 1)
+        ip = idx
+    }
+    else -> error("unknown opcode $op")
+}
+```
+
+Kotlin's `when` has no `case` keyword, no fall-through, no labeled-statement grammar at all. Each branch is an arrow `->` followed by either a single expression or a block `{ ... }`. Blocks create their own scope automatically — same as any Kotlin block. And because `when` is an *expression*, it can produce a value, which forces exhaustiveness (every branch must return the same type).
+
+There's no footgun equivalent to C's "declaration after label" because there's no label, and no `break` because there's no fall-through. The entire category of bugs is designed out of the language.
+
+### The conceptual takeaway
+
+Three different answers to "how does a multi-way branch handle locals?":
+
+| Language | Branch scope | Fall-through | Where locals live |
+|---|---|---|---|
+| **C** | Shared outer scope unless you add `{ }` | Default (silent) | Need explicit `{ }` per case for isolation |
+| **Go** | Implicit per-case scope | Opt-in via `fallthrough` | Fresh scope per `case`, no ceremony |
+| **Kotlin** | Each branch is an expression or block | None — no such concept | Block `{ }` is the only shape; scope comes free |
+
+C's `switch` is really a **computed goto with sugar** — labels + fall-through are a thin syntactic layer over jump instructions. That lets it be fast and predictable, but also exposes the grammar quirk: because `case X:` is literally a label on a statement, the rules for what can follow it are the rules for any labeled statement. Go and Kotlin both treat the multi-way branch as a higher-level construct with its own semantics, hiding the underlying jump table and the scope/declaration issues along with it.
+
+For a **bytecode dispatch loop** this is actually fine — you *want* the C `switch` to be a thin wrapper over a jump table, because that's what makes dispatch fast. You just pay for that performance with an extra pair of braces per case.
+
+### One-line takeaway
+
+> **`case X:` is a label attached to a single statement; wrap the body in `{ ... }` whenever you need to declare locals, both to satisfy the grammar and to give each case its own scope.**

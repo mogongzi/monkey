@@ -42,8 +42,8 @@ class Compiler() {
     }
 
     fun emit(op: Opcode, vararg operands: Int): Int {
-        val ins = make(op, *operands)
-        val pos = addInstruction(ins)
+        val instructions = make(op, *operands)
+        val pos = addInstruction(instructions)
         return pos
     }
 

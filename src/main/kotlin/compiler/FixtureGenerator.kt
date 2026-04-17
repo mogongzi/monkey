@@ -18,8 +18,9 @@ fun main() {
         val compiler = Compiler()
         compiler.compile(program)
         val bytecode = compiler.bytecode()
-
-        File(path).outputStream().use { out ->
+        val file = File(path)
+        file.parentFile?.mkdirs()
+        file.outputStream().use { out ->
             BytecodeWriter.write(bytecode, out)
         }
         println("  generated: $path")
