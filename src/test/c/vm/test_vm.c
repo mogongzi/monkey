@@ -29,7 +29,8 @@ static void run_vm_tests(VmTestCase *tests, int count)
 int main(void)
 {
   VmTestCase tests[] = {
-      {"src/test/fixtures/just_42.mkc", 42},
+      {"src/test/fixtures/just_one.mkc", 1},
+      {"src/test/fixtures/just_two.mkc", 2},
       {"src/test/fixtures/one_plus_two.mkc", 2},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));

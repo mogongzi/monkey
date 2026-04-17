@@ -8,8 +8,9 @@ import java.io.File
 @OptIn(ExperimentalUnsignedTypes::class)
 fun main() {
     val cases = listOf(
+        "src/test/fixtures/just_one.mkc" to "1",
+        "src/test/fixtures/just_two.mkc" to "2",
         "src/test/fixtures/one_plus_two.mkc" to "1 + 2",
-        "src/test/fixtures/just_42.mkc" to "42",
     )
 
     for ((path, source) in cases) {
