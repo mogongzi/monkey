@@ -379,3 +379,169 @@ For a **bytecode dispatch loop** this is actually fine — you *want* the C `swi
 ### One-line takeaway
 
 > **`case X:` is a label attached to a single statement; wrap the body in `{ ... }` whenever you need to declare locals, both to satisfy the grammar and to give each case its own scope.**
+
+---
+
+## What type is a `#define` macro in a `switch` statement?
+
+Context — this kind of code in `src/main/c/vm/vm.c`:
+
+```c
+#define OP_CONSTANT 0x00
+
+uint8_t op = vm->bc->instructions[ip];
+switch (op) {
+case OP_CONSTANT:
+    ...
+}
+```
+
+Natural question: what's the type of `OP_CONSTANT` here — is it `uint8_t` because `op` is `uint8_t`? Is it `uint32_t`? The answer is neither — it's `int` — and the path to that answer touches three separate layers of C.
+
+### Layer 1: `#define` has no type
+
+`#define OP_CONSTANT 0x00` is handled by the **preprocessor**, which runs *before* the compiler does any type analysis. It's pure textual substitution:
+
+```c
+case OP_CONSTANT:
+```
+
+becomes
+
+```c
+case 0x00:
+```
+
+before the compiler ever sees the line. So "what's the type of `OP_CONSTANT`" is the wrong question — the macro itself has no type. The real question is: **what's the type of the literal `0x00`?**
+
+### Layer 2: The type of `0x00` is `int`
+
+C11 §6.4.4.1 spells out the type of an unsuffixed integer constant. For a **hexadecimal** literal, the compiler picks the first type the value fits in, from this ordered list:
+
+```
+int → unsigned int → long → unsigned long → long long → unsigned long long
+```
+
+`0x00` fits in `int`, so its type is `int` (signed, typically 32 bits on your platform). If you wrote `0x80000000`, `int` couldn't hold it and the type would become `unsigned int`. If you want to force a width, use suffixes: `0x00U`, `0x00L`, `0x00UL`, `0x00LL`, etc.
+
+Note that **decimal** literals follow a different rule — they skip the unsigned types: `int → long → long long`. So `128` is always `int`, but `0x80` is also `int` only because it fits; larger hex values become unsigned first.
+
+### Layer 3: The `switch` applies integer promotion anyway
+
+Even if `op` is declared:
+
+```c
+uint8_t op = vm->bc->instructions[ip];
+```
+
+the controlling expression of a `switch` undergoes **integer promotion** (C11 §6.3.1.1): any integer type narrower than `int` is promoted to `int` (if `int` can represent all its values) or to `unsigned int` otherwise. `uint8_t` fits in `int`, so at the `switch`, `op` is promoted to `int` before comparison.
+
+The `case` labels are then converted to the same promoted type. So the comparison actually happening inside the dispatch loop is:
+
+```c
+(int)op == (int)0x00
+```
+
+Three narrow types (`uint8_t op`, the macro `OP_CONSTANT`, and the case label) all collapse into one: `int`.
+
+### The footgun: macros bypass the type system entirely
+
+`#define` has no type, which means it has no type checking. For opcodes this is harmless, but in other contexts it bites:
+
+```c
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+int x = MAX(f(), g());   // f() and g() each called TWICE
+```
+
+The preprocessor doesn't know `f()` has side effects — it just pastes the text. For function-like behavior with real type checking, prefer `static inline` functions in modern C:
+
+```c
+static inline int max_int(int a, int b) { return a > b ? a : b; }
+```
+
+For a closed set of constants like opcodes, the safer alternative is an `enum`:
+
+```c
+typedef enum {
+    OP_CONSTANT = 0x00,
+    OP_ADD      = 0x01,
+    ...
+} Opcode;
+```
+
+Enumerators *do* have a type (they're `int` in C), and `-Wswitch` will warn you if your `switch` forgets a case. With `#define`, you lose that safety — the compiler sees naked integer constants and can't tell they belong to a closed set.
+
+---
+
+## How Go and Kotlin handle the same situation
+
+### Go: no preprocessor, constants have real types
+
+Go has no preprocessor at all. The equivalent of `#define OP_CONSTANT 0x00` is:
+
+```go
+const OpConstant = 0x00
+```
+
+Go constants are **typed at the declaration site**, or *untyped* and inferred at each use. An untyped constant takes on whatever type the surrounding context needs:
+
+```go
+var op uint8 = 0x00
+switch op {
+case OpConstant:  // OpConstant adapts to uint8 in this context
+    ...
+}
+```
+
+For a closed set of opcodes, Go programmers reach for `iota`:
+
+```go
+type Opcode uint8
+const (
+    OpConstant Opcode = iota  // 0
+    OpAdd                     // 1
+    OpPop                     // 2
+)
+```
+
+Now `Opcode` is a distinct named type, the compiler tracks it separately from `uint8`, and tools like `go vet` and `exhaustive` give you switch-exhaustiveness checks. No preprocessor ambiguity, no integer-promotion surprises — just a typed constant set.
+
+### Kotlin: enum classes, with compile-time exhaustiveness
+
+Kotlin has no preprocessor either. The rough equivalent of `#define OP_CONSTANT 0x00` is:
+
+```kotlin
+const val OP_CONSTANT: Byte = 0x00
+```
+
+`const val` evaluates at compile time, but it's still fully typed — there's no way to write a constant whose type depends on context the way C's integer literals do. For opcodes, Kotlin's idiomatic choice is an `enum class`:
+
+```kotlin
+enum class Opcode(val code: Byte) {
+    CONSTANT(0x00),
+    ADD(0x01),
+    POP(0x02);
+}
+```
+
+And the `when` expression gives you **compile-time exhaustiveness checking** — if you add a new opcode and forget to handle it, the compiler refuses to build. That's a guarantee C's `switch` + `#define` fundamentally cannot provide, because `#define` lives outside the type system.
+
+### The conceptual takeaway
+
+Three different answers to "how do I name a constant integer":
+
+| Language | Mechanism | Type story |
+|---|---|---|
+| **C** | `#define`: preprocessor text substitution | No type; literal's type (`int` for hex that fits) wins |
+| **Go** | `const`: typed or context-typed constants | Untyped literals adapt; `iota` + named types for closed sets |
+| **Kotlin** | `const val`, `enum class` | Fully typed at declaration; exhaustiveness checking free |
+
+The C approach has one great virtue: **zero runtime cost and zero dependency on the type system.** `#define OP_CONSTANT 0x00` produces *identical* assembly to writing `0x00` inline. For a bytecode dispatch loop that runs millions of times per second, that matters.
+
+But you pay for it with footguns: macros bypass type checking, integer-literal rules surprise newcomers, and `switch` exhaustiveness is not enforceable. Go and Kotlin made the opposite trade: slightly heavier constructs, but the type system does the bookkeeping for you.
+
+For a **C VM** the `#define` + `switch` + `uint8_t op` combination is idiomatic: it's fast, it matches how the opcode byte lives in the `.mkc` file, and the promotion machinery that collapses everything to `int` is exactly what the CPU wants anyway — registers are int-width, and comparison instructions operate on int-width operands.
+
+### One-line takeaway
+
+> **A `#define` has no type — it's textual substitution. The expression that survives substitution has the type of the underlying literal (`int` for hex values that fit), and inside a `switch`, everything narrower is promoted to `int` before comparison.**

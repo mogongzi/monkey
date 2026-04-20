@@ -1,5 +1,5 @@
 CC       = cc
-CFLAGS   = -Wall -Wextra -std=c11 -g
+CFLAGS   = -Wall -Wextra -std=c11 -g -fsanitize=address -fno-omit-frame-pointer
 TEST_DIR = ../../../test/c/vm
 
 all: test_mkc test_vm

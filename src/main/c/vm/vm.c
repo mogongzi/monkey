@@ -1,3 +1,4 @@
+#include "bytes.h"
 #include "vm.h"
 #include "opcodes.h"
 #include <stdio.h>
@@ -36,9 +37,10 @@ void vm_run(VM *vm)
     {
     case OP_CONSTANT:
     {
-      uint32_t idx = (vm->bc->instructions[ip + 1] << 8) | vm->bc->instructions[ip + 2];
+      uint32_t idx = read_u16(&vm->bc->instructions[ip + 1]);
       vm->stack[vm->sp++] = vm->bc->constants[idx];
       ip += 2;
+      printf("successful.\n");
       break;
     }
     default:

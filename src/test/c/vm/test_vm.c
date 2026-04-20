@@ -1,4 +1,5 @@
 #include "../../../main/c/vm/mkc.h"
+#include "../../../main/c/vm/vm.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -17,10 +18,10 @@ static void run_vm_tests(VmTestCase *tests, int count)
 
     MkcBytecode bc;
     assert(mkc_read(f, &bc) == 0);
-    // VM *vm = vm_new(&bc);
-    // assert(vm_run(vm) == 0);
-    // assert(vm_stack_top(vm)->as.integer == tests[i].expected);
-    // vm_free(vm);
+    VM *vm = vm_init(&bc);
+    //vm_run(vm);
+    assert(vm_stack_top(vm)->as.integer == tests[i].expected);
+    vm_free(vm);
     mkc_free(&bc);
     printf("  PASS  %s\n", tests[i].fixture_path);
   }
