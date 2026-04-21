@@ -9,6 +9,13 @@ typedef struct
   int64_t expected;
 } VmTestCase;
 
+static void test_expected_integer(const MObject *obj, int64_t expected)
+{
+  assert(obj != NULL);
+  assert(obj->type == MINTEGER);
+  assert(obj->as.integer == expected);
+}
+
 static void run_vm_tests(VmTestCase *tests, int count)
 {
   for (int i = 0; i < count; i++)
@@ -18,9 +25,10 @@ static void run_vm_tests(VmTestCase *tests, int count)
 
     MkcBytecode bc;
     assert(mkc_read(f, &bc) == 0);
+    fclose(f);
     VM *vm = vm_init(&bc);
-    //vm_run(vm);
-    assert(vm_stack_top(vm)->as.integer == tests[i].expected);
+    assert(vm_run(vm) == VM_OK);
+    test_expected_integer(vm_stack_top(vm), tests[i].expected);
     vm_free(vm);
     mkc_free(&bc);
     printf("  PASS  %s\n", tests[i].fixture_path);

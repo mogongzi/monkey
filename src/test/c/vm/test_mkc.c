@@ -16,7 +16,13 @@ static FILE *bytes_to_stream(const uint8_t *data, size_t len)
   }
   fwrite(data, 1, len, f);
   fclose(f);
-  return fopen(path, "rb");
+  FILE *rf = fopen(path, "rb");
+  if (!rf)
+  {
+    perror(path);
+    abort();
+  }
+  return rf;
 }
 
 // test1: empty program
@@ -29,6 +35,7 @@ static void test_empty_program(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) == 0);
+  fclose(f);
   assert(bc.num_constants == 0);
   assert(bc.constants == NULL);
   assert(bc.num_instructions == 0);
@@ -48,6 +55,7 @@ static void test_one_integer(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) == 0);
+  fclose(f);
   assert(bc.num_constants == 1);
   assert(bc.constants[0].tag == TAG_INTEGER);
   assert(bc.constants[0].as.integer == 42);
@@ -68,6 +76,7 @@ static void test_negative_integer(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) == 0);
+  fclose(f);
   assert(bc.constants[0].as.integer == -42);
   mkc_free(&bc);
   printf("  PASS test_negative_integer\n");
@@ -92,6 +101,7 @@ static void test_two_constants_with_instructions(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) == 0);
+  fclose(f);
   // constants
   assert(bc.num_constants == 2);
   assert(bc.constants[0].as.integer == 1);
@@ -122,6 +132,7 @@ static void test_truncated_constants(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) != 0);
+  fclose(f);
   printf("  PASS test_truncated_constants\n");
 }
 
@@ -136,6 +147,7 @@ static void test_trailing_bytes(void)
   FILE *f = bytes_to_stream(data, sizeof(data));
   MkcBytecode bc;
   assert(mkc_read(f, &bc) != 0);
+  fclose(f);
   printf("  PASS test_trailing_bytes\n");
 }
 

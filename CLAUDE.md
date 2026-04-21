@@ -1,16 +1,17 @@
 ## Project Context
 
-This is a Kotlin implementation of the Monkey programming language, following the books by Thorsten Ball:
-1. *Writing an Interpreter in Go* — completed.
-2. *Writing a Compiler in Go* — in progress.
+This is a Kotlin implementation of the Monkey programming language and a C implementation of the VM, following the books by Thorsten Ball:
+1. *Writing an Interpreter in Go* — [done].
+2. *Writing a Compiler in Go* — [in progress].
 
 ## Architecture
 
-Reuse the existing Kotlin lexer/parser/AST. The **compiler** is written in Kotlin as an AST visitor that emits bytecode, serialized to a binary format. The **VM** is written in C — a tight bytecode dispatch loop. This mirrors real systems (e.g., `javac` → `.class` → JVM).
+The **compiler** is written in Kotlin as an AST visitor that emits bytecode, serialized to a binary format. The **VM** is written in C — a tight bytecode dispatch loop.
 
 ## Rules
 
-1. **Do NOT write/edit files directly.** The user writes all code themselves. Only provide guidance, explanations, and code snippets in conversation — never modify project files.
+0. **IMPORTANT**: Before answering questions, read the actual source and trace real callers — never reason from a guessed mental model of the code.
+1. **Do NOT write/edit files directly.** The user writes all code themselves. Only provide guidance, explanations, and code snippets in conversation.
 2. When the user shares **Go code from the book**, translate it along the compile-time / run-time boundary:
    - **Kotlin (compile-time)** — lexer, parser, AST, `code` package (opcode table, `Make`), `compiler` package (AST visitor emitting bytecode), and the `BytecodeWriter` that serializes `Bytecode` to the `.mkc` format. Any Go code under `code/`, `compiler/`, or the parts of `object/` that represent **compile-time constants** (e.g. `object.Integer` when it lives in the constant pool) belongs here.
    - **C (run-time)** — everything the VM touches after reading `.mkc`: the stack, frames, instruction pointer, dispatch loop, globals, and the runtime representation of Monkey objects on the stack. Any Go code under `vm/` or the parts of `object/` used as **live values at runtime** belongs here.

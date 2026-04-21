@@ -4,6 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int mobject_from_mkc_constant(const MkcConstant *constant, MObject *out)
+{
+  switch (constant->tag)
+  {
+  case TAG_INTEGER:
+    out->type = MINTEGER;
+    out->as.integer = constant->as.integer;
+    return 0;
+  default:
+    return -1;
+  }
+}
+
 VM *vm_init(const MkcBytecode *bc)
 {
   VM *vm = malloc(sizeof(VM));
@@ -11,6 +24,26 @@ VM *vm_init(const MkcBytecode *bc)
     return NULL;
   vm->bc = bc;
   vm->sp = 0;
+  vm->constants = NULL;
+  if (bc->num_constants > 0)
+  {
+    vm->constants = malloc(sizeof(MObject) * bc->num_constants);
+    if (!vm->constants)
+    {
+      free(vm);
+      return NULL;
+    }
+
+    for (uint16_t i = 0; i < bc->num_constants; i++)
+    {
+      if (mobject_from_mkc_constant(&bc->constants[i], &vm->constants[i]) != VM_OK)
+      {
+        free(vm->constants);
+        free(vm);
+        return NULL;
+      }
+    }
+  }
   return vm;
 }
 
@@ -18,17 +51,29 @@ void vm_free(VM *vm)
 {
   if (!vm)
     return;
+  free(vm->constants);
   free(vm);
 }
 
-const MkcConstant *vm_stack_top(const VM *vm)
+const MObject *vm_stack_top(const VM *vm)
 {
   if (vm->sp == 0)
     return NULL;
   return &(vm->stack[vm->sp - 1]);
 }
 
-void vm_run(VM *vm)
+VM_RESULT vm_push(VM *vm, MObject obj)
+{
+  if (vm->sp >= STACK_SIZE)
+  {
+    return VM_ERR_STACK_OVERFLOW;
+  }
+  vm->stack[vm->sp] = obj;
+  vm->sp++;
+  return VM_OK;
+}
+
+VM_RESULT vm_run(VM *vm)
 {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
   {
@@ -38,14 +83,19 @@ void vm_run(VM *vm)
     case OP_CONSTANT:
     {
       uint32_t idx = read_u16(&vm->bc->instructions[ip + 1]);
-      vm->stack[vm->sp++] = vm->bc->constants[idx];
+      VM_RESULT result = vm_push(vm, vm->constants[idx]);
+      if (result != VM_OK)
+      {
+        return result;
+      }
       ip += 2;
-      printf("successful.\n");
       break;
     }
     default:
       fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", op, ip);
-      return;
+      return VM_ERR_UNKNOWN_OPCODE;
     }
   }
+
+  return VM_OK;
 }

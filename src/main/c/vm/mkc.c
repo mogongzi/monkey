@@ -103,11 +103,9 @@ int mkc_read(FILE *f, MkcBytecode *out)
     goto fail;
   }
 
-  fclose(f);
   return 0;
 
 fail:
-  fclose(f);
   mkc_free(out);
   return -1;
 }

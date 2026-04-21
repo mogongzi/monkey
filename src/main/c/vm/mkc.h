@@ -7,14 +7,17 @@
 
 #define TAG_INTEGER 0x01
 
-typedef struct {
+typedef struct
+{
   uint8_t tag;
-  union {
+  union
+  {
     int64_t integer;
   } as;
 } MkcConstant;
 
-typedef struct {
+typedef struct
+{
   uint16_t num_constants;
   MkcConstant *constants;
   uint32_t num_instructions;

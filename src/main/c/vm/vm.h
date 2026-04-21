@@ -5,16 +5,37 @@
 
 #define STACK_SIZE 2048
 
+typedef enum
+{
+  MINTEGER,
+} MObjectType;
+
+typedef struct
+{
+  MObjectType type;
+  union
+  {
+    int64_t integer;
+  } as;
+} MObject;
 typedef struct
 {
   const MkcBytecode *bc;
-  MkcConstant stack[STACK_SIZE];
+  MObject *constants;
+  MObject stack[STACK_SIZE];
   uint32_t sp;
 } VM;
+typedef enum
+{
+  VM_OK = 0,
+  VM_ERR_UNKNOWN_OPCODE,
+  VM_ERR_STACK_OVERFLOW,
+} VM_RESULT;
 
 VM *vm_init(const MkcBytecode *bc);
 void vm_free(VM *vm);
-const MkcConstant *vm_stack_top(const VM *vm);
-void vm_run(VM *vm);
+const MObject *vm_stack_top(const VM *vm);
+VM_RESULT vm_run(VM *vm);
+VM_RESULT vm_push(VM *vm, MObject obj);
 
 #endif
