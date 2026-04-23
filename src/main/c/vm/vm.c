@@ -73,6 +73,12 @@ VM_RESULT vm_push(VM *vm, MObject obj)
   return VM_OK;
 }
 
+static MObject vm_pop(VM *vm) {
+  MObject obj = vm->stack[vm->sp - 1];
+  vm->sp--;
+  return obj;
+}
+
 VM_RESULT vm_run(VM *vm)
 {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
@@ -89,6 +95,16 @@ VM_RESULT vm_run(VM *vm)
         return result;
       }
       ip += 2;
+      break;
+    }
+    case OP_ADD:{
+      MObject right = vm_pop(vm);
+      MObject left = vm_pop(vm);
+      int64_t result = left.as.integer + right.as.integer;
+      MObject obj;
+      obj.type = MINTEGER;
+      obj.as.integer = result;
+      vm_push(vm, obj);
       break;
     }
     default:

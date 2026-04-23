@@ -2,6 +2,7 @@ package compiler
 
 import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.code.Instructions
+import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.compiler.Compiler
@@ -32,6 +33,7 @@ class CompilerTest {
                 expectedInstructions = listOf(
                     make(OpConstant, 0),
                     make(OpConstant, 1),
+                    make(OpAdd),
                 ),
             )
         )

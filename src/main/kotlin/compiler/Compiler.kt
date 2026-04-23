@@ -2,6 +2,7 @@ package me.ryan.interpreter.compiler
 
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.Instructions
+import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.make
@@ -23,6 +24,10 @@ class Compiler() {
             is InfixExpression -> {
                 compile(node.left)
                 compile(node.right)
+                when (node.operator) {
+                    "+" -> emit(OpAdd)
+                    else -> error("unknown operator ${node.operator}")
+                }
             }
             is IntegerLiteral -> {
                 // todo: evaluate first and add to constant pool

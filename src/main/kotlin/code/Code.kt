@@ -5,12 +5,14 @@ typealias Instructions = UByteArray
 typealias Opcode = UByte
 
 const val OpConstant: Opcode = 0u
+const val OpAdd: Opcode = 1u
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
 // mapOf<Opcode, Definition>
 val definitions = mapOf(
-    OpConstant to Definition("OpConstant", listOf(2))
+    OpConstant to Definition("OpConstant", listOf(2)),
+    OpAdd to Definition("OpAdd", emptyList()),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]
@@ -62,6 +64,7 @@ fun fmtInstruction(def: Definition, operands: IntArray): String {
         return "ERROR: operand len ${operands.size} does not match defined $operandCount\n"
     }
     return when (operandCount) {
+        0 -> def.name
         1 -> "${def.name} ${operands[0]}"
         else -> "ERROR: unhandled operandCount for ${def.name}\n"
     }

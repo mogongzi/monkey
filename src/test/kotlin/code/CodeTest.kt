@@ -1,5 +1,6 @@
 package code
 
+import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.lookup
@@ -23,6 +24,12 @@ class CodeTest {
                 OpConstant,
                 intArrayOf(65534),
                 ubyteArrayOf(OpConstant, 255u, 254u)
+            ),
+            TestCase(
+                OpAdd,
+                intArrayOf(),
+                ubyteArrayOf(OpAdd)
+
             )
         )
 
@@ -46,20 +53,22 @@ class CodeTest {
     @Test
     fun testInstructionsString() {
         val instructions = listOf(
+            make(OpAdd),
             make(OpConstant, 1),
             make(OpConstant, 2),
             make(OpConstant, 65535),
         )
 
         val expected = """
-            0000 OpConstant 1
-            0003 OpConstant 2
-            0006 OpConstant 65535
+            0000 OpAdd
+            0001 OpConstant 1
+            0004 OpConstant 2
+            0007 OpConstant 65535
         """.trimIndent()
 
-        val concatted = instructions.reduce { acc, ins -> acc + ins }
-        assertEquals(expected, concatted.string(),
-            "instructions wrongly formatted.\nwant=$expected\ngot=${concatted.string()}"
+        val contacted = instructions.reduce { acc, ins -> acc + ins }
+        assertEquals(expected, contacted.string(),
+            "instructions wrongly formatted.\nwant=$expected\ngot=${contacted.string()}"
         )
     }
 
