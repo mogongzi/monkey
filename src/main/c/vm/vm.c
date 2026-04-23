@@ -101,6 +101,9 @@ VM_RESULT vm_run(VM *vm)
       MObject right = vm_pop(vm);
       MObject left = vm_pop(vm);
       int64_t result = left.as.integer + right.as.integer;
+      // the below 3 lines can be rewrite in C99: compound literal
+      // (MObject){.type = MINTEGER, .as.integer = result}
+      // and vm_push(vm, ...)
       MObject obj;
       obj.type = MINTEGER;
       obj.as.integer = result;
