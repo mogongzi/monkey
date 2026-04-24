@@ -3,10 +3,21 @@
 #include <assert.h>
 #include <stdio.h>
 
+typedef enum
+{
+  EXP_INT,
+  EXP_BOOL,
+} ExpectedType;
+
 typedef struct
 {
   const char *fixture_path;
-  int64_t expected;
+  ExpectedType type;
+  union 
+  {
+    int64_t integer;
+    bool boolean;
+  } value;
 } VmTestCase;
 
 static void test_expected_integer(const MObject *obj, int64_t expected)
@@ -52,6 +63,15 @@ static void test_integer_arithmetic(void)
       {"src/test/fixtures/paren_expr.mkc", 60},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+static void test_boolean_expressions(void) 
+{
+    VmTestCase tests[] = {
+      {"src/test/fixtures/true.mkc", true},
+      {"src/test/fixtures/false.mkc", false},
+    };
+    run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
 int main(void)

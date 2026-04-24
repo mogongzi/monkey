@@ -5,9 +5,11 @@ import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.OpSub
+import me.ryan.interpreter.code.OpTrue
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.compiler.Compiler
 import me.ryan.interpreter.eval.MInteger
@@ -78,6 +80,30 @@ class CompilerTest {
                     make(OpConstant, 0),
                     make(OpConstant, 1),
                     make(OpDiv),
+                    make(OpPop),
+                ),
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    @Test
+    fun testBooleanExpressions() {
+        val tests = listOf(
+            TestCase(
+                input = "true",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "false",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpFalse),
                     make(OpPop),
                 ),
             ),

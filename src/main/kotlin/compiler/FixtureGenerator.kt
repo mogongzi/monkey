@@ -20,7 +20,9 @@ fun main() {
         "src/test/fixtures/mul_then_add.mkc" to "5 * 2 + 10",
         "src/test/fixtures/add_then_mul.mkc" to "5 + 2 * 10",
         "src/test/fixtures/paren_expr.mkc" to "5 * (2 + 10)",
-    )
+        "src/test/fixtures/true.mkc" to "true",
+        "src/test/fixtures/false.mkc" to "false",
+        )
 
     for ((path, source) in cases) {
         val program = parse(source)

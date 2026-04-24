@@ -2,12 +2,14 @@
 #define VM_H
 
 #include "mkc.h"
+#include <stdbool.h>
 
 #define STACK_SIZE 2048
 
 typedef enum
 {
   MINTEGER,
+  MBOOLEAN,
 } MObjectType;
 
 typedef struct
@@ -16,6 +18,7 @@ typedef struct
   union
   {
     int64_t integer;
+    bool boolean;
   } as;
 } MObject;
 typedef struct

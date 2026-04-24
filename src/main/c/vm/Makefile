@@ -1,19 +1,23 @@
 CC       = cc
 CFLAGS   = -Wall -Wextra -std=c11 -g -fsanitize=address -fno-omit-frame-pointer
 TEST_DIR = ../../../test/c/vm
+BUILD_DIR = ../../../../build
 
-all: test_mkc test_vm
+all: test_mkc test_vm dump_mkc
 
-test_mkc: $(TEST_DIR)/test_mkc.c mkc.c mkc.h bytes.c bytes.h
-	$(CC) $(CFLAGS) -o $@ $(TEST_DIR)/test_mkc.c mkc.c bytes.c
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-test_vm: $(TEST_DIR)/test_vm.c mkc.c mkc.h bytes.c bytes.h vm.c vm.h
-	$(CC) $(CFLAGS) -o $@ $(TEST_DIR)/test_vm.c mkc.c bytes.c vm.c
+test_mkc: $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/test_mkc.c mkc.c bytes.c
 
-dump_mkc: dump_mkc.o mkc.o bytes.o
-	$(CC) $(CFLAGS) -o $@ $^
+test_vm: $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/test_vm.c mkc.c bytes.c vm.c
+
+dump_mkc: $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ dump_mkc.c mkc.c bytes.c
 
 clean:
-	rm -f *.o test_mkc test_vm dump_mkc
+	rm -f $(BUILD_DIR)/test_mkc $(BUILD_DIR)/test_vm $(BUILD_DIR)/dump_mkc
 
-.PHONY: all clean
+.PHONY: all clean test_mkc test_vm dump_mkc

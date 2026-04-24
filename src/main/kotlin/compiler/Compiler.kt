@@ -5,9 +5,11 @@ import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.OpSub
+import me.ryan.interpreter.code.OpTrue
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.eval.MInteger
@@ -40,9 +42,15 @@ class Compiler() {
                 }
             }
             is IntegerLiteral -> {
-                // todo: evaluate first and add to constant pool
                 val integer = MInteger(node.value)
                 emit(OpConstant, addConstant(integer))
+            }
+            is BooleanLiteral -> {
+                if (node.value) {
+                    emit(OpTrue)
+                } else {
+                    emit(OpFalse)
+                }
             }
         }
     }
