@@ -41,6 +41,15 @@ static void test_integer_arithmetic(void)
       {"src/test/fixtures/just_one.mkc", 1},
       {"src/test/fixtures/just_two.mkc", 2},
       {"src/test/fixtures/one_plus_two.mkc", 3},
+      {"src/test/fixtures/one_minus_two.mkc", -1},
+      {"src/test/fixtures/one_times_two.mkc", 2},
+      {"src/test/fixtures/four_div_two.mkc", 2},
+      {"src/test/fixtures/mixed_arithmetic_1.mkc", 55},
+      {"src/test/fixtures/mixed_arithmetic_2.mkc", 10},
+      {"src/test/fixtures/power_of_two.mkc", 32},
+      {"src/test/fixtures/mul_then_add.mkc", 20},
+      {"src/test/fixtures/add_then_mul.mkc", 25},
+      {"src/test/fixtures/paren_expr.mkc", 60},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }

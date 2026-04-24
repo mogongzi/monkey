@@ -4,7 +4,10 @@ import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
+import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpPop
+import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.eval.MInteger
@@ -30,6 +33,9 @@ class Compiler() {
                 compile(node.right)
                 when (node.operator) {
                     "+" -> emit(OpAdd)
+                    "-" -> emit(OpSub)
+                    "*" -> emit(OpMul)
+                    "/" -> emit(OpDiv)
                     else -> error("unknown operator ${node.operator}")
                 }
             }

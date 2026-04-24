@@ -85,7 +85,43 @@ static MObject vm_pop(VM *vm)
   return obj;
 }
 
-VM_RESULT vm_run(VM *vm)
+static int vm_exec_binary_op(VM *vm, uint8_t opcode)
+{
+  MObject right = vm_pop(vm);
+  MObject left = vm_pop(vm);
+
+  int64_t l = left.as.integer;
+  int64_t r = right.as.integer;
+  int64_t result;
+
+  switch (opcode)
+  {
+  case OP_ADD:
+    result = l + r;
+    break;
+  case OP_SUB:
+    result = l - r;
+    break;
+  case OP_MUL:
+    result = l * r;
+    break;
+  case OP_DIV:
+    result = l / r;
+    break;
+  default:
+    fprintf(stderr, "unknown integer operator: %d\n", opcode);
+    return -1;
+  }
+  // the below 3 lines can be rewrite in C99: compound literal
+  // MObject obj;
+  // obj.type = MINTEGER;
+  // obj.as.integer = result;
+  MObject obj = {.type = MINTEGER, .as.integer = result};
+  return vm_push(vm, obj);
+}
+
+VM_RESULT
+vm_run(VM *vm)
 {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
   {
@@ -104,19 +140,12 @@ VM_RESULT vm_run(VM *vm)
       break;
     }
     case OP_ADD:
-    {
-      MObject right = vm_pop(vm);
-      MObject left = vm_pop(vm);
-      int64_t result = left.as.integer + right.as.integer;
-      // the below 3 lines can be rewrite in C99: compound literal
-      // (MObject){.type = MINTEGER, .as.integer = result}
-      // and vm_push(vm, ...)
-      MObject obj;
-      obj.type = MINTEGER;
-      obj.as.integer = result;
-      vm_push(vm, obj);
+    case OP_SUB:
+    case OP_MUL:
+    case OP_DIV:
+      if (vm_exec_binary_op(vm, op) != 0)
+        return -1;
       break;
-    }
     case OP_POP:
     {
       vm_pop(vm);

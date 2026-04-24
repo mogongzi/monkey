@@ -2,6 +2,10 @@ package code
 
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
+import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpMul
+import me.ryan.interpreter.code.OpPop
+import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.lookup
 import me.ryan.interpreter.code.make
@@ -29,8 +33,7 @@ class CodeTest {
                 OpAdd,
                 intArrayOf(),
                 ubyteArrayOf(OpAdd)
-
-            )
+            ),
         )
 
         for (test in tests) {
@@ -66,9 +69,9 @@ class CodeTest {
             0007 OpConstant 65535
         """.trimIndent()
 
-        val contacted = instructions.reduce { acc, ins -> acc + ins }
-        assertEquals(expected, contacted.string(),
-            "instructions wrongly formatted.\nwant=$expected\ngot=${contacted.string()}"
+        val concatted = instructions.reduce { acc, ins -> acc + ins }
+        assertEquals(expected, concatted.string(),
+            "instructions wrongly formatted.\nwant=$expected\ngot=${concatted.string()}"
         )
     }
 

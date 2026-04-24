@@ -4,7 +4,10 @@ import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
+import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpPop
+import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.compiler.Compiler
 import me.ryan.interpreter.eval.MInteger
@@ -47,8 +50,37 @@ class CompilerTest {
                     make(OpConstant, 1),
                     make(OpPop),
                 )
-
-            )
+            ),
+            TestCase(
+                input = "1 - 2",
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpSub),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "1 * 2",
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpMul),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "2 / 1",
+                expectedConstants = listOf(2, 1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpDiv),
+                    make(OpPop),
+                ),
+            ),
         )
 
         runCompilerTests(tests)
