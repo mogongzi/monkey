@@ -35,6 +35,7 @@ typedef enum
 VM *vm_init(const MkcBytecode *bc);
 void vm_free(VM *vm);
 const MObject *vm_stack_top(const VM *vm);
+const MObject *vm_last_popped_stack_elem(const VM *vm);
 VM_RESULT vm_run(VM *vm);
 VM_RESULT vm_push(VM *vm, MObject obj);
 

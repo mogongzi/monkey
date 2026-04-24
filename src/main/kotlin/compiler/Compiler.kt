@@ -4,6 +4,7 @@ import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
+import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.Opcode
 import me.ryan.interpreter.code.make
 import me.ryan.interpreter.eval.MInteger
@@ -20,7 +21,10 @@ class Compiler() {
     fun compile(node: Node) {
         when (node) {
             is Program -> node.statements.forEach { compile(it) }
-            is ExpressionStatement -> compile(node.expression)
+            is ExpressionStatement -> {
+                compile(node.expression)
+                emit(OpPop)
+            }
             is InfixExpression -> {
                 compile(node.left)
                 compile(node.right)

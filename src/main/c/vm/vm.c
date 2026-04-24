@@ -62,6 +62,11 @@ const MObject *vm_stack_top(const VM *vm)
   return &(vm->stack[vm->sp - 1]);
 }
 
+const MObject *vm_last_popped_stack_elem(const VM *vm)
+{
+  return &vm->stack[vm->sp];
+}
+
 VM_RESULT vm_push(VM *vm, MObject obj)
 {
   if (vm->sp >= STACK_SIZE)
@@ -73,7 +78,8 @@ VM_RESULT vm_push(VM *vm, MObject obj)
   return VM_OK;
 }
 
-static MObject vm_pop(VM *vm) {
+static MObject vm_pop(VM *vm)
+{
   MObject obj = vm->stack[vm->sp - 1];
   vm->sp--;
   return obj;
@@ -97,7 +103,8 @@ VM_RESULT vm_run(VM *vm)
       ip += 2;
       break;
     }
-    case OP_ADD:{
+    case OP_ADD:
+    {
       MObject right = vm_pop(vm);
       MObject left = vm_pop(vm);
       int64_t result = left.as.integer + right.as.integer;
@@ -108,6 +115,11 @@ VM_RESULT vm_run(VM *vm)
       obj.type = MINTEGER;
       obj.as.integer = result;
       vm_push(vm, obj);
+      break;
+    }
+    case OP_POP:
+    {
+      vm_pop(vm);
       break;
     }
     default:

@@ -28,14 +28,15 @@ static void run_vm_tests(VmTestCase *tests, int count)
     fclose(f);
     VM *vm = vm_init(&bc);
     assert(vm_run(vm) == VM_OK);
-    test_expected_integer(vm_stack_top(vm), tests[i].expected);
+    test_expected_integer(vm_last_popped_stack_elem(vm), tests[i].expected);
     vm_free(vm);
     mkc_free(&bc);
     printf("  PASS  %s\n", tests[i].fixture_path);
   }
 }
 
-static void test_integer_arithmetic(void) {
+static void test_integer_arithmetic(void)
+{
   VmTestCase tests[] = {
       {"src/test/fixtures/just_one.mkc", 1},
       {"src/test/fixtures/just_two.mkc", 2},
@@ -43,8 +44,6 @@ static void test_integer_arithmetic(void) {
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
-
-
 
 int main(void)
 {

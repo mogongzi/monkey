@@ -6,6 +6,7 @@ typealias Opcode = UByte
 
 const val OpConstant: Opcode = 0u
 const val OpAdd: Opcode = 1u
+const val OpPop: Opcode = 2u
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -13,6 +14,7 @@ data class Definition(val name: String, val operandWidths: List<Int>)
 val definitions = mapOf(
     OpConstant to Definition("OpConstant", listOf(2)),
     OpAdd to Definition("OpAdd", emptyList()),
+    OpPop to Definition("OpPop", emptyList()), // only job is to tell the VM to pop the topmost element off the stack
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]
