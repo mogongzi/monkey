@@ -146,6 +146,26 @@ vm_run(VM *vm)
       if (vm_exec_binary_op(vm, op) != 0)
         return -1;
       break;
+    case OP_TRUE:
+    {
+      MObject obj = {.type = MBOOLEAN, .as.boolean = true};
+      VM_RESULT result = vm_push(vm, obj);
+      if (result != VM_OK)
+      {
+        return result;
+      }
+      break;
+    }
+    case OP_FALSE:
+    {
+      MObject obj = {.type = MBOOLEAN, .as.boolean = false};
+      VM_RESULT result = vm_push(vm, obj);
+      if (result != VM_OK)
+      {
+        return result;
+      }
+      break;
+    }
     case OP_POP:
     {
       vm_pop(vm);
