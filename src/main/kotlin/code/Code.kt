@@ -12,6 +12,9 @@ const val OpMul: Opcode = 4u
 const val OpDiv: Opcode = 5u
 const val OpTrue: Opcode = 6u
 const val OpFalse: Opcode = 7u
+const val OpEqual: Opcode = 8u
+const val OpNotEqual: Opcode = 9u
+const val OpGreaterThan: Opcode = 10u
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -25,6 +28,9 @@ val definitions = mapOf(
     OpDiv to Definition("OpDiv", emptyList()),
     OpTrue to Definition("OpTrue", emptyList()),
     OpFalse to Definition("OpFalse", emptyList()),
+    OpEqual to Definition("OpEqual", emptyList()),
+    OpNotEqual to Definition("OpNotEqual", emptyList()),
+    OpGreaterThan to Definition("OpGreaterThan", emptyList()),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]

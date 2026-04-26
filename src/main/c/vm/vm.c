@@ -120,13 +120,19 @@ static int vm_exec_binary_op(VM *vm, uint8_t opcode)
   return vm_push(vm, obj);
 }
 
+static int vm_execute_comparison(VM *vm, uint8_t opcode)
+{
+  MObject left = vm_pop(vm);
+  MObject right = vm_pop(vm);
+}
+
 VM_RESULT
 vm_run(VM *vm)
 {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
   {
-    uint8_t op = vm->bc->instructions[ip];
-    switch (op)
+    uint8_t opcode = vm->bc->instructions[ip];
+    switch (opcode)
     {
     case OP_CONSTANT:
     {
@@ -143,7 +149,7 @@ vm_run(VM *vm)
     case OP_SUB:
     case OP_MUL:
     case OP_DIV:
-      if (vm_exec_binary_op(vm, op) != 0)
+      if (vm_exec_binary_op(vm, opcode) != 0)
         return -1;
       break;
     case OP_TRUE:
@@ -166,13 +172,19 @@ vm_run(VM *vm)
       }
       break;
     }
+    case OP_EQUAL:
+    case OP_NOT_EQUAL:
+    case OP_GREATER_THAN:
+      if (vm_execute_comparison(vm, opcode) != 0)
+        return -1;
+      break;
     case OP_POP:
     {
       vm_pop(vm);
       break;
     }
     default:
-      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", op, ip);
+      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
       return VM_ERR_UNKNOWN_OPCODE;
     }
   }

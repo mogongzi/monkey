@@ -11,5 +11,8 @@
 #define OP_DIV 0x05
 #define OP_TRUE 0x06
 #define OP_FALSE 0x07
+#define OP_EQUAL 0x08
+#define OP_NOT_EQUAL 0x0a
+#define OP_GREATER_THAN 0x0b
 
 #endif

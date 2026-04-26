@@ -5,8 +5,11 @@ import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
+import me.ryan.interpreter.code.OpGreaterThan
 import me.ryan.interpreter.code.OpMul
+import me.ryan.interpreter.code.OpNotEqual
 import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.OpTrue
@@ -31,6 +34,12 @@ class Compiler() {
                 emit(OpPop)
             }
             is InfixExpression -> {
+                if (node.operator == "<") {
+                    compile(node.right)
+                    compile(node.left)
+                    emit(OpGreaterThan)
+                    return
+                }
                 compile(node.left)
                 compile(node.right)
                 when (node.operator) {
@@ -38,6 +47,9 @@ class Compiler() {
                     "-" -> emit(OpSub)
                     "*" -> emit(OpMul)
                     "/" -> emit(OpDiv)
+                    ">" -> emit(OpGreaterThan)
+                    "==" -> emit(OpEqual)
+                    "!=" -> emit(OpNotEqual)
                     else -> error("unknown operator ${node.operator}")
                 }
             }

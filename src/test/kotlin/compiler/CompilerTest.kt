@@ -5,8 +5,11 @@ import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
+import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
+import me.ryan.interpreter.code.OpGreaterThan
 import me.ryan.interpreter.code.OpMul
+import me.ryan.interpreter.code.OpNotEqual
 import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.OpTrue
@@ -104,6 +107,66 @@ class CompilerTest {
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
                     make(OpFalse),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "1 > 2",
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpGreaterThan),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "1 < 2",
+                expectedConstants = listOf(2, 1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpGreaterThan),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "1 == 2",
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpEqual),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "1 != 2",
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpNotEqual),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "true == false",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpFalse),
+                    make(OpEqual),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = "true != false",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpFalse),
+                    make(OpNotEqual),
                     make(OpPop),
                 ),
             ),

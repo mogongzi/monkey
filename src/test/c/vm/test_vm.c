@@ -3,15 +3,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-typedef enum
-{
-  EXP_INT,
-  EXP_BOOL,
-} ExpectedType;
-
 typedef struct
 {
-  ExpectedType type;
+  MObjectType type;
   union
   {
     int64_t integer;
@@ -27,36 +21,36 @@ typedef struct
 
 static ExpectedObject expected_integer(int64_t value)
 {
-  return (ExpectedObject){.type = EXP_INT, .value.integer = value};
+  return (ExpectedObject){.type = MINTEGER, .value.integer = value};
 }
 
 static ExpectedObject expected_boolean(bool value)
 {
-  return (ExpectedObject){.type = EXP_BOOL, .value.boolean = value};
+  return (ExpectedObject){.type = MBOOLEAN, .value.boolean = value};
 }
 
 static void test_integer_object(const MObject *obj, int64_t expected)
 {
-  assert(obj != NULL);
-  assert(obj->type == MINTEGER);
-  assert(obj->as.integer == expected);
+  assert(obj != NULL && "expected integer object, got NULL");
+  assert(obj->type == MINTEGER && "object is not an Integer");
+  assert(obj->as.integer == expected && "integer value mismatch");
 }
 
 static void test_boolean_object(const MObject *obj, bool expected)
 {
-  assert(obj != NULL);
-  assert(obj->type == MBOOLEAN);
-  assert(obj->as.boolean == expected);
+  assert(obj != NULL && "expected boolean object, got NULL");
+  assert(obj->type == MBOOLEAN && "object is not a Boolean");
+  assert(obj->as.boolean == expected && "boolean value mismatch");
 }
 
 static void test_expected_object(ExpectedObject expected, const MObject *actual)
 {
   switch (expected.type)
   {
-  case EXP_INT:
+  case MINTEGER:
     test_integer_object(actual, expected.value.integer);
     break;
-  case EXP_BOOL:
+  case MBOOLEAN:
     test_boolean_object(actual, expected.value.boolean);
     break;
   default:
@@ -75,7 +69,7 @@ static void run_vm_tests(VmTestCase *tests, int count)
     assert(mkc_read(f, &bc) == 0);
     fclose(f);
     VM *vm = vm_init(&bc);
-    assert(vm_run(vm) == VM_OK);
+    assert(vm_run(vm) == VM_OK && "vm_run failed");
     test_expected_object(tests[i].expected, vm_last_popped_stack_elem(vm));
     vm_free(vm);
     mkc_free(&bc);
@@ -107,6 +101,23 @@ static void test_boolean_expressions(void)
   VmTestCase tests[] = {
       {"src/test/fixtures/true.mkc", expected_boolean(true)},
       {"src/test/fixtures/false.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_lt_two.mkc", expected_boolean(true)},
+      {"src/test/fixtures/one_gt_two.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_lt_one.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_gt_one.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_eq_one.mkc", expected_boolean(true)},
+      {"src/test/fixtures/one_neq_one.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_eq_two.mkc", expected_boolean(false)},
+      {"src/test/fixtures/one_neq_two.mkc", expected_boolean(true)},
+      {"src/test/fixtures/true_eq_true.mkc", expected_boolean(true)},
+      {"src/test/fixtures/false_eq_false.mkc", expected_boolean(true)},
+      {"src/test/fixtures/true_eq_false.mkc", expected_boolean(false)},
+      {"src/test/fixtures/true_neq_false.mkc", expected_boolean(true)},
+      {"src/test/fixtures/false_neq_true.mkc", expected_boolean(true)},
+      {"src/test/fixtures/lt_eq_true.mkc", expected_boolean(true)},
+      {"src/test/fixtures/lt_eq_false.mkc", expected_boolean(false)},
+      {"src/test/fixtures/gt_eq_true.mkc", expected_boolean(false)},
+      {"src/test/fixtures/gt_eq_false.mkc", expected_boolean(true)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }

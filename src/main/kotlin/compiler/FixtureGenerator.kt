@@ -22,7 +22,27 @@ fun main() {
         "src/test/fixtures/paren_expr.mkc" to "5 * (2 + 10)",
         "src/test/fixtures/true.mkc" to "true",
         "src/test/fixtures/false.mkc" to "false",
-        )
+        // integer comparisons
+        "src/test/fixtures/one_lt_two.mkc" to "1 < 2",
+        "src/test/fixtures/one_gt_two.mkc" to "1 > 2",
+        "src/test/fixtures/one_lt_one.mkc" to "1 < 1",
+        "src/test/fixtures/one_gt_one.mkc" to "1 > 1",
+        "src/test/fixtures/one_eq_one.mkc" to "1 == 1",
+        "src/test/fixtures/one_neq_one.mkc" to "1 != 1",
+        "src/test/fixtures/one_eq_two.mkc" to "1 == 2",
+        "src/test/fixtures/one_neq_two.mkc" to "1 != 2",
+        // boolean equality
+        "src/test/fixtures/true_eq_true.mkc" to "true == true",
+        "src/test/fixtures/false_eq_false.mkc" to "false == false",
+        "src/test/fixtures/true_eq_false.mkc" to "true == false",
+        "src/test/fixtures/true_neq_false.mkc" to "true != false",
+        "src/test/fixtures/false_neq_true.mkc" to "false != true",
+        // mixed: comparison result compared with boolean
+        "src/test/fixtures/lt_eq_true.mkc" to "(1 < 2) == true",
+        "src/test/fixtures/lt_eq_false.mkc" to "(1 < 2) == false",
+        "src/test/fixtures/gt_eq_true.mkc" to "(1 > 2) == true",
+        "src/test/fixtures/gt_eq_false.mkc" to "(1 > 2) == false",
+    )
 
     for ((path, source) in cases) {
         val program = parse(source)
