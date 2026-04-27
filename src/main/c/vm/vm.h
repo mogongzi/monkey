@@ -33,6 +33,8 @@ typedef enum
   VM_OK = 0,
   VM_ERR_UNKNOWN_OPCODE,
   VM_ERR_STACK_OVERFLOW,
+  VM_ERR_UNKNOWN_OPERATOR,
+  VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION,
 } VM_RESULT;
 
 VM *vm_init(const MkcBytecode *bc);

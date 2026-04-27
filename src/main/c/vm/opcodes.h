@@ -12,7 +12,9 @@
 #define OP_TRUE 0x06
 #define OP_FALSE 0x07
 #define OP_EQUAL 0x08
-#define OP_NOT_EQUAL 0x0a
-#define OP_GREATER_THAN 0x0b
+#define OP_NOT_EQUAL 0x09
+#define OP_GREATER_THAN 0x0A
+#define OP_MINUS 0x0B
+#define OP_BANG 0x0C
 
 #endif

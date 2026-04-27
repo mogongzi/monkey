@@ -42,6 +42,18 @@ fun main() {
         "src/test/fixtures/lt_eq_false.mkc" to "(1 < 2) == false",
         "src/test/fixtures/gt_eq_true.mkc" to "(1 > 2) == true",
         "src/test/fixtures/gt_eq_false.mkc" to "(1 > 2) == false",
+        // prefix: minus
+        "src/test/fixtures/minus_five.mkc" to "-5",
+        "src/test/fixtures/minus_ten.mkc" to "-10",
+        "src/test/fixtures/minus_sum.mkc" to "-50 + 100 + -50",
+        "src/test/fixtures/complex_arithmetic.mkc" to "(5 + 10 * 2 + 15 / 3) * 2 + -10",
+        // prefix: bang (logical not)
+        "src/test/fixtures/bang_true.mkc" to "!true",
+        "src/test/fixtures/bang_false.mkc" to "!false",
+        "src/test/fixtures/bang_five.mkc" to "!5",
+        "src/test/fixtures/bang_bang_true.mkc" to "!!true",
+        "src/test/fixtures/bang_bang_false.mkc" to "!!false",
+        "src/test/fixtures/bang_bang_five.mkc" to "!!5",
     )
 
     for ((path, source) in cases) {

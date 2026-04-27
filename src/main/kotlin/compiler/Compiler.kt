@@ -3,11 +3,13 @@ package me.ryan.interpreter.compiler
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
+import me.ryan.interpreter.code.OpBang
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
 import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpGreaterThan
+import me.ryan.interpreter.code.OpMinus
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpNotEqual
 import me.ryan.interpreter.code.OpPop
@@ -32,6 +34,14 @@ class Compiler() {
             is ExpressionStatement -> {
                 compile(node.expression)
                 emit(OpPop)
+            }
+            is PrefixExpression -> {
+                compile(node.right)
+                when(node.operator) {
+                    "!" -> emit(OpBang)
+                    "-" -> emit(OpMinus)
+                    else -> error("unknown operator ${node.operator}")
+                }
             }
             is InfixExpression -> {
                 if (node.operator == "<") {

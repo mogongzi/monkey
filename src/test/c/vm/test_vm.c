@@ -92,6 +92,10 @@ static void test_integer_arithmetic(void)
       {"src/test/fixtures/mul_then_add.mkc", expected_integer(20)},
       {"src/test/fixtures/add_then_mul.mkc", expected_integer(25)},
       {"src/test/fixtures/paren_expr.mkc", expected_integer(60)},
+      {"src/test/fixtures/minus_five.mkc", expected_integer(-5)},
+      {"src/test/fixtures/minus_ten.mkc", expected_integer(-10)},
+      {"src/test/fixtures/minus_sum.mkc", expected_integer(0)},
+      {"src/test/fixtures/complex_arithmetic.mkc", expected_integer(50)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
@@ -118,6 +122,12 @@ static void test_boolean_expressions(void)
       {"src/test/fixtures/lt_eq_false.mkc", expected_boolean(false)},
       {"src/test/fixtures/gt_eq_true.mkc", expected_boolean(false)},
       {"src/test/fixtures/gt_eq_false.mkc", expected_boolean(true)},
+      {"src/test/fixtures/bang_true.mkc", expected_boolean(false)},
+      {"src/test/fixtures/bang_false.mkc", expected_boolean(true)},
+      {"src/test/fixtures/bang_five.mkc", expected_boolean(false)},
+      {"src/test/fixtures/bang_bang_true.mkc", expected_boolean(true)},
+      {"src/test/fixtures/bang_bang_false.mkc", expected_boolean(false)},
+      {"src/test/fixtures/bang_bang_five.mkc", expected_boolean(true)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }

@@ -3,11 +3,13 @@ package compiler
 import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.OpAdd
+import me.ryan.interpreter.code.OpBang
 import me.ryan.interpreter.code.OpConstant
 import me.ryan.interpreter.code.OpDiv
 import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpGreaterThan
+import me.ryan.interpreter.code.OpMinus
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpNotEqual
 import me.ryan.interpreter.code.OpPop
@@ -86,6 +88,15 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
+            TestCase(
+                input = "-1",
+                expectedConstants = listOf(1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpMinus),
+                    make(OpPop),
+                )
+            )
         )
 
         runCompilerTests(tests)
@@ -169,6 +180,15 @@ class CompilerTest {
                     make(OpNotEqual),
                     make(OpPop),
                 ),
+            ),
+            TestCase(
+                input = "!true",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpBang),
+                    make(OpPop),
+                )
             ),
         )
 

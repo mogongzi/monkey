@@ -4,17 +4,19 @@ package me.ryan.interpreter.code
 typealias Instructions = UByteArray
 typealias Opcode = UByte
 
-const val OpConstant: Opcode = 0u
-const val OpAdd: Opcode = 1u
-const val OpPop: Opcode = 2u
-const val OpSub: Opcode = 3u
-const val OpMul: Opcode = 4u
-const val OpDiv: Opcode = 5u
-const val OpTrue: Opcode = 6u
-const val OpFalse: Opcode = 7u
-const val OpEqual: Opcode = 8u
-const val OpNotEqual: Opcode = 9u
-const val OpGreaterThan: Opcode = 10u
+const val OpConstant: Opcode = 0x00u
+const val OpAdd: Opcode = 0x01u
+const val OpPop: Opcode = 0x02u
+const val OpSub: Opcode = 0x03u
+const val OpMul: Opcode = 0x04u
+const val OpDiv: Opcode = 0x05u
+const val OpTrue: Opcode = 0x06u
+const val OpFalse: Opcode = 0x07u
+const val OpEqual: Opcode = 0x08u
+const val OpNotEqual: Opcode = 0x09u
+const val OpGreaterThan: Opcode = 0x0Au
+const val OpMinus: Opcode = 0xBu
+const val OpBang: Opcode = 0xCu
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -31,6 +33,8 @@ val definitions = mapOf(
     OpEqual to Definition("OpEqual", emptyList()),
     OpNotEqual to Definition("OpNotEqual", emptyList()),
     OpGreaterThan to Definition("OpGreaterThan", emptyList()),
+    OpMinus to Definition("OpMinus", emptyList()),
+    OpBang to Definition("OpBang", emptyList()),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]

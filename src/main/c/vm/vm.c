@@ -1,6 +1,6 @@
 #include "bytes.h"
-#include "vm.h"
 #include "opcodes.h"
+#include "vm.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -85,7 +85,7 @@ static MObject vm_pop(VM *vm)
   return obj;
 }
 
-static int vm_exec_binary_op(VM *vm, uint8_t opcode)
+static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode)
 {
   MObject right = vm_pop(vm);
   MObject left = vm_pop(vm);
@@ -110,7 +110,7 @@ static int vm_exec_binary_op(VM *vm, uint8_t opcode)
     break;
   default:
     fprintf(stderr, "unknown integer operator: %d\n", opcode);
-    return -1;
+    return VM_ERR_UNKNOWN_OPERATOR;
   }
   // the below 3 lines can be rewrite in C99: compound literal
   // MObject obj;
@@ -120,10 +120,80 @@ static int vm_exec_binary_op(VM *vm, uint8_t opcode)
   return vm_push(vm, obj);
 }
 
-static int vm_execute_comparison(VM *vm, uint8_t opcode)
+static VM_RESULT vm_execute_integer_comparision(VM *vm, uint8_t opcode, int64_t left, int64_t right)
 {
-  MObject left = vm_pop(vm);
+  bool result;
+  switch (opcode)
+  {
+  case OP_EQUAL:
+    result = (left == right);
+    break;
+  case OP_NOT_EQUAL:
+    result = (left != right);
+    break;
+  case OP_GREATER_THAN:
+    result = (left > right);
+    break;
+  default:
+    fprintf(stderr, "unknown operator: %d\n", opcode);
+    return VM_ERR_UNKNOWN_OPERATOR;
+  }
+  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
+}
+
+static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode)
+{
   MObject right = vm_pop(vm);
+  MObject left = vm_pop(vm);
+
+  if (left.type == MINTEGER && right.type == MINTEGER)
+  {
+    return vm_execute_integer_comparision(vm, opcode, left.as.integer, right.as.integer);
+  }
+
+  bool result;
+  switch (opcode)
+  {
+  case OP_EQUAL:
+    result = (left.as.boolean == right.as.boolean);
+    break;
+  case OP_NOT_EQUAL:
+    result = (left.as.boolean != right.as.boolean);
+    break;
+  default:
+    fprintf(stderr, "unknown operator: %d (%d %d)\n", opcode, left.type, right.type);
+    return VM_ERR_UNKNOWN_OPERATOR;
+  }
+  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
+}
+
+static VM_RESULT vm_exec_minus_operator(VM *vm)
+{
+  MObject operand = vm_pop(vm);
+  if (operand.type != MINTEGER)
+  {
+    fprintf(stderr, "unsupported type for negation: %d", operand.type);
+    return VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION;
+  }
+  int64_t value = -(operand.as.integer);
+  return vm_push(vm, (MObject){.type = MINTEGER, .as.integer = value});
+}
+
+static VM_RESULT
+vm_exec_bang_operator(VM *vm)
+{
+  MObject operand = vm_pop(vm);
+  bool result;
+  switch (operand.type)
+  {
+  case MBOOLEAN:
+    result = !operand.as.boolean;
+    break;
+  default:
+    result = false;
+    break;
+  }
+  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
 
 VM_RESULT
@@ -145,13 +215,21 @@ vm_run(VM *vm)
       ip += 2;
       break;
     }
+    case OP_POP:
+    {
+      vm_pop(vm);
+      break;
+    }
     case OP_ADD:
     case OP_SUB:
     case OP_MUL:
     case OP_DIV:
-      if (vm_exec_binary_op(vm, opcode) != 0)
-        return -1;
+    {
+      VM_RESULT r = vm_exec_binary_op(vm, opcode);
+      if (r != VM_OK)
+        return r;
       break;
+    }
     case OP_TRUE:
     {
       MObject obj = {.type = MBOOLEAN, .as.boolean = true};
@@ -175,14 +253,18 @@ vm_run(VM *vm)
     case OP_EQUAL:
     case OP_NOT_EQUAL:
     case OP_GREATER_THAN:
-      if (vm_execute_comparison(vm, opcode) != 0)
-        return -1;
-      break;
-    case OP_POP:
     {
-      vm_pop(vm);
+      VM_RESULT r = vm_execute_comparison(vm, opcode);
+      if (r != VM_OK)
+        return r;
       break;
     }
+    case OP_MINUS:
+      vm_exec_minus_operator(vm);
+      break;
+    case OP_BANG:
+      vm_exec_bang_operator(vm);
+      break;
     default:
       fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
       return VM_ERR_UNKNOWN_OPCODE;
