@@ -9,6 +9,7 @@ import me.ryan.interpreter.code.OpDiv
 import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpGreaterThan
+import me.ryan.interpreter.code.OpJumpNotTruthy
 import me.ryan.interpreter.code.OpMinus
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpNotEqual
@@ -16,6 +17,7 @@ import me.ryan.interpreter.code.OpPop
 import me.ryan.interpreter.code.OpSub
 import me.ryan.interpreter.code.OpTrue
 import me.ryan.interpreter.code.make
+import me.ryan.interpreter.code.string
 import me.ryan.interpreter.compiler.Compiler
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
@@ -27,10 +29,6 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalUnsignedTypes::class)
 data class TestCase(val input: String, val expectedConstants: List<Any>, val expectedInstructions: List<Instructions>)
-
-@OptIn(ExperimentalUnsignedTypes::class)
-fun Instructions.toHexString(): String =
-    joinToString("") { "\\x%02x".format(it.toInt()) }
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class CompilerTest {
@@ -195,6 +193,26 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testConditionals() {
+        val tests = listOf(
+            TestCase(input = """
+                if (true) { 10 }; 3333;
+            """.trimIndent(),
+                expectedConstants = listOf(10, 3333),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpJumpNotTruthy, 7),
+                    make(OpConstant, 0),
+                    make(OpPop),
+                    make(OpConstant, 1),
+                    make(OpPop),
+                ),
+        ))
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<TestCase>) {
         for (test in tests) {
             val program = parse(test.input)
@@ -217,13 +235,13 @@ class CompilerTest {
         val concatted = concatInstructions(expected)
         assertEquals(
             concatted.size, actual.size,
-            "wrong instructions length. \nwant=${concatted.toHexString()}\ngot=${actual.toHexString()}"
+            "wrong instructions length. \nwant=${concatted.string()}\ngot=${actual.string()}"
         )
 
         concatted.forEachIndexed { i, ins ->
             if (actual[i] != ins) {
                 throw AssertionError(
-                    "wrong instruction at $i.\nwant=${concatted.toHexString()}\ngot =${actual.toHexString()}"
+                    "wrong instruction at $i.\nwant=${concatted.string()}\ngot =${actual.string()}"
                 )
             }
         }

@@ -9,6 +9,7 @@ import me.ryan.interpreter.code.OpDiv
 import me.ryan.interpreter.code.OpEqual
 import me.ryan.interpreter.code.OpFalse
 import me.ryan.interpreter.code.OpGreaterThan
+import me.ryan.interpreter.code.OpJumpNotTruthy
 import me.ryan.interpreter.code.OpMinus
 import me.ryan.interpreter.code.OpMul
 import me.ryan.interpreter.code.OpNotEqual
@@ -72,6 +73,16 @@ class Compiler() {
                     emit(OpTrue)
                 } else {
                     emit(OpFalse)
+                }
+            }
+            is IfExpression -> {
+                compile(node.condition)
+                emit(OpJumpNotTruthy, 9999)
+                compile(node.consequence)
+            }
+            is BlockStatement -> {
+                for (statement in node.statements) {
+                    compile(statement)
                 }
             }
         }
