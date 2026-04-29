@@ -1,33 +1,21 @@
 package me.ryan.interpreter.compiler
 
 import me.ryan.interpreter.ast.*
-import me.ryan.interpreter.code.Instructions
-import me.ryan.interpreter.code.OpAdd
-import me.ryan.interpreter.code.OpBang
-import me.ryan.interpreter.code.OpConstant
-import me.ryan.interpreter.code.OpDiv
-import me.ryan.interpreter.code.OpEqual
-import me.ryan.interpreter.code.OpFalse
-import me.ryan.interpreter.code.OpGreaterThan
-import me.ryan.interpreter.code.OpJumpNotTruthy
-import me.ryan.interpreter.code.OpMinus
-import me.ryan.interpreter.code.OpMul
-import me.ryan.interpreter.code.OpNotEqual
-import me.ryan.interpreter.code.OpPop
-import me.ryan.interpreter.code.OpSub
-import me.ryan.interpreter.code.OpTrue
-import me.ryan.interpreter.code.Opcode
-import me.ryan.interpreter.code.make
+import me.ryan.interpreter.code.*
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Bytecode(val instructions: Instructions, val constants: MutableList<MObject>)
 
+data class EmittedInstruction(val opcode: Opcode, val position: Int)
+
 @OptIn(ExperimentalUnsignedTypes::class)
 class Compiler() {
     private var instructions: Instructions = ubyteArrayOf()
     private val constants: MutableList<MObject> = mutableListOf()
+    private var lastInstruction: EmittedInstruction? = null
+    private var previousInstruction: EmittedInstruction? = null
 
     fun compile(node: Node) {
         when (node) {
@@ -77,8 +65,27 @@ class Compiler() {
             }
             is IfExpression -> {
                 compile(node.condition)
-                emit(OpJumpNotTruthy, 9999)
+                val jumpNotTruthPos = emit(OpJumpNotTruthy, 9999)
                 compile(node.consequence)
+                if (lastInstructionIsPop()) {
+                    removeLastPop()
+                }
+
+                if (node.alternative == null) {
+                    val afterConsequencePos = instructions.size
+                    changeOperand(jumpNotTruthPos, afterConsequencePos)
+                } else {
+                    val jumpPos = emit(OpJump, 9999)
+
+                    val afterConsequencePos = instructions.size
+                    changeOperand(jumpNotTruthPos, afterConsequencePos)
+                    compile(node.alternative)
+                    if (lastInstructionIsPop()) {
+                        removeLastPop()
+                    }
+                    val afterAlternativePos = instructions.size
+                    changeOperand(jumpPos, afterAlternativePos)
+                }
             }
             is BlockStatement -> {
                 for (statement in node.statements) {
@@ -97,15 +104,45 @@ class Compiler() {
         return constants.size - 1
     }
 
-    fun emit(op: Opcode, vararg operands: Int): Int {
+    private fun emit(op: Opcode, vararg operands: Int): Int {
         val instructions = make(op, *operands)
         val pos = addInstruction(instructions)
+        setLastInstruction(op, pos)
         return pos
     }
 
-    fun addInstruction(ints: Instructions): Int {
+    private fun addInstruction(ints: Instructions): Int {
         val newPos = instructions.size
         instructions += ints
         return newPos
+    }
+
+    private fun setLastInstruction(op: Opcode, pos: Int) {
+        val previous = lastInstruction
+        val last = EmittedInstruction(op, pos)
+        previousInstruction = previous
+        lastInstruction = last
+    }
+
+    private fun lastInstructionIsPop(): Boolean {
+        return lastInstruction?.opcode == OpPop
+    }
+
+    private fun removeLastPop() {
+        val last = lastInstruction ?: return
+        instructions = instructions.copyOf(last.position)
+        lastInstruction = previousInstruction
+    }
+
+    private fun replaceInstruction(pos: Int, newInstruction: Instructions) {
+        for (i in newInstruction.indices) {
+            instructions[pos + i] = newInstruction[i]
+        }
+    }
+
+    private fun changeOperand(opPos: Int, operand: Int) {
+        val op = instructions[opPos]
+        val newInstruction = make(op, operand)
+        replaceInstruction(opPos, newInstruction)
     }
 }

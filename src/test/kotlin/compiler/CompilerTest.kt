@@ -1,23 +1,7 @@
 package compiler
 
 import me.ryan.interpreter.ast.Node
-import me.ryan.interpreter.code.Instructions
-import me.ryan.interpreter.code.OpAdd
-import me.ryan.interpreter.code.OpBang
-import me.ryan.interpreter.code.OpConstant
-import me.ryan.interpreter.code.OpDiv
-import me.ryan.interpreter.code.OpEqual
-import me.ryan.interpreter.code.OpFalse
-import me.ryan.interpreter.code.OpGreaterThan
-import me.ryan.interpreter.code.OpJumpNotTruthy
-import me.ryan.interpreter.code.OpMinus
-import me.ryan.interpreter.code.OpMul
-import me.ryan.interpreter.code.OpNotEqual
-import me.ryan.interpreter.code.OpPop
-import me.ryan.interpreter.code.OpSub
-import me.ryan.interpreter.code.OpTrue
-import me.ryan.interpreter.code.make
-import me.ryan.interpreter.code.string
+import me.ryan.interpreter.code.*
 import me.ryan.interpreter.compiler.Compiler
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
@@ -196,7 +180,8 @@ class CompilerTest {
     @Test
     fun testConditionals() {
         val tests = listOf(
-            TestCase(input = """
+            TestCase(
+                input = """
                 if (true) { 10 }; 3333;
             """.trimIndent(),
                 expectedConstants = listOf(10, 3333),
@@ -208,7 +193,24 @@ class CompilerTest {
                     make(OpConstant, 1),
                     make(OpPop),
                 ),
-        ))
+            ),
+            TestCase(
+                input = """
+                if (true) { 10 } else { 20 }; 3333;
+            """.trimIndent(),
+                expectedConstants = listOf(10, 20, 3333),
+                expectedInstructions = listOf(
+                    make(OpTrue),
+                    make(OpJumpNotTruthy, 10),
+                    make(OpConstant, 0),
+                    make(OpJump, 13),
+                    make(OpConstant, 1),
+                    make(OpPop),
+                    make(OpConstant, 2),
+                    make(OpPop),
+                ),
+            ),
+        )
 
         runCompilerTests(tests)
     }
@@ -235,13 +237,13 @@ class CompilerTest {
         val concatted = concatInstructions(expected)
         assertEquals(
             concatted.size, actual.size,
-            "wrong instructions length. \nwant=${concatted.string()}\ngot=${actual.string()}"
+            "wrong instructions length. \nwant=\n${concatted.string()}\ngot=\n${actual.string()}"
         )
 
         concatted.forEachIndexed { i, ins ->
             if (actual[i] != ins) {
                 throw AssertionError(
-                    "wrong instruction at $i.\nwant=${concatted.string()}\ngot =${actual.string()}"
+                    "wrong instruction at $i.\nwant=\n${concatted.string()}\ngot=\n${actual.string()}"
                 )
             }
         }
