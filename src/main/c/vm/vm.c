@@ -208,6 +208,8 @@ static bool is_truthy(MObject *obj)
 		return false;
 	case MINTEGER:
 		return true;
+	default:
+		return true;
 	}
 }
 

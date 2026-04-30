@@ -223,3 +223,94 @@ Adding a new opcode always touches three coordinated places:
 3. **C `vm_run`** — new `case` in the dispatch switch, reading operands with matching widths.
 
 If Kotlin writes 2 bytes and C reads 4, the IP falls out of sync with instruction boundaries and everything after becomes garbage. `OpConstant` is the minimal example of all three pieces cooperating; every future opcode is a variation on this theme.
+
+---
+
+## 9. Pratt parsing, expression trees, and tree walking
+
+Three concepts to keep separate:
+
+1. **Pratt `prefix` / `infix` is about parser roles, not traversal order.**
+
+   In Pratt parsing, a prefix parse function answers:
+
+   > Can this token start an expression?
+
+   Examples:
+
+   - `5` -> `IntegerLiteral`
+   - `foo` -> `Identifier`
+   - `-x` -> `PrefixExpression`
+   - `if (...) { ... }` -> `IfExpression`
+   - `fn(...) { ... }` -> `FunctionLiteral`
+
+   An infix parse function answers:
+
+   > Can this token extend the expression on its left?
+
+   Examples:
+
+   - `1 + 2` -> `InfixExpression`
+   - `add(1, 2)` -> `CallExpression`
+   - `arr[0]` -> `IndexExpression`
+
+2. **Source code is a linear token stream, often with infix expression syntax.**
+
+   Source code is not a tree yet. The lexer produces tokens, then the parser builds the AST.
+
+   ```text
+   1 + 2 * 3
+   ```
+
+   Pratt parsing turns that linear input into the correct tree:
+
+   ```text
+       +
+      / \
+     1   *
+        / \
+       2   3
+   ```
+
+   The precedence table decides that `*` binds tighter than `+`, so the AST becomes:
+
+   ```text
+   1 + (2 * 3)
+   ```
+
+3. **A tree-walking interpreter is postorder-like for expressions.**
+
+   Once the AST exists, the evaluator walks it. For normal operators, it evaluates children first, then applies the parent operation.
+
+   For:
+
+   ```text
+   1 + 2 * 3
+   ```
+
+   evaluation order is roughly:
+
+   ```text
+   1
+   2
+   3
+   *
+   +
+   ```
+
+   That is postorder-like: left child, right child, parent.
+
+   The caveat is that a real interpreter is not only a blind tree traversal. Some nodes have special semantics:
+
+   - `if` evaluates only the selected branch.
+   - `let` evaluates the right-hand side, then mutates the environment.
+   - `return` can stop evaluation early.
+   - function calls evaluate callee and arguments, then apply the function.
+
+   So the clean mental model is:
+
+   ```text
+   Parser builds the tree.
+   Evaluator/compiler walks the tree.
+   Pratt parsing controls how infix-looking source becomes the right tree shape.
+   ```
