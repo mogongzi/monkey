@@ -6,270 +6,308 @@
 
 static int mobject_from_mkc_constant(const MkcConstant *constant, MObject *out)
 {
-  switch (constant->tag)
-  {
-  case TAG_INTEGER:
-    out->type = MINTEGER;
-    out->as.integer = constant->as.integer;
-    return 0;
-  default:
-    return -1;
-  }
+	switch (constant->tag)
+	{
+	case TAG_INTEGER:
+		out->type = MINTEGER;
+		out->as.integer = constant->as.integer;
+		return 0;
+	default:
+		return -1;
+	}
 }
 
 VM *vm_init(const MkcBytecode *bc)
 {
-  VM *vm = malloc(sizeof(VM));
-  if (!vm)
-    return NULL;
-  vm->bc = bc;
-  vm->sp = 0;
-  vm->constants = NULL;
-  if (bc->num_constants > 0)
-  {
-    vm->constants = malloc(sizeof(MObject) * bc->num_constants);
-    if (!vm->constants)
-    {
-      free(vm);
-      return NULL;
-    }
+	VM *vm = malloc(sizeof(VM));
+	if (!vm)
+		return NULL;
+	vm->bc = bc;
+	vm->sp = 0;
+	vm->constants = NULL;
+	if (bc->num_constants > 0)
+	{
+		vm->constants = malloc(sizeof(MObject) * bc->num_constants);
+		if (!vm->constants)
+		{
+			free(vm);
+			return NULL;
+		}
 
-    for (uint16_t i = 0; i < bc->num_constants; i++)
-    {
-      if (mobject_from_mkc_constant(&bc->constants[i], &vm->constants[i]) != VM_OK)
-      {
-        free(vm->constants);
-        free(vm);
-        return NULL;
-      }
-    }
-  }
-  return vm;
+		for (uint16_t i = 0; i < bc->num_constants; i++)
+		{
+			if (mobject_from_mkc_constant(&bc->constants[i], &vm->constants[i]) != VM_OK)
+			{
+				free(vm->constants);
+				free(vm);
+				return NULL;
+			}
+		}
+	}
+	return vm;
 }
 
 void vm_free(VM *vm)
 {
-  if (!vm)
-    return;
-  free(vm->constants);
-  free(vm);
+	if (!vm)
+		return;
+	free(vm->constants);
+	free(vm);
 }
 
 const MObject *vm_stack_top(const VM *vm)
 {
-  if (vm->sp == 0)
-    return NULL;
-  return &(vm->stack[vm->sp - 1]);
+	if (vm->sp == 0)
+		return NULL;
+	return &(vm->stack[vm->sp - 1]);
 }
 
 const MObject *vm_last_popped_stack_elem(const VM *vm)
 {
-  return &vm->stack[vm->sp];
+	return &vm->stack[vm->sp];
 }
 
 VM_RESULT vm_push(VM *vm, MObject obj)
 {
-  if (vm->sp >= STACK_SIZE)
-  {
-    return VM_ERR_STACK_OVERFLOW;
-  }
-  vm->stack[vm->sp] = obj;
-  vm->sp++;
-  return VM_OK;
+	if (vm->sp >= STACK_SIZE)
+	{
+		return VM_ERR_STACK_OVERFLOW;
+	}
+	vm->stack[vm->sp] = obj;
+	vm->sp++;
+	return VM_OK;
 }
 
 static MObject vm_pop(VM *vm)
 {
-  MObject obj = vm->stack[vm->sp - 1];
-  vm->sp--;
-  return obj;
+	MObject obj = vm->stack[vm->sp - 1];
+	vm->sp--;
+	return obj;
 }
 
 static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode)
 {
-  MObject right = vm_pop(vm);
-  MObject left = vm_pop(vm);
+	MObject right = vm_pop(vm);
+	MObject left = vm_pop(vm);
 
-  int64_t l = left.as.integer;
-  int64_t r = right.as.integer;
-  int64_t result;
+	int64_t l = left.as.integer;
+	int64_t r = right.as.integer;
+	int64_t result;
 
-  switch (opcode)
-  {
-  case OP_ADD:
-    result = l + r;
-    break;
-  case OP_SUB:
-    result = l - r;
-    break;
-  case OP_MUL:
-    result = l * r;
-    break;
-  case OP_DIV:
-    result = l / r;
-    break;
-  default:
-    fprintf(stderr, "unknown integer operator: %d\n", opcode);
-    return VM_ERR_UNKNOWN_OPERATOR;
-  }
-  // the below 3 lines can be rewrite in C99: compound literal
-  // MObject obj;
-  // obj.type = MINTEGER;
-  // obj.as.integer = result;
-  MObject obj = {.type = MINTEGER, .as.integer = result};
-  return vm_push(vm, obj);
+	switch (opcode)
+	{
+	case OP_ADD:
+		result = l + r;
+		break;
+	case OP_SUB:
+		result = l - r;
+		break;
+	case OP_MUL:
+		result = l * r;
+		break;
+	case OP_DIV:
+		result = l / r;
+		break;
+	default:
+		fprintf(stderr, "unknown integer operator: %d\n", opcode);
+		return VM_ERR_UNKNOWN_OPERATOR;
+	}
+	// the below 3 lines can be rewrite in C99: compound literal
+	// MObject obj;
+	// obj.type = MINTEGER;
+	// obj.as.integer = result;
+	MObject obj = {.type = MINTEGER, .as.integer = result};
+	return vm_push(vm, obj);
 }
 
 static VM_RESULT vm_execute_integer_comparision(VM *vm, uint8_t opcode, int64_t left, int64_t right)
 {
-  bool result;
-  switch (opcode)
-  {
-  case OP_EQUAL:
-    result = (left == right);
-    break;
-  case OP_NOT_EQUAL:
-    result = (left != right);
-    break;
-  case OP_GREATER_THAN:
-    result = (left > right);
-    break;
-  default:
-    fprintf(stderr, "unknown operator: %d\n", opcode);
-    return VM_ERR_UNKNOWN_OPERATOR;
-  }
-  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
+	bool result;
+	switch (opcode)
+	{
+	case OP_EQUAL:
+		result = (left == right);
+		break;
+	case OP_NOT_EQUAL:
+		result = (left != right);
+		break;
+	case OP_GREATER_THAN:
+		result = (left > right);
+		break;
+	default:
+		fprintf(stderr, "unknown operator: %d\n", opcode);
+		return VM_ERR_UNKNOWN_OPERATOR;
+	}
+	return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
 
 static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode)
 {
-  MObject right = vm_pop(vm);
-  MObject left = vm_pop(vm);
+	MObject right = vm_pop(vm);
+	MObject left = vm_pop(vm);
 
-  if (left.type == MINTEGER && right.type == MINTEGER)
-  {
-    return vm_execute_integer_comparision(vm, opcode, left.as.integer, right.as.integer);
-  }
+	if (left.type == MINTEGER && right.type == MINTEGER)
+	{
+		return vm_execute_integer_comparision(vm, opcode, left.as.integer, right.as.integer);
+	}
 
-  bool result;
-  switch (opcode)
-  {
-  case OP_EQUAL:
-    result = (left.as.boolean == right.as.boolean);
-    break;
-  case OP_NOT_EQUAL:
-    result = (left.as.boolean != right.as.boolean);
-    break;
-  default:
-    fprintf(stderr, "unknown operator: %d (%d %d)\n", opcode, left.type, right.type);
-    return VM_ERR_UNKNOWN_OPERATOR;
-  }
-  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
+	bool result;
+	switch (opcode)
+	{
+	case OP_EQUAL:
+		result = (left.as.boolean == right.as.boolean);
+		break;
+	case OP_NOT_EQUAL:
+		result = (left.as.boolean != right.as.boolean);
+		break;
+	default:
+		fprintf(stderr, "unknown operator: %d (%d %d)\n", opcode, left.type, right.type);
+		return VM_ERR_UNKNOWN_OPERATOR;
+	}
+	return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
 
 static VM_RESULT vm_exec_minus_operator(VM *vm)
 {
-  MObject operand = vm_pop(vm);
-  if (operand.type != MINTEGER)
-  {
-    fprintf(stderr, "unsupported type for negation: %d", operand.type);
-    return VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION;
-  }
-  int64_t value = -(operand.as.integer);
-  return vm_push(vm, (MObject){.type = MINTEGER, .as.integer = value});
+	MObject operand = vm_pop(vm);
+	if (operand.type != MINTEGER)
+	{
+		fprintf(stderr, "unsupported type for negation: %d", operand.type);
+		return VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION;
+	}
+	int64_t value = -(operand.as.integer);
+	return vm_push(vm, (MObject){.type = MINTEGER, .as.integer = value});
 }
 
-static VM_RESULT
-vm_exec_bang_operator(VM *vm)
+static VM_RESULT vm_exec_bang_operator(VM *vm)
 {
-  MObject operand = vm_pop(vm);
-  bool result;
-  switch (operand.type)
-  {
-  case MBOOLEAN:
-    result = !operand.as.boolean;
-    break;
-  default:
-    result = false;
-    break;
-  }
-  return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
+	MObject operand = vm_pop(vm);
+	bool result;
+	switch (operand.type)
+	{
+	case MBOOLEAN:
+		result = !operand.as.boolean;
+		break;
+	case MNULL:
+		result = true;
+		break;
+	default:
+		result = false;
+		break;
+	}
+	return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
 
-VM_RESULT
-vm_run(VM *vm)
+static bool is_truthy(MObject *obj)
 {
-  for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
-  {
-    uint8_t opcode = vm->bc->instructions[ip];
-    switch (opcode)
-    {
-    case OP_CONSTANT:
-    {
-      uint32_t idx = read_u16(&vm->bc->instructions[ip + 1]);
-      VM_RESULT result = vm_push(vm, vm->constants[idx]);
-      if (result != VM_OK)
-      {
-        return result;
-      }
-      ip += 2;
-      break;
-    }
-    case OP_POP:
-    {
-      vm_pop(vm);
-      break;
-    }
-    case OP_ADD:
-    case OP_SUB:
-    case OP_MUL:
-    case OP_DIV:
-    {
-      VM_RESULT r = vm_exec_binary_op(vm, opcode);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_TRUE:
-    {
-      MObject obj = {.type = MBOOLEAN, .as.boolean = true};
-      VM_RESULT result = vm_push(vm, obj);
-      if (result != VM_OK)
-      {
-        return result;
-      }
-      break;
-    }
-    case OP_FALSE:
-    {
-      MObject obj = {.type = MBOOLEAN, .as.boolean = false};
-      VM_RESULT result = vm_push(vm, obj);
-      if (result != VM_OK)
-      {
-        return result;
-      }
-      break;
-    }
-    case OP_EQUAL:
-    case OP_NOT_EQUAL:
-    case OP_GREATER_THAN:
-    {
-      VM_RESULT r = vm_execute_comparison(vm, opcode);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_MINUS:
-      vm_exec_minus_operator(vm);
-      break;
-    case OP_BANG:
-      vm_exec_bang_operator(vm);
-      break;
-    default:
-      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
-      return VM_ERR_UNKNOWN_OPCODE;
-    }
-  }
+	switch (obj->type)
+	{
+	case MBOOLEAN:
+		return obj->as.boolean;
+	case MNULL:
+		return false;
+	case MINTEGER:
+		return true;
+	}
+}
 
-  return VM_OK;
+VM_RESULT vm_run(VM *vm)
+{
+	for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++)
+	{
+		uint8_t opcode = vm->bc->instructions[ip];
+		switch (opcode)
+		{
+		case OP_CONSTANT:
+		{
+			uint32_t idx = read_u16(&vm->bc->instructions[ip + 1]);
+			VM_RESULT result = vm_push(vm, vm->constants[idx]);
+			if (result != VM_OK)
+			{
+				return result;
+			}
+			ip += 2;
+			break;
+		}
+		case OP_POP:
+		{
+			vm_pop(vm);
+			break;
+		}
+		case OP_ADD:
+		case OP_SUB:
+		case OP_MUL:
+		case OP_DIV:
+		{
+			VM_RESULT r = vm_exec_binary_op(vm, opcode);
+			if (r != VM_OK)
+				return r;
+			break;
+		}
+		case OP_TRUE:
+		{
+			MObject obj = {.type = MBOOLEAN, .as.boolean = true};
+			VM_RESULT result = vm_push(vm, obj);
+			if (result != VM_OK)
+			{
+				return result;
+			}
+			break;
+		}
+		case OP_FALSE:
+		{
+			MObject obj = {.type = MBOOLEAN, .as.boolean = false};
+			VM_RESULT result = vm_push(vm, obj);
+			if (result != VM_OK)
+			{
+				return result;
+			}
+			break;
+		}
+		case OP_EQUAL:
+		case OP_NOT_EQUAL:
+		case OP_GREATER_THAN:
+		{
+			VM_RESULT r = vm_execute_comparison(vm, opcode);
+			if (r != VM_OK)
+				return r;
+			break;
+		}
+		case OP_MINUS:
+			vm_exec_minus_operator(vm);
+			break;
+		case OP_BANG:
+			vm_exec_bang_operator(vm);
+			break;
+		case OP_JUMP:
+		{
+			uint32_t pos = read_u16(&vm->bc->instructions[ip + 1]);
+			ip = pos - 1;
+			break;
+		}
+		case OP_JUMP_NOT_TRUTHY:
+		{
+			uint32_t pos = read_u16(&vm->bc->instructions[ip + 1]);
+			ip += 2;
+			MObject condition = vm_pop(vm);
+			if (!is_truthy(&condition)) // skip to 'pos' if top-of-stack is falsy
+			{
+				ip = pos - 1;
+			}
+			break;
+		}
+		case OP_NULL:
+		{
+			VM_RESULT r = vm_push(vm, (MObject){.type = MNULL});
+			if (r != VM_OK)
+				return r;
+			break;
+		}
+		default:
+			fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
+			return VM_ERR_UNKNOWN_OPCODE;
+		}
+	}
+
+	return VM_OK;
 }

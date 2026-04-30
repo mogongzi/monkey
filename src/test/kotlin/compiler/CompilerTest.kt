@@ -187,8 +187,10 @@ class CompilerTest {
                 expectedConstants = listOf(10, 3333),
                 expectedInstructions = listOf(
                     make(OpTrue),
-                    make(OpJumpNotTruthy, 7),
+                    make(OpJumpNotTruthy, 10),
                     make(OpConstant, 0),
+                    make(OpJump, 11),
+                    make(OpNull),
                     make(OpPop),
                     make(OpConstant, 1),
                     make(OpPop),

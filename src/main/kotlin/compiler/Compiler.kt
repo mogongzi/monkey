@@ -24,14 +24,16 @@ class Compiler() {
                 compile(node.expression)
                 emit(OpPop)
             }
+
             is PrefixExpression -> {
                 compile(node.right)
-                when(node.operator) {
+                when (node.operator) {
                     "!" -> emit(OpBang)
                     "-" -> emit(OpMinus)
                     else -> error("unknown operator ${node.operator}")
                 }
             }
+
             is InfixExpression -> {
                 if (node.operator == "<") {
                     compile(node.right)
@@ -52,10 +54,12 @@ class Compiler() {
                     else -> error("unknown operator ${node.operator}")
                 }
             }
+
             is IntegerLiteral -> {
                 val integer = MInteger(node.value)
                 emit(OpConstant, addConstant(integer))
             }
+
             is BooleanLiteral -> {
                 if (node.value) {
                     emit(OpTrue)
@@ -63,6 +67,7 @@ class Compiler() {
                     emit(OpFalse)
                 }
             }
+
             is IfExpression -> {
                 compile(node.condition)
                 val jumpNotTruthPos = emit(OpJumpNotTruthy, 9999)
@@ -71,22 +76,21 @@ class Compiler() {
                     removeLastPop()
                 }
 
+                val jumpPos = emit(OpJump, 9999)
+                val afterConsequencePos = instructions.size
+                changeOperand(jumpNotTruthPos, afterConsequencePos)
                 if (node.alternative == null) {
-                    val afterConsequencePos = instructions.size
-                    changeOperand(jumpNotTruthPos, afterConsequencePos)
+                    emit(OpNull)
                 } else {
-                    val jumpPos = emit(OpJump, 9999)
-
-                    val afterConsequencePos = instructions.size
-                    changeOperand(jumpNotTruthPos, afterConsequencePos)
                     compile(node.alternative)
                     if (lastInstructionIsPop()) {
                         removeLastPop()
                     }
-                    val afterAlternativePos = instructions.size
-                    changeOperand(jumpPos, afterAlternativePos)
                 }
+                val afterAlternativePos = instructions.size
+                changeOperand(jumpPos, afterAlternativePos)
             }
+
             is BlockStatement -> {
                 for (statement in node.statements) {
                     compile(statement)

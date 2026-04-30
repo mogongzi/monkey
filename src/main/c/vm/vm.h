@@ -10,6 +10,7 @@ typedef enum
 {
   MINTEGER,
   MBOOLEAN,
+  MNULL,
 } MObjectType;
 
 typedef struct

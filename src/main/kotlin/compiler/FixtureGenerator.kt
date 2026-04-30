@@ -54,6 +54,18 @@ fun main() {
         "src/test/fixtures/bang_bang_true.mkc" to "!!true",
         "src/test/fixtures/bang_bang_false.mkc" to "!!false",
         "src/test/fixtures/bang_bang_five.mkc" to "!!5",
+        "src/test/fixtures/bang_if_false_5.mkc" to "!(if (false) { 5; })",
+        // conditionals
+        "src/test/fixtures/if_true_10.mkc" to "if (true) { 10 }",
+        "src/test/fixtures/if_true_10_else_20.mkc" to "if (true) { 10 } else { 20 }",
+        "src/test/fixtures/if_false_10_else_20.mkc" to "if (false) { 10 } else { 20 }",
+        "src/test/fixtures/if_one_10.mkc" to "if (1) { 10 }",
+        "src/test/fixtures/if_one_lt_two_10.mkc" to "if (1 < 2) { 10 }",
+        "src/test/fixtures/if_one_lt_two_10_else_20.mkc" to "if (1 < 2) { 10 } else { 20 }",
+        "src/test/fixtures/if_one_gt_two_10_else_20.mkc" to "if (1 > 2) { 10 } else { 20 }",
+        "src/test/fixtures/if_one_gt_two_10.mkc" to "if (1 > 2) { 10 }",
+        "src/test/fixtures/if_false_10.mkc" to "if (false) { 10 }",
+        "src/test/fixtures/if_null_cond_10_else_20.mkc" to "if ((if (false) { 10 })) { 10 } else { 20 }",
     )
 
     for ((path, source) in cases) {

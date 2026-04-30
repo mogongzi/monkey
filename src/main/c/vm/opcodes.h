@@ -16,5 +16,8 @@
 #define OP_GREATER_THAN 0x0A
 #define OP_MINUS 0x0B
 #define OP_BANG 0x0C
+#define OP_JUMP_NOT_TRUTHY 0x0D
+#define OP_JUMP 0x0E
+#define OP_NULL 0x0F
 
 #endif

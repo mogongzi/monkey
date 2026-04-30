@@ -29,6 +29,11 @@ static ExpectedObject expected_boolean(bool value)
   return (ExpectedObject){.type = MBOOLEAN, .value.boolean = value};
 }
 
+static ExpectedObject expected_null(void)
+{
+  return (ExpectedObject){.type = MNULL};
+}
+
 static void test_integer_object(const MObject *obj, int64_t expected)
 {
   assert(obj != NULL && "expected integer object, got NULL");
@@ -43,6 +48,12 @@ static void test_boolean_object(const MObject *obj, bool expected)
   assert(obj->as.boolean == expected && "boolean value mismatch");
 }
 
+static void test_null_object(const MObject *obj)
+{
+  assert(obj != NULL && "expected null object, got NULL");
+  assert(obj->type == MNULL && "object is not MNull");
+}
+
 static void test_expected_object(ExpectedObject expected, const MObject *actual)
 {
   switch (expected.type)
@@ -52,6 +63,9 @@ static void test_expected_object(ExpectedObject expected, const MObject *actual)
     break;
   case MBOOLEAN:
     test_boolean_object(actual, expected.value.boolean);
+    break;
+  case MNULL:
+    test_null_object(actual);
     break;
   default:
     assert(false && "unhandled expected object type");
@@ -128,6 +142,24 @@ static void test_boolean_expressions(void)
       {"src/test/fixtures/bang_bang_true.mkc", expected_boolean(true)},
       {"src/test/fixtures/bang_bang_false.mkc", expected_boolean(false)},
       {"src/test/fixtures/bang_bang_five.mkc", expected_boolean(true)},
+      {"src/test/fixtures/bang_if_false_5.mkc", expected_boolean(true)},
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+static void test_conditionals(void)
+{
+  VmTestCase tests[] = {
+      {"src/test/fixtures/if_true_10.mkc", expected_integer(10)},
+      {"src/test/fixtures/if_true_10_else_20.mkc", expected_integer(10)},
+      {"src/test/fixtures/if_false_10_else_20.mkc", expected_integer(20)},
+      {"src/test/fixtures/if_one_10.mkc", expected_integer(10)},
+      {"src/test/fixtures/if_one_lt_two_10.mkc", expected_integer(10)},
+      {"src/test/fixtures/if_one_lt_two_10_else_20.mkc", expected_integer(10)},
+      {"src/test/fixtures/if_one_gt_two_10_else_20.mkc", expected_integer(20)},
+      {"src/test/fixtures/if_one_gt_two_10.mkc", expected_null()},
+      {"src/test/fixtures/if_false_10.mkc", expected_null()},
+      {"src/test/fixtures/if_null_cond_10_else_20.mkc", expected_integer(20)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
@@ -136,5 +168,6 @@ int main(void)
 {
   test_integer_arithmetic();
   test_boolean_expressions();
+  test_conditionals();
   return 0;
 }
