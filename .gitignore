@@ -67,3 +67,4 @@ src/test/c/**/*
 !src/test/c/**/*.c
 !src/test/c/**/*.h
 !src/test/c/**/Makefile
+.amp/
