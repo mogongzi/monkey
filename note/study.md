@@ -314,3 +314,171 @@ Three concepts to keep separate:
    Evaluator/compiler walks the tree.
    Pratt parsing controls how infix-looking source becomes the right tree shape.
    ```
+
+---
+
+## 10. Flat → Tree: parsing is the same shape as "build a tree from an array"
+
+Turning a linear input into a tree is one fundamental operation. What differs across problems isn't the operation — it's *where the rule for the tree's shape comes from.*
+
+### Three flavors, distinguished by source of structure
+
+| Problem | Input | Source of structure | Difficulty |
+|---------|-------|---------------------|------------|
+| Sorted `int[]` → balanced BST | values only | **Algorithm** (pick middle, recurse on halves) | trivial |
+| Level-order `Integer[]` (with nulls) → tree | values + position markers | **Input** (positions and nulls *are* the structure) | trivial |
+| Tokens → AST | tokens | **Grammar + precedence** (inferred from context) | hard (this is parsing) |
+
+All three are deserializers — flat → tree. The LeetCode "build a tree from an array" exercise is a tiny parser whose grammar is so trivial you can write it without ever saying the word *grammar*. Real parsing is the same shape, but with a non-trivial grammar.
+
+### Why lists don't have this problem
+
+`arrayToListNode` needs no rule. Each new element has exactly one place to go: after the previous one. Input order *is* the structure.
+
+A tree breaks that. For each element you must answer *left or right? whose child?* The input alone cannot tell you — you need a rule. That gap is the entire job of a parser. A parser is the apparatus that turns a linear input into a hierarchical structure when the structure isn't trivially position-based.
+
+### Same input, different rule, different tree
+
+Run two algorithms on the same flat input `{1, 2, 3, 4, 5}`:
+
+- **`sortedArrayToBST`** — rule: *middle is root, recurse on halves*
+
+  ```text
+       3
+      / \
+     2   5
+    /   /
+    1   4
+  ```
+
+  Balanced BST; in-order traversal yields the input.
+
+- **`buildTree`** — rule: *BFS level-order, nulls = absent*
+
+  ```text
+        1
+       / \
+      2   3
+     / \
+    4   5
+  ```
+
+  Not a BST. Not balanced. The shape comes straight from the input layout.
+
+Same flat input, two different trees, because **the rule for interpreting it differs**. The rule decides the structure; the input is just material.
+
+### Recursion vs. iteration is a side effect
+
+Control flow follows the algorithm shape, not the other way around:
+
+| Algorithm | Natural fit |
+|-----------|-------------|
+| Divide-and-conquer (split a range, do halves) | Recursion |
+| BFS (process node, enqueue children for later) | Queue + loop |
+| Recursive-descent grammar (Pratt: prefix/infix call each other) | Recursion |
+
+Either form can be rewritten in the other style — it's just awkward. The interesting axis is "where does structure come from?", not "is it recursive?"
+
+### The dual lives all over this project
+
+```
+                 flat                              tree
+                  │                                 │
+  tokens ─────────┼──── parser ────────────────────→│  AST        (hard: grammar + precedence)
+                  │                                 │
+                  │←─── compiler (AST visitor) ─────│  bytecode   (tree → flat: lowering)
+                  │                                 │
+  .mkc bytes ─────┴──── VM dispatch ────────────────┘  (stays flat — that's the *point* of bytecode)
+```
+
+- **Parser**: the hard end. Tokens carry no positional structure; the grammar invents the tree.
+- **Compiler**: tree → flat (the inverse). The AST visitor decides emission order so a stack VM produces the right value.
+- **`mkc_read`**: trivial flat → flat with framing. Positions in the file *are* the indices; no grammar needed.
+- **VM dispatch**: never reconstructs a tree. The whole reason for bytecode is to flatten the tree once, ahead of time, so the runtime is a tight `switch` over opcodes — no pointer-chasing children, no dynamic dispatch on node types.
+
+> The recursive shape — *walk input, maintain small state, build a node, recurse/loop* — is identical across building a BST from a sorted array, reconstructing a tree from a level-order array, and parsing tokens into an AST. Only the rule changes. Once you see flat → tree as one operation with a configurable rule, "LeetCode tree problems" and "writing a parser" stop looking like different activities.
+
+---
+
+## 11. Compilers are LeetCode in disguise
+
+The pattern from §10 generalizes beyond parsing. Most compiler subsystems are dressed-up versions of standard algorithm exercises:
+
+| Compiler subsystem | Algorithm exercise |
+|--------------------|--------------------|
+| AST traversal (visitor passes, evaluator, code emission) | Tree problems (DFS, postorder, in-order) |
+| Register allocation | Graph coloring |
+| Dependency analysis (build order, instruction scheduling) | Topological sort |
+| Constant folding, common subexpression elimination | DP / memoization |
+| Symbol tables, constant pools, string interning | Hash map exercises |
+| Reachability, dead-code elimination | Graph traversal (BFS/DFS) |
+| Loop detection in control-flow graphs | Cycle detection in graphs |
+
+> The interview-grind framing — "do 500 LeetCode problems" — is the wrong reason to learn these patterns. The right reason: they are the canonical shapes of solutions to recurring problems in computing, and a compiler is a domain where five or six of them collide in a single codebase. Without the vocabulary, reading compiler code (yours, the book's, or AI-generated) is wading through fog. With it, every subsystem becomes "oh, this is just *that* again."
+
+---
+
+## 12. How math relates to compiler theory
+
+Compiler theory is not a branch of programming practice that happens to use a little math. It is a direct application of several mathematical fields, each of which gives a specific compiler subsystem its theoretical backbone. The compiler isn't "inspired by" these fields — it *is* an executable instance of them.
+
+### The five pillars
+
+**1. Formal language theory** — the bedrock of lexing and parsing.
+
+- **Regular languages** + **finite automata** → lexing. A tokenizer is a DFA in disguise: it consumes characters, transitions between states, and emits tokens at accepting states. By Kleene's theorem, regular expressions, regular grammars, and finite automata are all equivalent — three notations for the same class of languages.
+- **Context-free grammars** + **pushdown automata** → parsing. Monkey's grammar (`expression = expression "+" expression`) is context-free; recognizing it requires a stack, which is exactly what recursive-descent and Pratt parsers use implicitly via the call stack.
+- The **Chomsky hierarchy** (regular ⊂ context-free ⊂ context-sensitive ⊂ recursively enumerable) tells you *what kind of machine* you need to recognize each class of language. This is the deep reason lexers and parsers are separate phases — they sit at different levels of the hierarchy, and conflating them costs both clarity and efficiency.
+
+**2. Tree and graph theory** — the structures the compiler manipulates.
+
+- ASTs are trees; the choice of traversal order (pre-, in-, post-order) determines evaluation semantics. Postorder for expressions is not a stylistic preference — it's what makes a stack VM work.
+- Later compiler phases use graphs heavily: control-flow graphs for analysis, dominator trees for SSA construction, and **register allocation as graph coloring** (NP-complete in the general case, hence the heuristics in real compilers like Chaitin-Briggs).
+
+**3. Type theory and lambda calculus** — the formal core of "what is a program."
+
+- Functions, scoping, and closures (which Monkey supports) trace directly back to Church's λ-calculus. Variable capture, α-conversion, and β-reduction are not academic curiosities — they're what your evaluator implements.
+- Type systems are formal logics. The **Curry–Howard correspondence** says programs *are* proofs and types *are* propositions. This is why dependently typed languages (Idris, Agda, Lean) can serve as proof assistants.
+
+**4. Lattice theory and fixed-point theorems** — the math of static analysis.
+
+- Optimizations like constant folding, dead-code elimination, and abstract interpretation are formulated as fixed-point computations over lattices. The **Knaster–Tarski theorem** guarantees that monotone functions on complete lattices have least fixed points — which is what a dataflow analysis is computing when it iterates to convergence.
+- You won't hit this in Monkey, but it's where industrial compiler optimization lives.
+
+**5. Algebra and formal semantics** — the math of program meaning.
+
+- **Operational semantics** describes execution as a transition relation between states. Your VM dispatch loop *is* small-step operational semantics, made executable.
+- **Denotational semantics** maps programs to mathematical objects (typically domains in domain theory).
+- **Axiomatic semantics** (Hoare logic) describes programs via pre- and post-conditions — the foundation of program verification.
+- Monoids and semirings appear in parsing algorithms (CYK, Earley) and in the algebra of regular expressions.
+
+### Where Monkey sits today
+
+Your current build exercises the first two pillars heavily and a slice of the fifth:
+
+```
+╭─────────────────────╮     ╭─────────────────────────────────────╮
+│ Lexer (Kotlin)      │ ──→ │ Pillar 1: regular languages / DFA   │
+╰─────────────────────╯     ╰─────────────────────────────────────╯
+╭─────────────────────╮     ╭─────────────────────────────────────╮
+│ Parser (Pratt)      │ ──→ │ Pillar 1: context-free grammar      │
+╰─────────────────────╯     ╰─────────────────────────────────────╯
+╭─────────────────────╮     ╭─────────────────────────────────────╮
+│ Compiler (visitor)  │ ──→ │ Pillar 2: tree traversal            │
+╰─────────────────────╯     ╰─────────────────────────────────────╯
+╭─────────────────────╮     ╭─────────────────────────────────────╮
+│ VM dispatch (C)     │ ──→ │ Pillar 5: operational semantics     │
+╰─────────────────────╯     ╰─────────────────────────────────────╯
+```
+
+The compiler→VM split you're building is a concrete instance of operational semantics: the bytecode is an intermediate language with its own formally definable transition rules, and `vm_run` is the interpreter for those rules.
+
+### Why this framing matters
+
+Each pillar tells you something the code alone cannot:
+
+- **What is possible.** The Chomsky hierarchy tells you why you cannot parse balanced parentheses with a regex — it's not a tooling limitation, it's a theorem.
+- **What is hard.** Register allocation being NP-complete is *why* every production compiler uses heuristics rather than searching for the optimal coloring.
+- **What is correct.** Operational semantics gives you a way to *prove* that your compiler preserves meaning — that the bytecode for `1 + 2` evaluates to the same value as the AST for `1 + 2`.
+
+> Compiler theory is the application layer of formal language theory, graph theory, type theory, lattice theory, and formal semantics. The Monkey project is a small, executable tour of the first two and a taste of the fifth. The same math scales up to LLVM, GHC, and the JVM — only the engineering effort grows.
