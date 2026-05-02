@@ -217,6 +217,56 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testGlobalLetStatements() {
+        val tests = listOf(
+            TestCase(
+                input = """
+                let one = 1;
+                let two = 2;
+            """.trimIndent(),
+                expectedConstants = listOf(1, 2),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpConstant, 1),
+                    make(OpSetGlobal, 1),
+                ),
+            ),
+            TestCase(
+                input = """
+                let one = 1;
+                one;
+            """.trimIndent(),
+                expectedConstants = listOf(1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpPop),
+                ),
+            ),
+            TestCase(
+                input = """
+                let one = 1;
+                let two = one;
+                two;
+            """.trimIndent(),
+                expectedConstants = listOf(1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpSetGlobal, 1),
+                    make(OpGetGlobal, 1),
+                    make(OpPop),
+                ),
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<TestCase>) {
         for (test in tests) {
             val program = parse(test.input)

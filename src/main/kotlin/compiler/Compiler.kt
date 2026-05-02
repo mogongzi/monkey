@@ -16,6 +16,7 @@ class Compiler() {
     private val constants: MutableList<MObject> = mutableListOf()
     private var lastInstruction: EmittedInstruction? = null
     private var previousInstruction: EmittedInstruction? = null
+    private val symbolTable = SymbolTable()
 
     fun compile(node: Node) {
         when (node) {
@@ -95,6 +96,18 @@ class Compiler() {
                 for (statement in node.statements) {
                     compile(statement)
                 }
+            }
+
+            is LetStatement -> {
+                compile(node.value)
+                val symbol = symbolTable.define(node.name.value)
+                emit(OpSetGlobal, symbol.index)
+            }
+
+            is Identifier -> {
+                val symbol = symbolTable.resolve(node.value)
+                    ?: error("undefined variable ${node.value}")
+                emit(OpGetGlobal, symbol.index)
             }
         }
     }

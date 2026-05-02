@@ -20,6 +20,8 @@ const val OpBang: Opcode = 0xCu
 const val OpJumpNotTruthy: Opcode = 0xDu
 const val OpJump: Opcode = 0xEu
 const val OpNull: Opcode = 0xFu
+const val OpGetGlobal: Opcode = 0x10u
+const val OpSetGlobal: Opcode = 0x11u
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -41,6 +43,8 @@ val definitions = mapOf(
     OpJumpNotTruthy to Definition("OpJumpNotTruthy", listOf(2)),
     OpJump to Definition("OpJump", listOf(2)),
     OpNull to Definition("OpNull", emptyList()),
+    OpGetGlobal to Definition("OpGetGlobal", listOf(2)),
+    OpSetGlobal to Definition("OpSetGlobal", listOf(2)),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]
