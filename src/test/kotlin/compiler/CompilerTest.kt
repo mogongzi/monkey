@@ -5,6 +5,7 @@ import me.ryan.interpreter.code.*
 import me.ryan.interpreter.compiler.Compiler
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
+import me.ryan.interpreter.eval.MString
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -267,6 +268,32 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testStringExpressions() {
+        val tests = listOf(
+            TestCase(
+                input = "\"monkey\"",
+                expectedConstants = listOf("monkey"),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpPop),
+                )
+            ),
+            TestCase(
+                input = "\"mon\" + \"key\"",
+                expectedConstants = listOf("mon", "key"),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpAdd),
+                    make(OpPop),
+                )
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<TestCase>) {
         for (test in tests) {
             val program = parse(test.input)
@@ -314,6 +341,7 @@ class CompilerTest {
         expected.forEachIndexed { i, constant ->
             when (constant) {
                 is Int -> testMIntegerObject(constant.toLong(), actual[i])
+                is String -> testMStringObject(constant, actual[i])
             }
         }
     }
@@ -322,6 +350,17 @@ class CompilerTest {
         val result = assertInstanceOf(
             MInteger::class.java, actual,
             "MObject is not MInteger. got=${actual::class.simpleName} (${actual.inspect()})"
+        )
+        assertEquals(
+            expected, result.value,
+            "MObject has wrong value. got=${result.value}, want=$expected"
+        )
+    }
+
+    private fun testMStringObject(expected: String, actual: MObject) {
+        val result = assertInstanceOf(
+            MString::class.java, actual,
+            "MObject is not MString. got=${actual::class.simpleName} (${actual.inspect()})"
         )
         assertEquals(
             expected, result.value,

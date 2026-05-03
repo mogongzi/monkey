@@ -2,12 +2,14 @@
 #include "../../../main/c/vm/vm.h"
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef struct {
   MObjectType type;
   union {
     int64_t integer;
     bool boolean;
+    const char *string;
   } value;
 } ExpectedObject;
 
@@ -28,6 +30,10 @@ static ExpectedObject expected_null(void) {
   return (ExpectedObject){.type = MNULL};
 }
 
+static ExpectedObject expected_string(const char *value) {
+  return (ExpectedObject){.type = MSTRING, .value.string = value};
+}
+
 static void test_integer_object(const MObject *obj, int64_t expected) {
   assert(obj != NULL && "expected integer object, got NULL");
   assert(obj->type == MINTEGER && "object is not an Integer");
@@ -45,6 +51,12 @@ static void test_null_object(const MObject *obj) {
   assert(obj->type == MNULL && "object is not MNull");
 }
 
+static void test_string_object(const MObject *obj, const char *expected) {
+  assert(obj != NULL && "expected string object, got NULL");
+  assert(obj->type == MSTRING && "object is not a String");
+  assert(strcmp(obj->as.string, expected) == 0 && "string value mismatch");
+}
+
 static void test_expected_object(ExpectedObject expected,
                                  const MObject *actual) {
   switch (expected.type) {
@@ -56,6 +68,9 @@ static void test_expected_object(ExpectedObject expected,
     break;
   case MNULL:
     test_null_object(actual);
+    break;
+  case MSTRING:
+    test_string_object(actual, expected.value.string);
     break;
   default:
     assert(false && "unhandled expected object type");
@@ -71,6 +86,7 @@ static void run_vm_tests(VmTestCase *tests, int count) {
     assert(mkc_read(f, &bc) == 0);
     fclose(f);
     VM *vm = vm_init(&bc);
+    assert(vm != NULL && "vm_init failed");
     assert(vm_run(vm) == VM_OK && "vm_run failed");
     test_expected_object(tests[i].expected, vm_last_popped_stack_elem(vm));
     vm_free(vm);
@@ -158,10 +174,22 @@ static void test_global_let_statements(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_string_expressions(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/string_monkey.mkc", expected_string("monkey")},
+      {"src/test/fixtures/string_mon_plus_key.mkc", expected_string("monkey")},
+      {"src/test/fixtures/string_mon_plus_key_plus_banana.mkc",
+       expected_string("monkeybanana")},
+
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 int main(void) {
   test_integer_arithmetic();
   test_boolean_expressions();
   test_conditionals();
   test_global_let_statements();
+  test_string_expressions();
   return 0;
 }

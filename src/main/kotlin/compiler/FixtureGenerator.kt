@@ -70,6 +70,10 @@ fun main() {
         "src/test/fixtures/global_let_one.mkc" to "let one = 1; one",
         "src/test/fixtures/global_let_one_two_sum.mkc" to "let one = 1; let two = 2; one + two",
         "src/test/fixtures/global_let_two_from_one.mkc" to "let one = 1; let two = one + one; one + two",
+        // string expressions
+        "src/test/fixtures/string_monkey.mkc" to "\"monkey\"",
+        "src/test/fixtures/string_mon_plus_key.mkc" to "\"mon\" + \"key\"",
+        "src/test/fixtures/string_mon_plus_key_plus_banana.mkc" to "\"mon\" + \"key\" + \"banana\"",
     )
 
     for ((path, source) in cases) {

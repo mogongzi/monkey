@@ -1,9 +1,12 @@
 #include "vm.h"
 #include "bytes.h"
+#include "mkc.h"
 #include "opcodes.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int mobject_from_mkc_constant(const MkcConstant *constant,
                                      MObject *out) {
@@ -11,6 +14,10 @@ static int mobject_from_mkc_constant(const MkcConstant *constant,
   case TAG_INTEGER:
     out->type = MINTEGER;
     out->as.integer = constant->as.integer;
+    return 0;
+  case TAG_STRING:
+    out->type = MSTRING;
+    out->as.string = constant->as.string.value;
     return 0;
   default:
     return -1;
@@ -40,12 +47,42 @@ VM *vm_init(const MkcBytecode *bc) {
       }
     }
   }
+
+  vm->allocated_strings = NULL;
+  vm->allocated_string_count = 0;
+  vm->allocated_string_capacity = 0;
+
   return vm;
+}
+
+static int vm_track_allocated_string(VM *vm, char *value) {
+  if (vm->allocated_string_count == vm->allocated_string_capacity) {
+    uint32_t new_capacity = vm->allocated_string_capacity == 0
+                                ? 16
+                                : vm->allocated_string_capacity * 2;
+    char **new_allocated_strings =
+        realloc(vm->allocated_strings, sizeof(char *) * new_capacity);
+    if (!new_allocated_strings) {
+      return -1;
+    }
+
+    vm->allocated_strings = new_allocated_strings;
+    vm->allocated_string_capacity = new_capacity;
+  }
+
+  vm->allocated_strings[vm->allocated_string_count] = value;
+  vm->allocated_string_count++;
+  return 0;
 }
 
 void vm_free(VM *vm) {
   if (!vm)
     return;
+  for (uint32_t i = 0; i < vm->allocated_string_count; i++) {
+    free(vm->allocated_strings[i]);
+  }
+
+  free(vm->allocated_strings);
   free(vm->constants);
   free(vm);
 }
@@ -75,26 +112,22 @@ static MObject vm_pop(VM *vm) {
   return obj;
 }
 
-static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
-  MObject right = vm_pop(vm);
-  MObject left = vm_pop(vm);
-
-  int64_t l = left.as.integer;
-  int64_t r = right.as.integer;
+static VM_RESULT vm_exec_binary_integer_operation(VM *vm, uint8_t opcode,
+                                                  int64_t left, int64_t right) {
   int64_t result;
 
   switch (opcode) {
   case OP_ADD:
-    result = l + r;
+    result = left + right;
     break;
   case OP_SUB:
-    result = l - r;
+    result = left - right;
     break;
   case OP_MUL:
-    result = l * r;
+    result = left * right;
     break;
   case OP_DIV:
-    result = l / r;
+    result = left / right;
     break;
   default:
     fprintf(stderr, "unknown integer operator: %d\n", opcode);
@@ -106,6 +139,50 @@ static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
   // obj.as.integer = result;
   MObject obj = {.type = MINTEGER, .as.integer = result};
   return vm_push(vm, obj);
+}
+
+static VM_RESULT vm_exec_string_concat(VM *vm, MObject left, MObject right) {
+  size_t left_len = strlen(left.as.string);
+  size_t right_len = strlen(right.as.string);
+  size_t result_len = left_len + right_len;
+
+  char *result = malloc(result_len + 1);
+  if (!result) {
+    return VM_ERR_OUT_OF_MEMORY;
+  }
+
+  memcpy(result, left.as.string, left_len);
+  memcpy(result + left_len, right.as.string, right_len);
+  result[result_len] = '\0';
+
+  if (vm_track_allocated_string(vm, result) != 0) {
+    free(result);
+    return VM_ERR_OUT_OF_MEMORY;
+  }
+
+  return vm_push(vm, (MObject){.type = MSTRING, .as.string = result});
+}
+
+static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
+  MObject right = vm_pop(vm);
+  MObject left = vm_pop(vm);
+
+  if (left.type == MINTEGER && right.type == MINTEGER) {
+    return vm_exec_binary_integer_operation(vm, opcode, left.as.integer,
+                                            right.as.integer);
+  }
+
+  if (left.type == MSTRING && right.type == MSTRING) {
+    if (opcode != OP_ADD) {
+      fprintf(stderr, "unknown string operator: %d\n", opcode);
+      return VM_ERR_UNKNOWN_OPERATOR;
+    }
+    return vm_exec_string_concat(vm, left, right);
+  }
+
+  fprintf(stderr, "unsupported types for binary operator: %d %d\n", left.type,
+          right.type);
+  return VM_ERR_UNKNOWN_OPERATOR;
 }
 
 static VM_RESULT vm_execute_integer_comparision(VM *vm, uint8_t opcode,

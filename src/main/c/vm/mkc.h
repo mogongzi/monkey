@@ -1,23 +1,27 @@
 #ifndef MKC_H
 #define MKC_H
 
-#include <stdio.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #define TAG_INTEGER 0x01
+#define TAG_STRING 0x02
 
-typedef struct
-{
+typedef struct {
+  uint32_t byte_len;
+  char *value;
+} MkcString;
+
+typedef struct {
   uint8_t tag;
-  union
-  {
+  union {
     int64_t integer;
+    MkcString string;
   } as;
 } MkcConstant;
 
-typedef struct
-{
+typedef struct {
   uint16_t num_constants;
   MkcConstant *constants;
   uint32_t num_instructions;

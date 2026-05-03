@@ -4,6 +4,7 @@ import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.*
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
+import me.ryan.interpreter.eval.MString
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Bytecode(val instructions: Instructions, val constants: MutableList<MObject>)
@@ -67,6 +68,11 @@ class Compiler() {
                 } else {
                     emit(OpFalse)
                 }
+            }
+
+            is StringLiteral -> {
+                val string = MString(node.value)
+                emit(OpConstant, addConstant(string))
             }
 
             is IfExpression -> {

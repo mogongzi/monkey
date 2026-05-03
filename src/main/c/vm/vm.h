@@ -12,6 +12,7 @@ typedef enum
   MINTEGER,
   MBOOLEAN,
   MNULL,
+  MSTRING,
 } MObjectType;
 
 typedef struct
@@ -21,8 +22,10 @@ typedef struct
   {
     int64_t integer;
     bool boolean;
+    char* string;
   } as;
 } MObject;
+
 typedef struct
 {
   const MkcBytecode *bc;
@@ -30,7 +33,12 @@ typedef struct
   MObject stack[STACK_SIZE];
   MObject globals[GLOBALS_SIZE];
   uint32_t sp;
+
+  char **allocated_strings;
+  size_t allocated_string_count;
+  size_t allocated_string_capacity;
 } VM;
+
 typedef enum
 {
   VM_OK = 0,
@@ -38,6 +46,7 @@ typedef enum
   VM_ERR_STACK_OVERFLOW,
   VM_ERR_UNKNOWN_OPERATOR,
   VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION,
+  VM_ERR_OUT_OF_MEMORY,
 } VM_RESULT;
 
 VM *vm_init(const MkcBytecode *bc);
