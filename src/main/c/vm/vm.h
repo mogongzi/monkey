@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 #define STACK_SIZE 2048
+#define GLOBALS_SIZE 65535
 
 typedef enum
 {
@@ -27,6 +28,7 @@ typedef struct
   const MkcBytecode *bc;
   MObject *constants;
   MObject stack[STACK_SIZE];
+  MObject globals[GLOBALS_SIZE];
   uint32_t sp;
 } VM;
 typedef enum

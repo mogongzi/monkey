@@ -3,61 +3,51 @@
 #include <assert.h>
 #include <stdio.h>
 
-typedef struct
-{
+typedef struct {
   MObjectType type;
-  union
-  {
+  union {
     int64_t integer;
     bool boolean;
   } value;
 } ExpectedObject;
 
-typedef struct
-{
+typedef struct {
   const char *fixture_path;
   ExpectedObject expected;
 } VmTestCase;
 
-static ExpectedObject expected_integer(int64_t value)
-{
+static ExpectedObject expected_integer(int64_t value) {
   return (ExpectedObject){.type = MINTEGER, .value.integer = value};
 }
 
-static ExpectedObject expected_boolean(bool value)
-{
+static ExpectedObject expected_boolean(bool value) {
   return (ExpectedObject){.type = MBOOLEAN, .value.boolean = value};
 }
 
-static ExpectedObject expected_null(void)
-{
+static ExpectedObject expected_null(void) {
   return (ExpectedObject){.type = MNULL};
 }
 
-static void test_integer_object(const MObject *obj, int64_t expected)
-{
+static void test_integer_object(const MObject *obj, int64_t expected) {
   assert(obj != NULL && "expected integer object, got NULL");
   assert(obj->type == MINTEGER && "object is not an Integer");
   assert(obj->as.integer == expected && "integer value mismatch");
 }
 
-static void test_boolean_object(const MObject *obj, bool expected)
-{
+static void test_boolean_object(const MObject *obj, bool expected) {
   assert(obj != NULL && "expected boolean object, got NULL");
   assert(obj->type == MBOOLEAN && "object is not a Boolean");
   assert(obj->as.boolean == expected && "boolean value mismatch");
 }
 
-static void test_null_object(const MObject *obj)
-{
+static void test_null_object(const MObject *obj) {
   assert(obj != NULL && "expected null object, got NULL");
   assert(obj->type == MNULL && "object is not MNull");
 }
 
-static void test_expected_object(ExpectedObject expected, const MObject *actual)
-{
-  switch (expected.type)
-  {
+static void test_expected_object(ExpectedObject expected,
+                                 const MObject *actual) {
+  switch (expected.type) {
   case MINTEGER:
     test_integer_object(actual, expected.value.integer);
     break;
@@ -72,10 +62,8 @@ static void test_expected_object(ExpectedObject expected, const MObject *actual)
   }
 }
 
-static void run_vm_tests(VmTestCase *tests, int count)
-{
-  for (int i = 0; i < count; i++)
-  {
+static void run_vm_tests(VmTestCase *tests, int count) {
+  for (int i = 0; i < count; i++) {
     FILE *f = fopen(tests[i].fixture_path, "rb");
     assert(f != NULL);
 
@@ -91,8 +79,7 @@ static void run_vm_tests(VmTestCase *tests, int count)
   }
 }
 
-static void test_integer_arithmetic(void)
-{
+static void test_integer_arithmetic(void) {
   VmTestCase tests[] = {
       {"src/test/fixtures/just_one.mkc", expected_integer(1)},
       {"src/test/fixtures/just_two.mkc", expected_integer(2)},
@@ -114,8 +101,7 @@ static void test_integer_arithmetic(void)
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
-static void test_boolean_expressions(void)
-{
+static void test_boolean_expressions(void) {
   VmTestCase tests[] = {
       {"src/test/fixtures/true.mkc", expected_boolean(true)},
       {"src/test/fixtures/false.mkc", expected_boolean(false)},
@@ -147,8 +133,7 @@ static void test_boolean_expressions(void)
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
-static void test_conditionals(void)
-{
+static void test_conditionals(void) {
   VmTestCase tests[] = {
       {"src/test/fixtures/if_true_10.mkc", expected_integer(10)},
       {"src/test/fixtures/if_true_10_else_20.mkc", expected_integer(10)},
@@ -164,10 +149,19 @@ static void test_conditionals(void)
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
-int main(void)
-{
+static void test_global_let_statements(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/global_let_one.mkc", expected_integer(1)},
+      {"src/test/fixtures/global_let_one_two_sum.mkc", expected_integer(3)},
+      {"src/test/fixtures/global_let_two_from_one.mkc", expected_integer(3)},
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+int main(void) {
   test_integer_arithmetic();
   test_boolean_expressions();
   test_conditionals();
+  test_global_let_statements();
   return 0;
 }

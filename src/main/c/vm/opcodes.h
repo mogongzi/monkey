@@ -19,5 +19,7 @@
 #define OP_JUMP_NOT_TRUTHY 0x0D
 #define OP_JUMP 0x0E
 #define OP_NULL 0x0F
+#define OP_GET_GLOBAL 0x10
+#define OP_SET_GLOBAL 0x11
 
 #endif

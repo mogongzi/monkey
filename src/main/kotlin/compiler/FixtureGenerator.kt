@@ -66,6 +66,10 @@ fun main() {
         "src/test/fixtures/if_one_gt_two_10.mkc" to "if (1 > 2) { 10 }",
         "src/test/fixtures/if_false_10.mkc" to "if (false) { 10 }",
         "src/test/fixtures/if_null_cond_10_else_20.mkc" to "if ((if (false) { 10 })) { 10 } else { 20 }",
+        // global let statements
+        "src/test/fixtures/global_let_one.mkc" to "let one = 1; one",
+        "src/test/fixtures/global_let_one_two_sum.mkc" to "let one = 1; let two = 2; one + two",
+        "src/test/fixtures/global_let_two_from_one.mkc" to "let one = 1; let two = one + one; one + two",
     )
 
     for ((path, source) in cases) {
