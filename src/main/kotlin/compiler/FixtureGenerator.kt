@@ -74,6 +74,10 @@ fun main() {
         "src/test/fixtures/string_monkey.mkc" to "\"monkey\"",
         "src/test/fixtures/string_mon_plus_key.mkc" to "\"mon\" + \"key\"",
         "src/test/fixtures/string_mon_plus_key_plus_banana.mkc" to "\"mon\" + \"key\" + \"banana\"",
+        // array literals
+        "src/test/fixtures/array_empty.mkc" to "[]",
+        "src/test/fixtures/array_one_two_three.mkc" to "[1, 2, 3]",
+        "src/test/fixtures/array_with_arithmetic.mkc" to "[1 + 2, 3 * 4, 5 + 6]",
     )
 
     for ((path, source) in cases) {

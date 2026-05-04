@@ -1,6 +1,8 @@
 #include "../../../main/c/vm/mkc.h"
 #include "../../../main/c/vm/vm.h"
 #include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +12,10 @@ typedef struct {
     int64_t integer;
     bool boolean;
     const char *string;
+    struct {
+      const int64_t *elements;
+      size_t len;
+    } array;
   } value;
 } ExpectedObject;
 
@@ -32,6 +38,11 @@ static ExpectedObject expected_null(void) {
 
 static ExpectedObject expected_string(const char *value) {
   return (ExpectedObject){.type = MSTRING, .value.string = value};
+}
+
+static ExpectedObject expected_array(const int64_t *elements, size_t len) {
+  return (ExpectedObject){
+      .type = MARRAY, .value.array.elements = elements, .value.array.len = len};
 }
 
 static void test_integer_object(const MObject *obj, int64_t expected) {
@@ -57,6 +68,17 @@ static void test_string_object(const MObject *obj, const char *expected) {
   assert(strcmp(obj->as.string, expected) == 0 && "string value mismatch");
 }
 
+static void test_array_object(const MObject *obj, const int64_t *expected,
+                              size_t expected_len) {
+  assert(obj != NULL && "expected array object, got NULL");
+  assert(obj->type == MARRAY && "object is not an Array");
+  assert(obj->as.array != NULL && "array pointer is NULL");
+  assert(obj->as.array->len == expected_len && "array length mismatch");
+  for (size_t i = 0; i < expected_len; i++) {
+    test_integer_object(&obj->as.array->elements[i], expected[i]);
+  }
+}
+
 static void test_expected_object(ExpectedObject expected,
                                  const MObject *actual) {
   switch (expected.type) {
@@ -71,6 +93,10 @@ static void test_expected_object(ExpectedObject expected,
     break;
   case MSTRING:
     test_string_object(actual, expected.value.string);
+    break;
+  case MARRAY:
+    test_array_object(actual, expected.value.array.elements,
+                      expected.value.array.len);
     break;
   default:
     assert(false && "unhandled expected object type");
@@ -185,11 +211,24 @@ static void test_string_expressions(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_array_literals(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/array_empty.mkc", expected_array(NULL, 0)},
+      {"src/test/fixtures/array_one_two_three.mkc",
+       expected_array((int64_t[]){1, 2, 3}, 3)},
+      {"src/test/fixtures/array_with_arithmetic.mkc",
+       expected_array((int64_t[]){3, 12, 11}, 3)},
+  };
+
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 int main(void) {
   test_integer_arithmetic();
   test_boolean_expressions();
   test_conditionals();
   test_global_let_statements();
   test_string_expressions();
+  test_array_literals();
   return 0;
 }

@@ -75,6 +75,14 @@ class Compiler() {
                 emit(OpConstant, addConstant(string))
             }
 
+            is ArrayLiteral -> {
+                for (element in node.elements) {
+                    compile(element)
+                }
+
+                emit(OpArray, node.elements.size)
+            }
+
             is IfExpression -> {
                 compile(node.condition)
                 val jumpNotTruthPos = emit(OpJumpNotTruthy, 9999)

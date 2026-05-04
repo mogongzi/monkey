@@ -13,18 +13,29 @@ typedef enum
   MBOOLEAN,
   MNULL,
   MSTRING,
+  MARRAY,
 } MObjectType;
 
-typedef struct
+// forward declarations - just names, no layout yet for resovling circular type problem in C.
+typedef struct MObject MObject;
+typedef struct MArray MArray;
+
+struct MArray {
+    MObject *elements;
+    size_t len;
+};
+
+struct MObject
 {
   MObjectType type;
   union
   {
     int64_t integer;
     bool boolean;
-    char* string;
+    char *string;
+    MArray *array;
   } as;
-} MObject;
+};
 
 typedef struct
 {
@@ -37,6 +48,10 @@ typedef struct
   char **allocated_strings;
   size_t allocated_string_count;
   size_t allocated_string_capacity;
+
+  MArray **allocated_arrays;
+  size_t allocated_array_count;
+  size_t allocated_array_capacity;
 } VM;
 
 typedef enum

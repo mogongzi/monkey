@@ -52,14 +52,18 @@ VM *vm_init(const MkcBytecode *bc) {
   vm->allocated_string_count = 0;
   vm->allocated_string_capacity = 0;
 
+  vm->allocated_arrays = NULL;
+  vm->allocated_array_count = 0;
+  vm->allocated_array_capacity = 0;
+
   return vm;
 }
 
 static int vm_track_allocated_string(VM *vm, char *value) {
   if (vm->allocated_string_count == vm->allocated_string_capacity) {
-    uint32_t new_capacity = vm->allocated_string_capacity == 0
-                                ? 16
-                                : vm->allocated_string_capacity * 2;
+    size_t new_capacity = vm->allocated_string_capacity == 0
+                              ? 16
+                              : vm->allocated_string_capacity * 2;
     char **new_allocated_strings =
         realloc(vm->allocated_strings, sizeof(char *) * new_capacity);
     if (!new_allocated_strings) {
@@ -75,14 +79,40 @@ static int vm_track_allocated_string(VM *vm, char *value) {
   return 0;
 }
 
+static int vm_track_allocated_array(VM *vm, MArray *array) {
+  if (vm->allocated_array_count == vm->allocated_array_capacity) {
+    size_t new_capacity = vm->allocated_array_capacity == 0
+                              ? 16
+                              : vm->allocated_array_capacity * 2;
+    MArray **new_allocated_arrays =
+        realloc(vm->allocated_arrays, sizeof(MArray *) * new_capacity);
+    if (!new_allocated_arrays) {
+      return -1;
+    }
+
+    vm->allocated_arrays = new_allocated_arrays;
+    vm->allocated_array_capacity = new_capacity;
+  }
+
+  vm->allocated_arrays[vm->allocated_array_count] = array;
+  vm->allocated_array_count++;
+  return 0;
+}
+
 void vm_free(VM *vm) {
   if (!vm)
     return;
-  for (uint32_t i = 0; i < vm->allocated_string_count; i++) {
+  for (size_t i = 0; i < vm->allocated_string_count; i++) {
     free(vm->allocated_strings[i]);
   }
-
   free(vm->allocated_strings);
+
+  for (size_t i = 0; i < vm->allocated_array_count; i++) {
+    free(vm->allocated_arrays[i]->elements); // the MObject[] buffer
+    free(vm->allocated_arrays[i]);           // the MArray struct itself
+  }
+  free(vm->allocated_arrays);
+
   free(vm->constants);
   free(vm);
 }
@@ -270,6 +300,17 @@ static bool is_truthy(MObject *obj) {
   }
 }
 
+static MObject build_array(VM *vm, uint32_t start, uint32_t end) {
+  size_t len = end - start;
+  MArray *arr = malloc(sizeof(MArray));
+  arr->elements = malloc(sizeof(MObject) * len);
+  arr->len = len;
+  for (size_t i = 0; i < len; i++) {
+    arr->elements[i] = vm->stack[start + i];
+  }
+  return (MObject){.type = MARRAY, .as.array = arr};
+}
+
 VM_RESULT vm_run(VM *vm) {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++) {
     uint8_t opcode = vm->bc->instructions[ip];
@@ -357,6 +398,21 @@ VM_RESULT vm_run(VM *vm) {
       uint32_t global_index = read_u16(&vm->bc->instructions[ip + 1]);
       ip += 2;
       VM_RESULT r = vm_push(vm, vm->globals[global_index]);
+      if (r != VM_OK)
+        return r;
+      break;
+    }
+    case OP_ARRAY: {
+      uint32_t num_elements = read_u16(&vm->bc->instructions[ip + 1]);
+      ip += 2;
+      MObject array = build_array(vm, (vm->sp - num_elements), vm->sp);
+      vm->sp = vm->sp - num_elements;
+      VM_RESULT r = vm_push(vm, array);
+      if (vm_track_allocated_array(vm, array.as.array) != 0) {
+        free(array.as.array->elements); // don't forget this one
+        free(array.as.array);
+        return VM_ERR_OUT_OF_MEMORY;
+      }
       if (r != VM_OK)
         return r;
       break;
