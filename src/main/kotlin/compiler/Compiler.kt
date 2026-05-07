@@ -83,6 +83,14 @@ class Compiler() {
                 emit(OpArray, node.elements.size)
             }
 
+            is HashLiteral -> {
+                for (k in node.pairs.keys.sortedBy { it.string() }) {
+                    compile(k)
+                    compile(node.pairs[k]!!)
+                }
+                emit(OpHash, node.pairs.size * 2)
+            }
+
             is IfExpression -> {
                 compile(node.condition)
                 val jumpNotTruthPos = emit(OpJumpNotTruthy, 9999)

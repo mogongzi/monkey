@@ -78,6 +78,10 @@ fun main() {
         "src/test/fixtures/array_empty.mkc" to "[]",
         "src/test/fixtures/array_one_two_three.mkc" to "[1, 2, 3]",
         "src/test/fixtures/array_with_arithmetic.mkc" to "[1 + 2, 3 * 4, 5 + 6]",
+        // hash literals
+        "src/test/fixtures/hash_empty.mkc" to "{}",
+        "src/test/fixtures/hash_one_two.mkc" to "{1 : 2, 2 : 3}",
+        "src/test/fixtures/hash_with_arithmetic.mkc" to "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
     )
 
     for ((path, source) in cases) {

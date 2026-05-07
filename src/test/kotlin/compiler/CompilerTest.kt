@@ -331,9 +331,54 @@ class CompilerTest {
                     make(OpMul),
                     make(OpArray, 3),
                     make(OpPop),
-
                 )
             ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    @Test
+    fun testHashLiterals() {
+        val tests = listOf(
+            TestCase(
+                input= "{}",
+                expectedConstants = emptyList(),
+                expectedInstructions = listOf(
+                    make(OpHash, 0),
+                    make(OpPop),
+                )
+            ),
+            TestCase(
+                input = "{1: 2, 3: 4, 5: 6}",
+                expectedConstants = listOf(1, 2, 3, 4, 5, 6),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpConstant, 2),
+                    make(OpConstant, 3),
+                    make(OpConstant, 4),
+                    make(OpConstant, 5),
+                    make(OpHash, 6),
+                    make(OpPop),
+                )
+            ),
+            TestCase(
+                input = "{1: 2 + 3, 4: 5 * 6}",
+                expectedConstants = listOf(1, 2, 3, 4, 5, 6),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpConstant, 2),
+                    make(OpAdd),
+                    make(OpConstant, 3),
+                    make(OpConstant, 4),
+                    make(OpConstant, 5),
+                    make(OpMul),
+                    make(OpHash, 4),
+                    make(OpPop),
+                )
+            )
         )
 
         runCompilerTests(tests)

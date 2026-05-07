@@ -147,6 +147,16 @@ static void dump(const MkcBytecode *bc) {
       ip += 3;
       break;
     }
+    case OP_HASH: {
+      if (ip + 2 >= bc->num_instructions) {
+        printf("  %04u OpHash <truncated>\n", ip);
+        return;
+      }
+      uint16_t n = read_u16(&bc->instructions[ip + 1]);
+      printf("  %04u OpHash %u\n", ip, n);
+      ip += 3;
+      break;
+    }
     default:
       printf("  %04u UNKNOWN opcode=0x%02x\n", ip, op);
       ip += 1;

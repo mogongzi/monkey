@@ -22,5 +22,6 @@
 #define OP_GET_GLOBAL 0x10
 #define OP_SET_GLOBAL 0x11
 #define OP_ARRAY 0x12
+#define OP_HASH 0x13
 
 #endif

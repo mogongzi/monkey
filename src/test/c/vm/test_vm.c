@@ -1,3 +1,4 @@
+#include "../../../main/c/vm/hash_table.h"
 #include "../../../main/c/vm/mkc.h"
 #include "../../../main/c/vm/vm.h"
 #include <assert.h>
@@ -5,6 +6,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+typedef struct {
+  HashKey key;
+  int64_t value;
+} ExpectedHashPair;
 
 typedef struct {
   MObjectType type;
@@ -16,6 +22,10 @@ typedef struct {
       const int64_t *elements;
       size_t len;
     } array;
+    struct {
+      const ExpectedHashPair *pairs;
+      size_t len;
+    } hash;
   } value;
 } ExpectedObject;
 
@@ -23,6 +33,8 @@ typedef struct {
   const char *fixture_path;
   ExpectedObject expected;
 } VmTestCase;
+
+static bool hash_key_objects_equal()
 
 static ExpectedObject expected_integer(int64_t value) {
   return (ExpectedObject){.type = MINTEGER, .value.integer = value};
@@ -43,6 +55,13 @@ static ExpectedObject expected_string(const char *value) {
 static ExpectedObject expected_array(const int64_t *elements, size_t len) {
   return (ExpectedObject){
       .type = MARRAY, .value.array.elements = elements, .value.array.len = len};
+}
+
+static ExpectedObject expected_hash(const ExpectedHashPair *pairs, size_t len) {
+  return (ExpectedObject){
+      .type = MHASH,
+      .value.hash = {.pairs = pairs, .len = len},
+  };
 }
 
 static void test_integer_object(const MObject *obj, int64_t expected) {
@@ -79,6 +98,27 @@ static void test_array_object(const MObject *obj, const int64_t *expected,
   }
 }
 
+static void test_hash_object(const MObject *obj,
+                             const ExpectedHashPair *expected,
+                             size_t expected_len) {
+  assert(obj != NULL && "expected hash object, got NULL");
+  assert(obj->type == MHASH && "object is not a Hash");
+  assert(obj->as.hash != NULL && "hash pointer is NULL");
+  assert(obj->as.hash->count == expected_len && "hash pair size mismatch");
+
+  for (size_t i = 0; i < expected_len; i++) {
+    const HashEntry *entry = find_hash_entry_by_key(object->as.hash, &expected[i].value);
+    assert(entry != NULL && "no pair for given key in hash");
+    test_integer_object(&entry->pair_value, expected[i].value);
+  }
+
+  for (size_t i = 0; i < expected_len; i++) {
+    MObject actual_value;
+    assert(get(obj->as.hash, expected[i].key, &actual_value));
+    test_integer_object(&actual_value, expected[i].value);
+  }
+}
+
 static void test_expected_object(ExpectedObject expected,
                                  const MObject *actual) {
   switch (expected.type) {
@@ -97,6 +137,10 @@ static void test_expected_object(ExpectedObject expected,
   case MARRAY:
     test_array_object(actual, expected.value.array.elements,
                       expected.value.array.len);
+    break;
+  case MHASH:
+    test_hash_object(actual, expected.value.hash.pairs,
+                     expected.value.hash.len);
     break;
   default:
     assert(false && "unhandled expected object type");
@@ -218,6 +262,26 @@ static void test_array_literals(void) {
        expected_array((int64_t[]){1, 2, 3}, 3)},
       {"src/test/fixtures/array_with_arithmetic.mkc",
        expected_array((int64_t[]){3, 12, 11}, 3)},
+  };
+
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+static void test_hash_literals(void) {
+  static const ExpectedHashPair one_two[] = {
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 1}, .value = 2},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 2}, .value = 3},
+  };
+
+  static const ExpectedHashPair arithmetic[] = {
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 2}, .value = 4},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 6}, .value = 16},
+  };
+
+  VmTestCase tests[] = {
+      {"src/test/fixtures/hash_empty.mkc", expected_hash(NULL, 0)},
+      {"src/test/fixtures/hash_one_two.mkc", expected_hash(one_two, 2)},
+      {"src/test/fixtures/hash_with_arithmetic", expected_hash(arithmetic, 2)},
   };
 
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));

@@ -14,11 +14,13 @@ typedef enum
   MNULL,
   MSTRING,
   MARRAY,
+  MHASH,
 } MObjectType;
 
 // forward declarations - just names, no layout yet for resovling circular type problem in C.
 typedef struct MObject MObject;
 typedef struct MArray MArray;
+typedef struct MHash MHash;
 
 struct MArray {
     MObject *elements;
@@ -34,6 +36,7 @@ struct MObject
     bool boolean;
     char *string;
     MArray *array;
+    MHash *hash;
   } as;
 };
 
@@ -62,6 +65,7 @@ typedef enum
   VM_ERR_UNKNOWN_OPERATOR,
   VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION,
   VM_ERR_OUT_OF_MEMORY,
+  VM_ERR_UNHASHABLE_KEY,
 } VM_RESULT;
 
 VM *vm_init(const MkcBytecode *bc);
