@@ -28,8 +28,8 @@ typedef struct MHash {
 
 MHash *new_hash(void);
 void free_hash(MHash *table);
-bool hash_set(MHash *table, HashKey key, MObject value);
-bool hash_get(MHash *table, HashKey key, MObject *out_value);
+bool hash_set(MHash *table, HashKey key, MObject pair_key, MObject pair_value);
+bool hash_get(MHash *table, HashKey key, MObject *out_pair_key, MObject *out_pair_value);
 bool hashkey_equal(HashKey *first, HashKey *second);
 
 #endif
