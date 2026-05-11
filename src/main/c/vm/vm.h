@@ -3,6 +3,7 @@
 
 #include "mkc.h"
 #include <stdbool.h>
+#include <stddef.h>
 
 #define STACK_SIZE 2048
 #define GLOBALS_SIZE 65535
@@ -55,6 +56,10 @@ typedef struct
   MArray **allocated_arrays;
   size_t allocated_array_count;
   size_t allocated_array_capacity;
+
+  MHash **allocated_hash;
+  size_t allocated_hash_count;
+  size_t allocated_hash_capacity;
 } VM;
 
 typedef enum

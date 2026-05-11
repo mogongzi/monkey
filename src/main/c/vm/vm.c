@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "bytes.h"
+#include "hash_table.h"
 #include "mkc.h"
 #include "opcodes.h"
 #include <stddef.h>
@@ -56,6 +57,10 @@ VM *vm_init(const MkcBytecode *bc) {
   vm->allocated_array_count = 0;
   vm->allocated_array_capacity = 0;
 
+  vm->allocated_hash = NULL;
+  vm->allocated_hash_count = 0;
+  vm->allocated_hash_capacity = 0;
+
   return vm;
 }
 
@@ -97,6 +102,10 @@ static int vm_track_allocated_array(VM *vm, MArray *array) {
   vm->allocated_arrays[vm->allocated_array_count] = array;
   vm->allocated_array_count++;
   return 0;
+}
+
+static int vm_track_allocated_hash(VM *vm, MHash *hash) {
+
 }
 
 void vm_free(VM *vm) {
@@ -311,6 +320,13 @@ static MObject build_array(VM *vm, uint32_t start, uint32_t end) {
   return (MObject){.type = MARRAY, .as.array = arr};
 }
 
+static MObject build_hash(VM *vm, uint32_t start, uint32_t end) {
+    size_t len = (end - start) / 2;
+    MHash *hash = malloc(sizeof(MHash));
+
+    return (MObject){.type = MHASH, .as.hash = hash};
+}
+
 VM_RESULT vm_run(VM *vm) {
   for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++) {
     uint8_t opcode = vm->bc->instructions[ip];
@@ -405,17 +421,32 @@ VM_RESULT vm_run(VM *vm) {
     case OP_ARRAY: {
       uint32_t num_elements = read_u16(&vm->bc->instructions[ip + 1]);
       ip += 2;
-      MObject array = build_array(vm, (vm->sp - num_elements), vm->sp);
+      MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
       vm->sp = vm->sp - num_elements;
-      VM_RESULT r = vm_push(vm, array);
-      if (vm_track_allocated_array(vm, array.as.array) != 0) {
-        free(array.as.array->elements); // don't forget this one
-        free(array.as.array);
+      VM_RESULT r = vm_push(vm, obj);
+      if (vm_track_allocated_array(vm, obj.as.array) != 0) {
+        free(obj.as.array->elements); // don't forget this one
+        free(obj.as.array);
         return VM_ERR_OUT_OF_MEMORY;
       }
       if (r != VM_OK)
         return r;
       break;
+    }
+    case OP_HASH: {
+        uint32_t num_hashes = read_u16(&vm->bc->instructions[ip + 1]);
+        ip += 2;
+        MObject hash = build_hash(vm, (vm->sp - num_hashes), vm->sp);
+        vm->sp = vm->sp - num_hashes;
+        VM_RESULT r = vm_push(vm, hash);
+        if (vm_track_allocated_hash(vm, hash) != 0) {
+          free(hash.as.hash->); // don't forget this one
+          free(array.as.array);
+          return VM_ERR_OUT_OF_MEMORY;
+        }
+        if (r != VM_OK)
+          return r;
+        break;
     }
     default:
       fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
