@@ -1,4 +1,5 @@
 #include "hash_table.h"
+#include "mkc.h"
 #include "vm.h"
 #include <assert.h>
 #include <stddef.h>
@@ -43,9 +44,35 @@ static uint64_t hash_key(HashKey key) {
   return hash;
 }
 
-static void resize(MHash *table) {}
+static void resize(MHash *table) {
+  // 1. create a new array of buckets which size is twice of the current one.
+  size_t new_capacity = table->capacity * 2;
+  HashEntry **new_bucket = calloc(new_capacity, sizeof(HashEntry *));
 
-bool new_hash_key(const MObject *obj, HashKey *out) {
+  // 2. iterate over the old array and recalculate the hash key and insert it
+  // into new one.
+  for (size_t i = 0; i < table->capacity; i++) {
+    if (table->buckets[i] != NULL) {
+      HashEntry *entry = table->buckets[i];
+      while (entry) {
+        size_t index = hash_key(entry->hash_key) % new_capacity;
+        // what if two entries from different old buckets land in the same new
+        // bucket
+        HashEntry *next = entry->next;   // save old chain
+        entry->next = new_bucket[index]; // prepend to new chain
+        new_bucket[index] = entry;
+        entry = next;
+      }
+    }
+  }
+
+  // 3. free old bucket. change the pointer to the new one.
+  free(table->buckets);
+  table->buckets = new_bucket;
+  table->capacity = new_capacity;
+}
+
+bool hashkey_from_mobject(const MObject *obj, HashKey *out) {
   out->type = obj->type;
   switch (obj->type) {
   case MINTEGER:
@@ -73,7 +100,7 @@ MHash *new_hash(void) {
 void free_hash(MHash *table) {
   if (table == NULL)
     return;
-  for (int i = 0; i < table->capacity; i++) {
+  for (size_t i = 0; i < table->capacity; i++) {
     HashEntry *entry = table->buckets[i];
     while (entry) {
       HashEntry *next = entry->next;
@@ -88,24 +115,36 @@ void free_hash(MHash *table) {
   free(table);
 }
 
-bool hash_set(MHash *table, HashKey key, MObject pair_key, MObject pair_value) {
-  if (table->count >= table->capacity) {
+bool hash_set(MHash *table, HashKey key, HashPair pair) {
+  if (table->count >= (table->capacity * LOAD_FACTOR_THRESHOLD)) {
     resize(table);
   }
-
-  // create a new entry and calculate the hash value, and then insert the data;
-  // if collision happend, append the linked list node
-  table->buckets[table->count + 1]->key = key;
-}
-
-bool hash_get(MHash *table, HashKey key, MObject *out_pair_key,
-              MObject *out_pair_value) {
   size_t index = hash_key(key) % table->capacity;
   HashEntry *entry = table->buckets[index];
   while (entry != NULL) {
-    if (hashkey_equal(&entry->key, &key)) {
-      *out_pair_key = entry->pair_key;
-      *out_pair_value = entry->pair_value;
+    if (hashkey_equal(entry->hash_key, key)) {
+      // same key -> update existing entry
+      entry->pair = pair;
+      return true;
+    }
+    entry = entry->next; // different key, same bucket, hash collision -> keep
+                         // walking
+  }
+  entry = malloc(sizeof(HashEntry));
+  entry->hash_key = key;
+  entry->pair = pair;
+  entry->next = table->buckets[index];
+  table->buckets[index] = entry;
+  table->count++;
+  return true;
+}
+
+bool hash_get(MHash *table, HashKey key, HashPair *out_pair) {
+  size_t index = hash_key(key) % table->capacity;
+  HashEntry *entry = table->buckets[index];
+  while (entry != NULL) {
+    if (hashkey_equal(entry->hash_key, key)) {
+      *out_pair = entry->pair;
       return true;
     }
     entry = entry->next;
@@ -113,19 +152,17 @@ bool hash_get(MHash *table, HashKey key, MObject *out_pair_key,
   return false;
 }
 
-bool hashkey_equal(HashKey *first, HashKey *second) {
-  if (first == NULL || second == NULL)
-    return false;
-  if (first->type != second->type)
+bool hashkey_equal(HashKey first, HashKey second) {
+  if (first.type != second.type)
     return false;
 
-  switch (first->type) {
+  switch (first.type) {
   case MINTEGER:
-    return first->as.integer == second->as.integer;
+    return first.as.integer == second.as.integer;
   case MBOOLEAN:
-    return first->as.boolean == second->as.boolean;
+    return first.as.boolean == second.as.boolean;
   case MSTRING:
-    return strcmp(first->as.string, second->as.string) == 0;
+    return strcmp(first.as.string, second.as.string) == 0;
   default:
     return false;
   }

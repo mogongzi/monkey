@@ -12,7 +12,7 @@ test_mkc: $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/test_mkc.c mkc.c bytes.c
 
 test_vm: $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/test_vm.c mkc.c bytes.c vm.c
+	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/test_vm.c mkc.c bytes.c vm.c hash_table.c
 
 dump_mkc: $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ dump_mkc.c mkc.c bytes.c

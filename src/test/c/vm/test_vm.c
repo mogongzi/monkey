@@ -34,8 +34,6 @@ typedef struct {
   ExpectedObject expected;
 } VmTestCase;
 
-static bool hash_key_objects_equal()
-
 static ExpectedObject expected_integer(int64_t value) {
   return (ExpectedObject){.type = MINTEGER, .value.integer = value};
 }
@@ -104,18 +102,14 @@ static void test_hash_object(const MObject *obj,
   assert(obj != NULL && "expected hash object, got NULL");
   assert(obj->type == MHASH && "object is not a Hash");
   assert(obj->as.hash != NULL && "hash pointer is NULL");
-  assert(obj->as.hash->count == expected_len && "hash pair size mismatch");
+  assert(obj->as.hash->count == expected_len &&
+         "hash has wrong number of Pairs");
 
   for (size_t i = 0; i < expected_len; i++) {
-    const HashEntry *entry = find_hash_entry_by_key(object->as.hash, &expected[i].value);
-    assert(entry != NULL && "no pair for given key in hash");
-    test_integer_object(&entry->pair_value, expected[i].value);
-  }
-
-  for (size_t i = 0; i < expected_len; i++) {
-    MObject actual_value;
-    assert(get(obj->as.hash, expected[i].key, &actual_value));
-    test_integer_object(&actual_value, expected[i].value);
+    HashPair pair;
+    bool ok = hash_get(obj->as.hash, expected[i].key, &pair);
+    assert(ok && "no pair for given key in hash");
+    test_integer_object(&pair.value, expected[i].value);
   }
 }
 
@@ -281,7 +275,8 @@ static void test_hash_literals(void) {
   VmTestCase tests[] = {
       {"src/test/fixtures/hash_empty.mkc", expected_hash(NULL, 0)},
       {"src/test/fixtures/hash_one_two.mkc", expected_hash(one_two, 2)},
-      {"src/test/fixtures/hash_with_arithmetic", expected_hash(arithmetic, 2)},
+      {"src/test/fixtures/hash_with_arithmetic.mkc",
+       expected_hash(arithmetic, 2)},
   };
 
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
@@ -294,5 +289,6 @@ int main(void) {
   test_global_let_statements();
   test_string_expressions();
   test_array_literals();
+  test_hash_literals();
   return 0;
 }

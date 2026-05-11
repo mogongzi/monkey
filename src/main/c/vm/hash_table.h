@@ -12,11 +12,15 @@ typedef struct {
   } as;
 } HashKey;
 
+typedef struct {
+    MObject original_key;
+    MObject value;
+} HashPair ;
+
 typedef struct HashEntry HashEntry;
 struct HashEntry {
-  HashKey key;
-  MObject pair_key;
-  MObject pair_value;
+  HashKey hash_key;
+  HashPair pair;
   HashEntry *next; // chaining for hash collision
 };
 
@@ -28,8 +32,9 @@ typedef struct MHash {
 
 MHash *new_hash(void);
 void free_hash(MHash *table);
-bool hash_set(MHash *table, HashKey key, MObject pair_key, MObject pair_value);
-bool hash_get(MHash *table, HashKey key, MObject *out_pair_key, MObject *out_pair_value);
-bool hashkey_equal(HashKey *first, HashKey *second);
+bool hash_set(MHash *table, HashKey key, HashPair pair);
+bool hash_get(MHash *table, HashKey key, HashPair *out_pair);
+bool hashkey_equal(HashKey first, HashKey second);
+bool hashkey_from_mobject(const MObject *obj, HashKey *out);
 
 #endif
