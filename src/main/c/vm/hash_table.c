@@ -9,7 +9,6 @@
 #include <string.h>
 
 #define INITIAL_BUCKET_COUNT 16
-#define LOAD_FACTOR_THRESHOLD 0.75
 
 static uint64_t fnv1a_step(uint64_t state, const void *data, size_t len) {
   const uint8_t *bytes = (const uint8_t *)data;
@@ -24,7 +23,7 @@ static uint64_t fnv1a_hash(const void *data, size_t len) {
   return fnv1a_step(0xcbf29ce484222325ULL, data, len); // FNV offset basis
 }
 
-static uint64_t hash_key(HashKey key) {
+static uint64_t compute_hash(HashKey key) {
   uint64_t hash = fnv1a_hash(&key.type, sizeof(key.type));
   switch (key.type) {
   case MINTEGER:
@@ -37,7 +36,7 @@ static uint64_t hash_key(HashKey key) {
     hash ^= fnv1a_hash(key.as.string, strlen(key.as.string));
     break;
   default:
-    assert(0 && "hash_key: invalid HashKey.type — caller violated contract");
+    assert(0 && "compute_hash: invalid HashKey.type — caller violated contract");
     abort();
   }
 
@@ -52,17 +51,15 @@ static void resize(MHash *table) {
   // 2. iterate over the old array and recalculate the hash key and insert it
   // into new one.
   for (size_t i = 0; i < table->capacity; i++) {
-    if (table->buckets[i] != NULL) {
-      HashEntry *entry = table->buckets[i];
-      while (entry) {
-        size_t index = hash_key(entry->hash_key) % new_capacity;
-        // what if two entries from different old buckets land in the same new
-        // bucket
-        HashEntry *next = entry->next;   // save old chain
-        entry->next = new_bucket[index]; // prepend to new chain
-        new_bucket[index] = entry;
-        entry = next;
-      }
+    HashEntry *entry = table->buckets[i];
+    while (entry) {
+      size_t index = compute_hash(entry->hash_key) % new_capacity;
+      // what if two entries from different old buckets land in the same new
+      // bucket
+      HashEntry *next = entry->next;   // save old chain
+      entry->next = new_bucket[index]; // prepend to new chain
+      new_bucket[index] = entry;
+      entry = next;
     }
   }
 
@@ -70,6 +67,22 @@ static void resize(MHash *table) {
   free(table->buckets);
   table->buckets = new_bucket;
   table->capacity = new_capacity;
+}
+
+bool hashkey_equal(HashKey first, HashKey second) {
+  if (first.type != second.type)
+    return false;
+
+  switch (first.type) {
+  case MINTEGER:
+    return first.as.integer == second.as.integer;
+  case MBOOLEAN:
+    return first.as.boolean == second.as.boolean;
+  case MSTRING:
+    return strcmp(first.as.string, second.as.string) == 0;
+  default:
+    return false;
+  }
 }
 
 bool hashkey_from_mobject(const MObject *obj, HashKey *out) {
@@ -116,10 +129,11 @@ void free_hash(MHash *table) {
 }
 
 bool hash_set(MHash *table, HashKey key, HashPair pair) {
-  if (table->count >= (table->capacity * LOAD_FACTOR_THRESHOLD)) {
+  if (table->count * 4 >=
+      table->capacity * 3) { // equivalent to count >= capacity * 0.75
     resize(table);
   }
-  size_t index = hash_key(key) % table->capacity;
+  size_t index = compute_hash(key) % table->capacity;
   HashEntry *entry = table->buckets[index];
   while (entry != NULL) {
     if (hashkey_equal(entry->hash_key, key)) {
@@ -140,7 +154,7 @@ bool hash_set(MHash *table, HashKey key, HashPair pair) {
 }
 
 bool hash_get(MHash *table, HashKey key, HashPair *out_pair) {
-  size_t index = hash_key(key) % table->capacity;
+  size_t index = compute_hash(key) % table->capacity;
   HashEntry *entry = table->buckets[index];
   while (entry != NULL) {
     if (hashkey_equal(entry->hash_key, key)) {
@@ -150,20 +164,4 @@ bool hash_get(MHash *table, HashKey key, HashPair *out_pair) {
     entry = entry->next;
   }
   return false;
-}
-
-bool hashkey_equal(HashKey first, HashKey second) {
-  if (first.type != second.type)
-    return false;
-
-  switch (first.type) {
-  case MINTEGER:
-    return first.as.integer == second.as.integer;
-  case MBOOLEAN:
-    return first.as.boolean == second.as.boolean;
-  case MSTRING:
-    return strcmp(first.as.string, second.as.string) == 0;
-  default:
-    return false;
-  }
 }
