@@ -57,6 +57,12 @@ class Compiler() {
                 }
             }
 
+            is IndexExpression -> {
+                compile(node.left)
+                compile(node.index)
+                emit(OpIndex)
+            }
+
             is IntegerLiteral -> {
                 val integer = MInteger(node.value)
                 emit(OpConstant, addConstant(integer))

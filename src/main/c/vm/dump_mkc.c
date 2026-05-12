@@ -157,6 +157,10 @@ static void dump(const MkcBytecode *bc) {
       ip += 3;
       break;
     }
+    case OP_INDEX:
+      printf("  %04u OpIndex\n", ip);
+      ip += 1;
+      break;
     default:
       printf("  %04u UNKNOWN opcode=0x%02x\n", ip, op);
       ip += 1;

@@ -282,6 +282,22 @@ static void test_hash_literals(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_index_expressions(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/index_array_simple.mkc", expected_integer(2)},
+      {"src/test/fixtures/index_array_expr.mkc", expected_integer(3)},
+      {"src/test/fixtures/index_nested_array.mkc", expected_integer(1)},
+      {"src/test/fixtures/index_empty_array.mkc", expected_null()},
+      {"src/test/fixtures/index_array_oob.mkc", expected_null()},
+      {"src/test/fixtures/index_array_negative.mkc", expected_null()},
+      {"src/test/fixtures/index_hash_one.mkc", expected_integer(1)},
+      {"src/test/fixtures/index_hash_two.mkc", expected_integer(2)},
+      {"src/test/fixtures/index_hash_missing.mkc", expected_null()},
+      {"src/test/fixtures/index_empty_hash.mkc", expected_null()},
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 int main(void) {
   test_integer_arithmetic();
   test_boolean_expressions();
@@ -290,5 +306,6 @@ int main(void) {
   test_string_expressions();
   test_array_literals();
   test_hash_literals();
+  test_index_expressions();
   return 0;
 }

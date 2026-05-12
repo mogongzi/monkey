@@ -384,6 +384,43 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testIndexExpressions() {
+        val tests = listOf(
+            TestCase(
+                input = "[1, 2, 3][1 + 1]",
+                expectedConstants = listOf(1, 2, 3, 1, 1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpConstant, 2),
+                    make(OpArray, 3),
+                    make(OpConstant, 3),
+                    make(OpConstant, 4),
+                    make(OpAdd),
+                    make(OpIndex),
+                    make(OpPop),
+                )
+            ),
+            TestCase(
+                input = "{1 :2}[2 - 1]",
+                expectedConstants = listOf(1, 2, 2, 1),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpConstant, 1),
+                    make(OpHash, 2),
+                    make(OpConstant, 2),
+                    make(OpConstant, 3),
+                    make(OpSub),
+                    make(OpIndex),
+                    make(OpPop),
+                )
+            )
+        )
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<TestCase>) {
         for (test in tests) {
             val program = parse(test.input)

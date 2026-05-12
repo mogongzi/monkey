@@ -317,6 +317,39 @@ static VM_RESULT vm_exec_bang_operator(VM *vm) {
   return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
 
+static VM_RESULT vm_exec_array_index(VM *vm, MArray *array, uint64_t index) {
+  if (index < 0 || index >= array->len)
+    return vm_push(vm, (MObject){.type = MNULL});
+  return vm_push(vm, array->elements[index]);
+}
+
+static VM_RESULT vm_exec_hash_index(VM *vm, MHash *hash, MObject index) {
+  HashKey hash_key;
+  if (!hashkey_from_mobject(&index, &hash_key)) {
+    return VM_ERR_UNHASHABLE_KEY;
+  }
+  HashPair pair;
+  if (hash_get(hash, hash_key, &pair)) {
+    return vm_push(vm, pair.value);
+
+  } else {
+    return vm_push(vm, (MObject){.type = MNULL});
+  }
+}
+
+static VM_RESULT vm_exec_index_expression(VM *vm) {
+  MObject index = vm_pop(vm);
+  MObject left = vm_pop(vm);
+
+  if (left.type == MARRAY && index.type == MINTEGER) {
+    return vm_exec_array_index(vm, left.as.array, index.as.integer);
+  } else if (left.type == MHASH) {
+    return vm_exec_hash_index(vm, left.as.hash, index);
+  } else {
+    return VM_ERR_UNKNOWN_OPERATOR;
+  }
+}
+
 static bool is_truthy(MObject *obj) {
   switch (obj->type) {
   case MBOOLEAN:
@@ -482,6 +515,12 @@ VM_RESULT vm_run(VM *vm) {
         free_hash(obj.as.hash);
         return VM_ERR_OUT_OF_MEMORY;
       }
+      if (r != VM_OK)
+        return r;
+      break;
+    }
+    case OP_INDEX: {
+      VM_RESULT r = vm_exec_index_expression(vm);
       if (r != VM_OK)
         return r;
       break;

@@ -82,6 +82,17 @@ fun main() {
         "src/test/fixtures/hash_empty.mkc" to "{}",
         "src/test/fixtures/hash_one_two.mkc" to "{1 : 2, 2 : 3}",
         "src/test/fixtures/hash_with_arithmetic.mkc" to "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+        // index expressions
+        "src/test/fixtures/index_array_simple.mkc" to "[1, 2, 3][1]",
+        "src/test/fixtures/index_array_expr.mkc" to "[1, 2, 3][0 + 2]",
+        "src/test/fixtures/index_nested_array.mkc" to "[[1, 1, 1]][0][0]",
+        "src/test/fixtures/index_empty_array.mkc" to "[][0]",
+        "src/test/fixtures/index_array_oob.mkc" to "[1, 2, 3][99]",
+        "src/test/fixtures/index_array_negative.mkc" to "[1][-1]",
+        "src/test/fixtures/index_hash_one.mkc" to "{1: 1, 2: 2}[1]",
+        "src/test/fixtures/index_hash_two.mkc" to "{1: 1, 2: 2}[2]",
+        "src/test/fixtures/index_hash_missing.mkc" to "{1: 1}[0]",
+        "src/test/fixtures/index_empty_hash.mkc" to "{}[0]",
     )
 
     for ((path, source) in cases) {
