@@ -57,7 +57,7 @@ typedef struct
   size_t allocated_array_count;
   size_t allocated_array_capacity;
 
-  MHash **allocated_hash;
+  MHash **allocated_hashs;
   size_t allocated_hash_count;
   size_t allocated_hash_capacity;
 } VM;

@@ -3,6 +3,7 @@
 #include "hash_table.h"
 #include "mkc.h"
 #include "opcodes.h"
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -57,7 +58,7 @@ VM *vm_init(const MkcBytecode *bc) {
   vm->allocated_array_count = 0;
   vm->allocated_array_capacity = 0;
 
-  vm->allocated_hash = NULL;
+  vm->allocated_hashs = NULL;
   vm->allocated_hash_count = 0;
   vm->allocated_hash_capacity = 0;
 
@@ -105,7 +106,22 @@ static int vm_track_allocated_array(VM *vm, MArray *array) {
 }
 
 static int vm_track_allocated_hash(VM *vm, MHash *hash) {
+  if (vm->allocated_hash_count == vm->allocated_hash_capacity) {
+    size_t new_capacity =
+        vm->allocated_hash_capacity == 0 ? 16 : vm->allocated_hash_capacity * 2;
+    MHash **new_allocated_hashs =
+        realloc(vm->allocated_hashs, sizeof(MHash *) * new_capacity);
+    if (!new_allocated_hashs) {
+      return -1;
+    }
 
+    vm->allocated_hashs = new_allocated_hashs;
+    vm->allocated_hash_capacity = new_capacity;
+  }
+
+  vm->allocated_hashs[vm->allocated_hash_count] = hash;
+  vm->allocated_hash_count++;
+  return 0;
 }
 
 void vm_free(VM *vm) {
@@ -121,6 +137,11 @@ void vm_free(VM *vm) {
     free(vm->allocated_arrays[i]);           // the MArray struct itself
   }
   free(vm->allocated_arrays);
+
+  for (size_t i = 0; i < vm->allocated_hash_count; i++) {
+    free_hash(vm->allocated_hashs[i]);
+  }
+  free(vm->allocated_hashs);
 
   free(vm->constants);
   free(vm);
@@ -320,11 +341,26 @@ static MObject build_array(VM *vm, uint32_t start, uint32_t end) {
   return (MObject){.type = MARRAY, .as.array = arr};
 }
 
-static MObject build_hash(VM *vm, uint32_t start, uint32_t end) {
-    size_t len = (end - start) / 2;
-    MHash *hash = malloc(sizeof(MHash));
+static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
+                            MObject *out) {
+  MHash *hash = new_hash(0);
+  for (size_t i = start; i < end; i += 2) {
+    MObject key = vm->stack[i];
+    MObject value = vm->stack[i + 1];
+    HashKey hash_key;
+    if (!hashkey_from_mobject(&key, &hash_key)) {
+      free_hash(hash);
+      return VM_ERR_UNHASHABLE_KEY;
+    }
 
-    return (MObject){.type = MHASH, .as.hash = hash};
+    HashPair pair;
+    pair.original_key = key;
+    pair.value = value;
+
+    hash_set(hash, hash_key, pair);
+  }
+  *out = (MObject){.type = MHASH, .as.hash = hash};
+  return VM_OK;
 }
 
 VM_RESULT vm_run(VM *vm) {
@@ -434,19 +470,21 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_HASH: {
-        uint32_t num_hashes = read_u16(&vm->bc->instructions[ip + 1]);
-        ip += 2;
-        MObject hash = build_hash(vm, (vm->sp - num_hashes), vm->sp);
-        vm->sp = vm->sp - num_hashes;
-        VM_RESULT r = vm_push(vm, hash);
-        if (vm_track_allocated_hash(vm, hash) != 0) {
-          free(hash.as.hash->); // don't forget this one
-          free(array.as.array);
-          return VM_ERR_OUT_OF_MEMORY;
-        }
-        if (r != VM_OK)
-          return r;
-        break;
+      uint32_t num_hashes = read_u16(&vm->bc->instructions[ip + 1]);
+      ip += 2;
+      MObject obj;
+      VM_RESULT r = build_hash(vm, (vm->sp - num_hashes), vm->sp, &obj);
+      if (r != VM_OK)
+        return r;
+      vm->sp = vm->sp - num_hashes;
+      r = vm_push(vm, obj);
+      if (vm_track_allocated_hash(vm, obj.as.hash) != 0) {
+        free_hash(obj.as.hash);
+        return VM_ERR_OUT_OF_MEMORY;
+      }
+      if (r != VM_OK)
+        return r;
+      break;
     }
     default:
       fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);

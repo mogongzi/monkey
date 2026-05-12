@@ -3,6 +3,8 @@
 
 #include "vm.h"
 
+#define INITIAL_BUCKET_COUNT 16
+
 typedef struct {
   MObjectType type;
   union {
@@ -30,7 +32,7 @@ typedef struct MHash {
   size_t count;
 } MHash;
 
-MHash *new_hash(void);
+MHash *new_hash(int capacity);
 void free_hash(MHash *table);
 bool hash_set(MHash *table, HashKey key, HashPair pair);
 bool hash_get(MHash *table, HashKey key, HashPair *out_pair);

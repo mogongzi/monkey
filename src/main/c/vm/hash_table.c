@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define INITIAL_BUCKET_COUNT 16
-
 static uint64_t fnv1a_step(uint64_t state, const void *data, size_t len) {
   const uint8_t *bytes = (const uint8_t *)data;
   for (size_t i = 0; i < len; i++) {
@@ -36,7 +34,8 @@ static uint64_t compute_hash(HashKey key) {
     hash ^= fnv1a_hash(key.as.string, strlen(key.as.string));
     break;
   default:
-    assert(0 && "compute_hash: invalid HashKey.type — caller violated contract");
+    assert(0 &&
+           "compute_hash: invalid HashKey.type — caller violated contract");
     abort();
   }
 
@@ -102,11 +101,14 @@ bool hashkey_from_mobject(const MObject *obj, HashKey *out) {
   }
 }
 
-MHash *new_hash(void) {
+MHash *new_hash(int capacity) {
+  if (capacity == 0) {
+    capacity = INITIAL_BUCKET_COUNT;
+  }
   MHash *table = malloc(sizeof(MHash));
-  table->capacity = INITIAL_BUCKET_COUNT;
+  table->capacity = capacity;
   table->count = 0;
-  table->buckets = calloc(INITIAL_BUCKET_COUNT, sizeof(HashEntry *));
+  table->buckets = calloc(capacity, sizeof(HashEntry *));
   return table;
 }
 
