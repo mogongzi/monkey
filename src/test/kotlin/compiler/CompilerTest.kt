@@ -3,6 +3,7 @@ package compiler
 import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.code.*
 import me.ryan.interpreter.compiler.Compiler
+import me.ryan.interpreter.eval.MCompiledFunction
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
 import me.ryan.interpreter.eval.MString
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalUnsignedTypes::class)
 data class TestCase(val input: String, val expectedConstants: List<Any>, val expectedInstructions: List<Instructions>)
+
+@JvmInline
+value class FunctionInstructions(val instructions: List<Instructions>)
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class CompilerTest {
@@ -342,7 +346,7 @@ class CompilerTest {
     fun testHashLiterals() {
         val tests = listOf(
             TestCase(
-                input= "{}",
+                input = "{}",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
                     make(OpHash, 0),
@@ -421,6 +425,32 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testFunctions() {
+        val tests = listOf(
+            TestCase(
+                input = "fn() { return 5 + 10 }",
+                expectedConstants = listOf(
+                    5, 10,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpConstant, 1),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 2),
+                    make(OpPop),
+                )
+            )
+        )
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<TestCase>) {
         for (test in tests) {
             val program = parse(test.input)
@@ -469,6 +499,12 @@ class CompilerTest {
             when (constant) {
                 is Int -> testMIntegerObject(constant.toLong(), actual[i])
                 is String -> testMStringObject(constant, actual[i])
+                is FunctionInstructions -> {
+                    val fn = assertInstanceOf(
+                        MCompiledFunction::class.java, actual[i],
+                        "constant $i - not a function: ${actual[i]::class.simpleName}")
+                    testInstructions(constant.instructions, fn.instructions)
+                }
             }
         }
     }
@@ -494,4 +530,6 @@ class CompilerTest {
             "MObject has wrong value. got=${result.value}, want=$expected"
         )
     }
+
+    private fun fnInstructions(ins: List<UByteArray>): List<Instructions> = ins
 }

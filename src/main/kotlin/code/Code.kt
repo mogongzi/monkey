@@ -25,6 +25,9 @@ const val OpSetGlobal: Opcode = 0x11u
 const val OpArray: Opcode = 0x12u
 const val OpHash: Opcode = 0x13u
 const val OpIndex: Opcode = 0x14u
+const val OpCall: Opcode = 0x15u
+const val OpReturnValue: Opcode = 0x16u
+const val OpReturn: Opcode = 0x17u
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -51,6 +54,9 @@ val definitions = mapOf(
     OpArray to Definition("OpArray", listOf(2)),
     OpHash to Definition("OpHash", listOf(2)),
     OpIndex to Definition("OpIndex", emptyList()),
+    OpCall to Definition("OpCall", emptyList()),
+    OpReturnValue to Definition("OpReturnValue", emptyList()),
+    OpReturn to Definition("OpReturn", emptyList()),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]

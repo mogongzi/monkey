@@ -3,6 +3,8 @@ package me.ryan.interpreter.eval
 import me.ryan.interpreter.ast.BlockStatement
 import me.ryan.interpreter.ast.Identifier
 import me.ryan.interpreter.ast.Node
+import me.ryan.interpreter.code.Instructions
+import me.ryan.interpreter.code.string
 
 // MObject (Monkey Object) is the internal representation of values
 // produced during evaluation of Monkey programs.
@@ -74,6 +76,11 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
         append("\n}")
     }
 
+}
+
+// bytecode representation rather than AST for compiler/vm usage.
+class MCompiledFunction(val instructions: Instructions) : MObject {
+    override fun inspect(): String = "CompiledFunction[${"0x%08x".format(System.identityHashCode(this))}]"
 }
 
 class MBuiltinFunction(val function: (List<MObject>) -> MObject) : MObject {
