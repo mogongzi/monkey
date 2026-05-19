@@ -14,9 +14,10 @@ import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalUnsignedTypes::class)
-data class TestCase(val input: String, val expectedConstants: List<Any>, val expectedInstructions: List<Instructions>)
+data class CompilerTestCase(val input: String, val expectedConstants: List<Any>, val expectedInstructions: List<Instructions>)
 
 @JvmInline
+@OptIn(ExperimentalUnsignedTypes::class)
 value class FunctionInstructions(val instructions: List<Instructions>)
 
 @OptIn(ExperimentalUnsignedTypes::class)
@@ -25,7 +26,7 @@ class CompilerTest {
     @Test
     fun testIntegerArithmetic() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "1 + 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -35,7 +36,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1;2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -45,7 +46,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 - 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -55,7 +56,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 * 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -65,7 +66,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "2 / 1",
                 expectedConstants = listOf(2, 1),
                 expectedInstructions = listOf(
@@ -75,7 +76,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "-1",
                 expectedConstants = listOf(1),
                 expectedInstructions = listOf(
@@ -92,7 +93,7 @@ class CompilerTest {
     @Test
     fun testBooleanExpressions() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "true",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -100,7 +101,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "false",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -108,7 +109,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 > 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -118,7 +119,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 < 2",
                 expectedConstants = listOf(2, 1),
                 expectedInstructions = listOf(
@@ -128,7 +129,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 == 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -138,7 +139,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "1 != 2",
                 expectedConstants = listOf(1, 2),
                 expectedInstructions = listOf(
@@ -148,7 +149,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "true == false",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -158,7 +159,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "true != false",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -168,7 +169,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "!true",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -185,7 +186,7 @@ class CompilerTest {
     @Test
     fun testConditionals() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = """
                 if (true) { 10 }; 3333;
             """.trimIndent(),
@@ -201,7 +202,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = """
                 if (true) { 10 } else { 20 }; 3333;
             """.trimIndent(),
@@ -225,7 +226,7 @@ class CompilerTest {
     @Test
     fun testGlobalLetStatements() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = """
                 let one = 1;
                 let two = 2;
@@ -238,7 +239,7 @@ class CompilerTest {
                     make(OpSetGlobal, 1),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = """
                 let one = 1;
                 one;
@@ -251,7 +252,7 @@ class CompilerTest {
                     make(OpPop),
                 ),
             ),
-            TestCase(
+            CompilerTestCase(
                 input = """
                 let one = 1;
                 let two = one;
@@ -275,7 +276,7 @@ class CompilerTest {
     @Test
     fun testStringExpressions() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "\"monkey\"",
                 expectedConstants = listOf("monkey"),
                 expectedInstructions = listOf(
@@ -283,7 +284,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "\"mon\" + \"key\"",
                 expectedConstants = listOf("mon", "key"),
                 expectedInstructions = listOf(
@@ -301,7 +302,7 @@ class CompilerTest {
     @Test
     fun testArrayLiterals() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "[]",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -309,7 +310,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "[1, 2, 3]",
                 expectedConstants = listOf(1, 2, 3),
                 expectedInstructions = listOf(
@@ -320,7 +321,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "[1 + 2, 3 - 4, 5 * 6]",
                 expectedConstants = listOf(1, 2, 3, 4, 5, 6),
                 expectedInstructions = listOf(
@@ -345,7 +346,7 @@ class CompilerTest {
     @Test
     fun testHashLiterals() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "{}",
                 expectedConstants = emptyList(),
                 expectedInstructions = listOf(
@@ -353,7 +354,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "{1: 2, 3: 4, 5: 6}",
                 expectedConstants = listOf(1, 2, 3, 4, 5, 6),
                 expectedInstructions = listOf(
@@ -367,7 +368,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "{1: 2 + 3, 4: 5 * 6}",
                 expectedConstants = listOf(1, 2, 3, 4, 5, 6),
                 expectedInstructions = listOf(
@@ -391,7 +392,7 @@ class CompilerTest {
     @Test
     fun testIndexExpressions() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "[1, 2, 3][1 + 1]",
                 expectedConstants = listOf(1, 2, 3, 1, 1),
                 expectedInstructions = listOf(
@@ -406,7 +407,7 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
-            TestCase(
+            CompilerTestCase(
                 input = "{1 :2}[2 - 1]",
                 expectedConstants = listOf(1, 2, 2, 1),
                 expectedInstructions = listOf(
@@ -428,7 +429,7 @@ class CompilerTest {
     @Test
     fun testFunctions() {
         val tests = listOf(
-            TestCase(
+            CompilerTestCase(
                 input = "fn() { return 5 + 10 }",
                 expectedConstants = listOf(
                     5, 10,
@@ -445,13 +446,100 @@ class CompilerTest {
                     make(OpConstant, 2),
                     make(OpPop),
                 )
-            )
+            ),
+            CompilerTestCase(
+                input = "fn() { 5 + 10 }",
+                expectedConstants = listOf(
+                    5, 10,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpConstant, 1),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 2),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = "fn() { 1; 2 }",
+                expectedConstants = listOf(
+                    1, 2,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpPop),
+                            make(OpConstant, 1),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 2),
+                    make(OpPop),
+                )
+            ),
         )
 
         runCompilerTests(tests)
     }
 
-    private fun runCompilerTests(tests: List<TestCase>) {
+    @Test
+    fun testCompilerScope() {
+        val compiler = Compiler()
+        assertEquals(0, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex, want=0")
+        compiler.emit(OpMul)
+        compiler.enterScope()
+        assertEquals(1, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex, want=1")
+        compiler.emit(OpSub)
+        assertEquals(
+            1,
+            compiler.scopes[compiler.scopeIndex].instructions.size,
+            "instructions length wrong. got=${compiler.scopes[compiler.scopeIndex].instructions.size}"
+        )
+        var last = compiler.scopes[compiler.scopeIndex].lastInstruction
+        assertEquals(OpSub, last!!.opcode, "lastInstruction.Opcode wrong. got=${last.opcode}, want=$OpSub")
+        compiler.leaveScope()
+        assertEquals(0, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex")
+        compiler.emit(OpAdd)
+        assertEquals(
+            2,
+            compiler.scopes[compiler.scopeIndex].instructions.size,
+            "instructions length wrong. got=${compiler.scopes[compiler.scopeIndex].instructions.size}"
+        )
+        last = compiler.scopes[compiler.scopeIndex].lastInstruction
+        assertEquals(OpAdd, last!!.opcode, "lastInstruction.Opcode wrong. got=${last.opcode}, want=$OpAdd")
+        val previous = compiler.scopes[compiler.scopeIndex].previousInstruction
+        assertEquals(OpMul, previous!!.opcode, "previousInstruction.Opcode wrong. got=${previous.opcode}, want=$OpMul")
+    }
+
+    @Test
+    fun testFunctionsWithoutReturnValue() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = "fn() { }",
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpReturn),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpPop),
+                )
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    private fun runCompilerTests(tests: List<CompilerTestCase>) {
         for (test in tests) {
             val program = parse(test.input)
             val compiler = Compiler()
@@ -502,7 +590,8 @@ class CompilerTest {
                 is FunctionInstructions -> {
                     val fn = assertInstanceOf(
                         MCompiledFunction::class.java, actual[i],
-                        "constant $i - not a function: ${actual[i]::class.simpleName}")
+                        "constant $i - not a function: ${actual[i]::class.simpleName}"
+                    )
                     testInstructions(constant.instructions, fn.instructions)
                 }
             }

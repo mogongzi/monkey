@@ -2,6 +2,7 @@ package me.ryan.interpreter.compiler
 
 import me.ryan.interpreter.ast.*
 import me.ryan.interpreter.code.*
+import me.ryan.interpreter.eval.MCompiledFunction
 import me.ryan.interpreter.eval.MInteger
 import me.ryan.interpreter.eval.MObject
 import me.ryan.interpreter.eval.MString
@@ -9,14 +10,21 @@ import me.ryan.interpreter.eval.MString
 @OptIn(ExperimentalUnsignedTypes::class)
 class Bytecode(val instructions: Instructions, val constants: MutableList<MObject>)
 
-data class EmittedInstruction(val opcode: Opcode, val position: Int)
+data class EmittedInstruction(var opcode: Opcode, var position: Int)
+
+@OptIn(ExperimentalUnsignedTypes::class)
+class CompilationScope(
+    var instructions: Instructions = ubyteArrayOf(),
+    var lastInstruction: EmittedInstruction? = null,
+    var previousInstruction: EmittedInstruction? = null
+)
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Compiler() {
-    private var instructions: Instructions = ubyteArrayOf()
+    internal val scopes = arrayListOf(CompilationScope())
+    internal var scopeIndex: Int = 0
+
     private val constants: MutableList<MObject> = mutableListOf()
-    private var lastInstruction: EmittedInstruction? = null
-    private var previousInstruction: EmittedInstruction? = null
     private val symbolTable = SymbolTable()
 
     fun compile(node: Node) {
@@ -97,26 +105,40 @@ class Compiler() {
                 emit(OpHash, node.pairs.size * 2)
             }
 
+            is FunctionLiteral -> {
+                enterScope()
+                compile(node.body)
+                if (lastInstructionIs(OpPop)) {
+                    replaceLastPopWithReturn()
+                }
+                if (!lastInstructionIs(OpReturnValue)) {
+                    emit(OpReturn)
+                }
+                val instructions = leaveScope()
+                val compiledFn = MCompiledFunction(instructions)
+                emit(OpConstant, addConstant(compiledFn))
+            }
+
             is IfExpression -> {
                 compile(node.condition)
                 val jumpNotTruthPos = emit(OpJumpNotTruthy, 9999)
                 compile(node.consequence)
-                if (lastInstructionIsPop()) {
+                if (lastInstructionIs(OpPop)) {
                     removeLastPop()
                 }
 
                 val jumpPos = emit(OpJump, 9999)
-                val afterConsequencePos = instructions.size
+                val afterConsequencePos = currentScope().instructions.size
                 changeOperand(jumpNotTruthPos, afterConsequencePos)
                 if (node.alternative == null) {
                     emit(OpNull)
                 } else {
                     compile(node.alternative)
-                    if (lastInstructionIsPop()) {
+                    if (lastInstructionIs(OpPop)) {
                         removeLastPop()
                     }
                 }
-                val afterAlternativePos = instructions.size
+                val afterAlternativePos = currentScope().instructions.size
                 changeOperand(jumpPos, afterAlternativePos)
             }
 
@@ -132,6 +154,11 @@ class Compiler() {
                 emit(OpSetGlobal, symbol.index)
             }
 
+            is ReturnStatement -> {
+                compile(node.returnValue)
+                emit(OpReturnValue)
+            }
+
             is Identifier -> {
                 val symbol = symbolTable.resolve(node.value)
                     ?: error("undefined variable ${node.value}")
@@ -141,7 +168,7 @@ class Compiler() {
     }
 
     fun bytecode(): Bytecode {
-        return Bytecode(instructions, constants)
+        return Bytecode(currentScope().instructions, constants)
     }
 
     fun addConstant(obj: MObject): Int {
@@ -149,45 +176,68 @@ class Compiler() {
         return constants.size - 1
     }
 
-    private fun emit(op: Opcode, vararg operands: Int): Int {
+    internal fun emit(op: Opcode, vararg operands: Int): Int {
         val instructions = make(op, *operands)
         val pos = addInstruction(instructions)
         setLastInstruction(op, pos)
         return pos
     }
 
+    private fun currentScope(): CompilationScope = scopes[scopeIndex]
+
+
     private fun addInstruction(ints: Instructions): Int {
-        val newPos = instructions.size
-        instructions += ints
+        val newPos = currentScope().instructions.size
+        currentScope().instructions += ints
         return newPos
     }
 
     private fun setLastInstruction(op: Opcode, pos: Int) {
-        val previous = lastInstruction
+        val previous = currentScope().lastInstruction
         val last = EmittedInstruction(op, pos)
-        previousInstruction = previous
-        lastInstruction = last
+        currentScope().previousInstruction = previous
+        currentScope().lastInstruction = last
     }
 
-    private fun lastInstructionIsPop(): Boolean {
-        return lastInstruction?.opcode == OpPop
+    private fun lastInstructionIs(opCode: Opcode): Boolean {
+        if (currentScope().instructions.isEmpty()) return false
+        return currentScope().lastInstruction?.opcode == opCode
     }
 
     private fun removeLastPop() {
-        val last = lastInstruction ?: return
-        instructions = instructions.copyOf(last.position)
-        lastInstruction = previousInstruction
+        val last = currentScope().lastInstruction ?: return
+        currentScope().instructions = currentScope().instructions.copyOf(last.position)
+        currentScope().lastInstruction = currentScope().previousInstruction
+    }
+
+    private fun replaceLastPopWithReturn() {
+        val lastPos = currentScope().lastInstruction?.position
+        replaceInstruction(lastPos!!, make(OpReturnValue))
+        currentScope().lastInstruction?.opcode = OpReturnValue
     }
 
     private fun replaceInstruction(pos: Int, newInstruction: Instructions) {
         for (i in newInstruction.indices) {
-            instructions[pos + i] = newInstruction[i]
+            currentScope().instructions[pos + i] = newInstruction[i]
         }
     }
 
     private fun changeOperand(opPos: Int, operand: Int) {
-        val op = instructions[opPos]
+        val op = currentScope().instructions[opPos]
         val newInstruction = make(op, operand)
         replaceInstruction(opPos, newInstruction)
+    }
+
+    internal fun enterScope() {
+        val scope = CompilationScope()
+        scopes += scope
+        scopeIndex++
+    }
+
+    internal fun leaveScope(): Instructions {
+        val instructions = currentScope().instructions
+        scopes.removeLast()
+        scopeIndex--
+        return instructions
     }
 }

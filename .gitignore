@@ -68,3 +68,4 @@ src/test/c/**/*
 !src/test/c/**/*.h
 !src/test/c/**/Makefile
 .amp/
+note/inferencing.md

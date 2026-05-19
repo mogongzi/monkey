@@ -6,21 +6,23 @@ import me.ryan.interpreter.ast.Node
 import me.ryan.interpreter.code.Instructions
 import me.ryan.interpreter.code.string
 
-// MObject (Monkey Object) is the internal representation of values
-// produced during evaluation of Monkey programs.
-// Every value the evaluator produces (integers, booleans, null, etc.) implements this interface.
-//
-// Value types (MInteger, MBoolean, MString) are data classes, giving them structural equality —
-// two instances with the same value are considered equal (e.g., MInteger(5) == MInteger(5)).
-// Reference types (MFunction) remain regular classes with identity-based equality,
-// since each function definition creates a distinct value regardless of its body.
+/**
+ * MObject (Monkey Object) is the internal representation of values
+ * produced during evaluation of Monkey programs.
+ * Every value the evaluator produces (integers, booleans, null, etc.) implements this interface.
+
+ * Value types (MInteger, MBoolean, MString) are data classes, giving them structural equality —
+ * two instances with the same value are considered equal (e.g., MInteger(5) == MInteger(5)).
+ * Reference types (MFunction) remain regular classes with identity-based equality,
+ * since each function definition creates a distinct value regardless of its body.
+*/
 
 /**
  * The base interface for all Monkey object types.
  * Equivalent to Go's `object.Object` interface in the book.
  */
 interface MObject {
-    /** Returns a human-readable string representation for debugging and REPL output. */
+    // Returns a human-readable string representation for debugging and REPL output.
     fun inspect(): String
 }
 
@@ -30,7 +32,7 @@ interface Hashable {
     fun hashKey(): HashKey
 }
 
-/** Wraps a 64-bit integer value produced by evaluating an integer literal or expression. */
+// Wraps a 64-bit integer value produced by evaluating an integer literal or expression.
 data class MInteger(val value: Long) : MObject, Hashable {
     override fun inspect(): String = value.toString()
     override fun hashKey(): HashKey = HashKey("MInteger", value)
@@ -75,7 +77,6 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
         append(body.string())
         append("\n}")
     }
-
 }
 
 // bytecode representation rather than AST for compiler/vm usage.
@@ -87,7 +88,7 @@ class MBuiltinFunction(val function: (List<MObject>) -> MObject) : MObject {
     override fun inspect(): String = "builtin function"
 }
 
-/** Wraps a Monkey array value. Uses `List` (immutable view) so structural equality is safe. */
+// Wraps a Monkey array value. Uses `List` (immutable view) so structural equality is safe.
 data class MArray(val elements: List<MObject> = emptyList()) : MObject {
     override fun inspect(): String = buildString {
         append("[")
