@@ -4,6 +4,7 @@
 #include "mkc.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define STACK_SIZE 2048
 #define GLOBALS_SIZE 65535
@@ -40,6 +41,13 @@ struct MObject
     MHash *hash;
   } as;
 };
+
+typedef struct {
+    uint8_t *instructions;
+    uint32_t num_instructions;
+    uint32_t ip;
+    uint32_t base_pointer;
+} Framer;
 
 typedef struct
 {

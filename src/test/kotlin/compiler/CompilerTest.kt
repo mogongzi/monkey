@@ -427,7 +427,7 @@ class CompilerTest {
     }
 
     @Test
-    fun testFunctions() {
+    fun testFunctionLiterals() {
         val tests = listOf(
             CompilerTestCase(
                 input = "fn() { return 5 + 10 }",
@@ -534,6 +534,51 @@ class CompilerTest {
                     make(OpPop),
                 )
             ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    @Test
+    fun testFunctionCalls() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = "fn() { 24 }();",
+                expectedConstants = listOf(24,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpReturnValue),
+                        )
+                    )),
+                expectedInstructions = listOf(
+                    make(OpConstant, 1),
+                    make(OpCall),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = """
+                    let noArg = fn() { 24 };
+                    noArg();
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    24,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 1),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpCall),
+                    make(OpPop),
+                )
+            )
         )
 
         runCompilerTests(tests)

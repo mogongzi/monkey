@@ -59,7 +59,8 @@ int mkc_read(FILE *f, MkcBytecode *out) {
       }
       uint32_t len = read_u32(len_bytes); // length of MString
       out->constants[i].as.string.byte_len = len;
-      out->constants[i].as.string.value = malloc(len + 1); // string gets allocated on Heap
+      out->constants[i].as.string.value =
+          malloc(len + 1); // string gets allocated on Heap
       if (out->constants[i].as.string.value == NULL) {
         fprintf(stderr, "mkc: out of memory (string constant)\n");
         goto fail;
@@ -72,6 +73,27 @@ int mkc_read(FILE *f, MkcBytecode *out) {
       }
 
       out->constants[i].as.string.value[len] = '\0';
+      break;
+    }
+    case TAG_FUNCTION: {
+      uint8_t len_bytes[4];
+      if (read_exact(f, len_bytes, 4) != 0) {
+        fprintf(stderr, "mkc: truncated MFunction length at index %u\n", i);
+        goto fail;
+      }
+      uint32_t len = read_u32(len_bytes); // length of MFunction
+      out->constants[i].as.function.num_instructions = len;
+      out->constants[i].as.function.instructions = malloc(len);
+      if (out->constants[i].as.function.instructions == NULL) {
+        fprintf(stderr, "mkc: out of memory (function instructions)\n");
+        goto fail;
+      }
+
+      if (read_exact(f, out->constants[i].as.function.instructions, len) != 0) {
+        fprintf(stderr, "mkc: truncated function instructions at index %u\n",
+                i);
+        goto fail;
+      }
       break;
     }
     default:
@@ -122,6 +144,8 @@ void mkc_free(MkcBytecode *bc) {
     for (uint16_t i = 0; i < bc->num_constants; i++) {
       if (bc->constants[i].tag == TAG_STRING) {
         free(bc->constants[i].as.string.value);
+      } else if (bc->constants[i].tag == TAG_FUNCTION) {
+        free(bc->constants[i].as.function.instructions);
       }
     }
   }

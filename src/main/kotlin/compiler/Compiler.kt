@@ -142,6 +142,11 @@ class Compiler() {
                 changeOperand(jumpPos, afterAlternativePos)
             }
 
+            is CallExpression -> {
+                compile(node.function)
+                emit(OpCall)
+            }
+
             is BlockStatement -> {
                 for (statement in node.statements) {
                     compile(statement)

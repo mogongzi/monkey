@@ -24,5 +24,8 @@
 #define OP_ARRAY 0x12
 #define OP_HASH 0x13
 #define OP_INDEX 0x14
+#define OP_CALL 0x15
+#define OP_RETURN_VALUE 0x16
+#define OP_RETURN 0x17
 
 #endif

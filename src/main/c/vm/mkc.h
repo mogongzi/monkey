@@ -7,6 +7,7 @@
 
 #define TAG_INTEGER 0x01
 #define TAG_STRING 0x02
+#define TAG_FUNCTION 0x03
 
 typedef struct {
   uint32_t byte_len;
@@ -14,10 +15,16 @@ typedef struct {
 } MkcString;
 
 typedef struct {
+  uint32_t num_instructions;
+  uint8_t *instructions;
+} MkcFunction;
+
+typedef struct {
   uint8_t tag;
   union {
     int64_t integer;
     MkcString string;
+    MkcFunction function;
   } as;
 } MkcConstant;
 

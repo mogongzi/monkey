@@ -1,5 +1,109 @@
 # Writing an Interpreter & Compiler in Kotlin from scratch (Handcrafted)
 
+## The Monkey Language
+
+Monkey is a small, expressive programming language designed for learning how interpreters and compilers work. It supports **integers**, **booleans**, **strings**, **arrays**, **hashmaps**, **first-class functions with closures**, and a **macro system**.
+
+### Variables and expressions
+
+```monkey
+let age = 25;
+let name = "Monkey";
+let result = 10 * (20 / 2) - 5 + 1;
+```
+
+### Control flow
+
+`if/else` is an expression — it returns a value:
+
+```monkey
+let max = if (a > b) { a } else { b };
+```
+
+### Functions and closures
+
+Functions are first-class values. They can be assigned to variables, passed as arguments, and returned from other functions:
+
+```monkey
+let add = fn(x, y) { x + y };
+add(1, 2); // 3
+
+let newAdder = fn(x) {
+  fn(y) { x + y };
+};
+let addTwo = newAdder(2);
+addTwo(3); // 5
+```
+
+Closures capture their surrounding environment. Here a counter function returns two closures that share the same `count` variable:
+
+```monkey
+let counter = fn() {
+  let count = 0;
+  let increment = fn() {
+    let count = count + 1;
+    count;
+  };
+  increment;
+};
+let myCounter = counter();
+myCounter(); // 1
+myCounter(); // 2
+myCounter(); // 3
+```
+
+### Strings
+
+```monkey
+let greeting = "Hello" + " " + "World";
+len(greeting); // 11
+```
+
+### Arrays
+
+```monkey
+let arr = [1, 2, 3, 4, 5];
+arr[0];          // 1
+len(arr);        // 5
+first(arr);      // 1
+last(arr);       // 5
+rest(arr);       // [2, 3, 4, 5]
+push(arr, 6);   // [1, 2, 3, 4, 5, 6]
+```
+
+### Hashmaps
+
+```monkey
+let people = {"name": "Monkey", "age": 25};
+people["name"]; // "Monkey"
+```
+
+### Higher-order functions
+
+```monkey
+let map = fn(arr, f) {
+  if (len(arr) == 0) {
+    []
+  } else {
+    push(map(rest(arr), f), f(first(arr)));
+  }
+};
+map([1, 2, 3], fn(x) { x * 2 }); // [2, 4, 6]
+```
+
+### Macros
+
+Monkey supports AST-level macros with `quote` and `unquote`:
+
+```monkey
+let unless = macro(condition, body) {
+  quote(if (!(unquote(condition))) {
+    unquote(body);
+  });
+};
+unless(false, puts("this runs!"));
+```
+
 ## Build and Run
 
 Option 1: Gradle (dev loop)

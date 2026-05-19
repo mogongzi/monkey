@@ -93,6 +93,11 @@ fun main() {
         "src/test/fixtures/index_hash_two.mkc" to "{1: 1, 2: 2}[2]",
         "src/test/fixtures/index_hash_missing.mkc" to "{1: 1}[0]",
         "src/test/fixtures/index_empty_hash.mkc" to "{}[0]",
+        // function calls
+        "src/test/fixtures/function_call_no_args.mkc" to """
+            let fivePlusTen = fn() { 5 + 10; };
+            fivePlusTen();
+        """.trimIndent(),
     )
 
     for ((path, source) in cases) {

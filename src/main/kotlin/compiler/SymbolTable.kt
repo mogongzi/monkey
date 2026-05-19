@@ -7,6 +7,9 @@ enum class SymbolScope {
 data class Symbol(val name: String, val scope: SymbolScope, val index: Int)
 
 class SymbolTable() {
+    private val store = mutableMapOf<String, Symbol>()
+    private var numDefinitions: Int = 0
+
     fun define(name: String): Symbol {
         val symbol = Symbol(name, SymbolScope.GLOBAL, index = numDefinitions)
         store[name] = symbol
@@ -17,7 +20,4 @@ class SymbolTable() {
     fun resolve(name: String) : Symbol? {
         return store[name]
     }
-
-    private val store = mutableMapOf<String, Symbol>()
-    private var numDefinitions: Int = 0
 }

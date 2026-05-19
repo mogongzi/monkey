@@ -1,6 +1,8 @@
 #include "../../../main/c/vm/mkc.h"
+#include "../../../main/c/vm/opcodes.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -151,6 +153,35 @@ static void test_trailing_bytes(void)
   printf("  PASS test_trailing_bytes\n");
 }
 
+// test9: test function call
+static void test_function_call(void) {
+    uint8_t data[] = {
+        0x00, 0x01,              // 1 constant
+        TAG_FUNCTION,            // constant tag
+        0x00, 0x00, 0x00, 0x01,  // function instruction length = 1
+        OP_RETURN,               // function instructions
+        0x00, 0x00, 0x00, 0x00   // main instruction length = 0
+    };
+
+    // verify size matches
+    assert(sizeof(data) == 12);
+
+    FILE *f = bytes_to_stream(data, sizeof(data));
+    MkcBytecode bc;
+    assert(mkc_read(f, &bc) == 0);
+    fclose(f);
+    assert(bc.num_constants == 1);
+    assert(bc.constants[0].tag == TAG_FUNCTION);
+    assert(bc.constants[0].as.function.num_instructions == 1);
+    assert(bc.constants[0].as.function.instructions[0] == OP_RETURN);
+
+    assert(bc.num_instructions == 0);
+    assert(bc.instructions == NULL);
+
+    mkc_free(&bc);
+    printf("  PASS test_function_call\n");
+}
+
 int main(void)
 {
   printf("Running mkc tests...\n");
@@ -160,6 +191,7 @@ int main(void)
   test_two_constants_with_instructions();
   test_truncated_constants();
   test_trailing_bytes();
+  test_function_call();
   printf("All tests passed.\n");
   return 0;
 }
