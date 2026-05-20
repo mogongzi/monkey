@@ -69,3 +69,5 @@ src/test/c/**/*
 !src/test/c/**/Makefile
 .amp/
 note/inferencing.md
+
+.antigravitycli/

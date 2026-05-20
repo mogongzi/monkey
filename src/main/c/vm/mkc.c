@@ -108,15 +108,16 @@ int mkc_read(FILE *f, MkcBytecode *out) {
     fprintf(stderr, "mkc: truncated instruction length\n");
     goto fail;
   }
-  out->num_instructions = read_u32(insn_len_bytes);
-  if (out->num_instructions > 0) {
-    out->instructions = malloc(out->num_instructions);
-    if (!out->instructions) {
+
+  out->fn.num_instructions = read_u32(insn_len_bytes);
+  if (out->fn.num_instructions > 0) {
+    out->fn.instructions = malloc(out->fn.num_instructions);
+    if (!out->fn.instructions) {
       fprintf(stderr, "mkc: out of memory (instructions)\n");
       goto fail;
     }
 
-    if (read_exact(f, out->instructions, out->num_instructions) != 0) {
+    if (read_exact(f, out->fn.instructions, out->fn.num_instructions) != 0) {
       fprintf(stderr, "mkc: truncated instructions\n");
       goto fail;
     }
@@ -149,8 +150,7 @@ void mkc_free(MkcBytecode *bc) {
       }
     }
   }
-
   free(bc->constants);
-  free(bc->instructions);
+  free(bc->fn.instructions);
   memset(bc, 0, sizeof(*bc));
 }

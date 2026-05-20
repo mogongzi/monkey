@@ -8,6 +8,7 @@
 
 #define STACK_SIZE 2048
 #define GLOBALS_SIZE 65535
+#define MAX_FRAME_SIZE 1024
 
 typedef enum
 {
@@ -43,11 +44,9 @@ struct MObject
 };
 
 typedef struct {
-    uint8_t *instructions;
-    uint32_t num_instructions;
+    const MkcFunction *fn;
     uint32_t ip;
-    uint32_t base_pointer;
-} Framer;
+} Frame;
 
 typedef struct
 {
@@ -56,6 +55,9 @@ typedef struct
   MObject stack[STACK_SIZE];
   MObject globals[GLOBALS_SIZE];
   uint32_t sp;
+
+  Frame *frames;
+  uint32_t frames_index;
 
   char **allocated_strings;
   size_t allocated_string_count;

@@ -31,8 +31,7 @@ typedef struct {
 typedef struct {
   uint16_t num_constants;
   MkcConstant *constants;
-  uint32_t num_instructions;
-  uint8_t *instructions;
+  MkcFunction fn;
 } MkcBytecode;
 
 int mkc_read(FILE *f, MkcBytecode *out);

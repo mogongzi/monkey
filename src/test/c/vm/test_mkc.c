@@ -40,8 +40,8 @@ static void test_empty_program(void)
   fclose(f);
   assert(bc.num_constants == 0);
   assert(bc.constants == NULL);
-  assert(bc.num_instructions == 0);
-  assert(bc.instructions == NULL);
+  assert(bc.fn.num_instructions == 0);
+  assert(bc.fn.instructions == NULL);
   mkc_free(&bc);
   printf("  PASS test_empty_program\n");
 }
@@ -61,7 +61,7 @@ static void test_one_integer(void)
   assert(bc.num_constants == 1);
   assert(bc.constants[0].tag == TAG_INTEGER);
   assert(bc.constants[0].as.integer == 42);
-  assert(bc.num_instructions == 0);
+  assert(bc.fn.num_instructions == 0);
   mkc_free(&bc);
   printf("  PASS test_one_integer\n");
 }
@@ -110,13 +110,13 @@ static void test_two_constants_with_instructions(void)
   assert(bc.constants[1].as.integer == 2);
 
   // instructions
-  assert(bc.num_instructions == 6);
-  assert(bc.instructions[0] == 0x00);
-  assert(bc.instructions[1] == 0x00);
-  assert(bc.instructions[2] == 0x00);
-  assert(bc.instructions[3] == 0x00);
-  assert(bc.instructions[4] == 0x00);
-  assert(bc.instructions[5] == 0x01);
+  assert(bc.fn.num_instructions == 6);
+  assert(bc.fn.instructions[0] == 0x00);
+  assert(bc.fn.instructions[1] == 0x00);
+  assert(bc.fn.instructions[2] == 0x00);
+  assert(bc.fn.instructions[3] == 0x00);
+  assert(bc.fn.instructions[4] == 0x00);
+  assert(bc.fn.instructions[5] == 0x01);
 
   mkc_free(&bc);
   printf("  PASS test_two_constants_with_instructions\n");
@@ -175,8 +175,8 @@ static void test_function_call(void) {
     assert(bc.constants[0].as.function.num_instructions == 1);
     assert(bc.constants[0].as.function.instructions[0] == OP_RETURN);
 
-    assert(bc.num_instructions == 0);
-    assert(bc.instructions == NULL);
+    assert(bc.fn.num_instructions == 0);
+    assert(bc.fn.instructions == NULL);
 
     mkc_free(&bc);
     printf("  PASS test_function_call\n");

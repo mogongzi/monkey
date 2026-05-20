@@ -33,9 +33,18 @@ VM *vm_init(const MkcBytecode *bc) {
   vm->bc = bc;
   vm->sp = 0;
   vm->constants = NULL;
+  vm->frames = malloc(sizeof(Frame) * MAX_FRAME_SIZE);
+  if (!vm->frames) {
+    free(vm);
+    return NULL;
+  }
+  vm->frames[0].fn = &bc->fn;
+  vm->frames[0].ip = 0;
+  vm->frames_index = 1;
   if (bc->num_constants > 0) {
-    vm->constants = malloc(sizeof(MObject) * bc->num_constants);
+    vm->constants = malloc(sizeof(MObject) * (bc->num_constants));
     if (!vm->constants) {
+      free(vm->frames);
       free(vm);
       return NULL;
     }
@@ -44,6 +53,7 @@ VM *vm_init(const MkcBytecode *bc) {
       if (mobject_from_mkc_constant(&bc->constants[i], &vm->constants[i]) !=
           VM_OK) {
         free(vm->constants);
+        free(vm->frames);
         free(vm);
         return NULL;
       }
@@ -63,6 +73,24 @@ VM *vm_init(const MkcBytecode *bc) {
   vm->allocated_hash_capacity = 0;
 
   return vm;
+}
+
+static Frame *current_frame(VM *vm) {
+  return &vm->frames[vm->frames_index - 1];
+}
+
+static void push_frame(VM *vm, Frame *frame) {
+  if (vm->frames_index >= MAX_FRAME_SIZE) {
+    fprintf(stderr, "call stack overflow: exceeded maximum frames of %d\n", MAX_FRAME_SIZE);
+    abort();
+  }
+  vm->frames[vm->frames_index] = *frame;
+  vm->frames_index++;
+}
+
+static Frame *pop_frame(VM *vm) {
+  vm->frames_index--;
+  return &vm->frames[vm->frames_index];
 }
 
 static int vm_track_allocated_string(VM *vm, char *value) {
@@ -397,11 +425,15 @@ static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
 }
 
 VM_RESULT vm_run(VM *vm) {
-  for (uint32_t ip = 0; ip < vm->bc->num_instructions; ip++) {
-    uint8_t opcode = vm->bc->instructions[ip];
+  Frame *frame = current_frame(vm);
+  const uint8_t *instructions = frame->fn->instructions;
+  uint32_t ip = frame->ip;
+  uint32_t num_instructions = frame->fn->num_instructions;
+  while (ip < num_instructions) {
+    uint8_t opcode = instructions[ip];
     switch (opcode) {
     case OP_CONSTANT: {
-      uint32_t idx = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t idx = read_u16(&instructions[ip + 1]);
       VM_RESULT result = vm_push(vm, vm->constants[idx]);
       if (result != VM_OK) {
         return result;
@@ -453,12 +485,12 @@ VM_RESULT vm_run(VM *vm) {
       vm_exec_bang_operator(vm);
       break;
     case OP_JUMP: {
-      uint32_t pos = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t pos = read_u16(&instructions[ip + 1]);
       ip = pos - 1;
       break;
     }
     case OP_JUMP_NOT_TRUTHY: {
-      uint32_t pos = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t pos = read_u16(&instructions[ip + 1]);
       ip += 2;
       MObject condition = vm_pop(vm);
       if (!is_truthy(&condition)) // skip to 'pos' if top-of-stack is falsy
@@ -474,13 +506,13 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_SET_GLOBAL: {
-      uint32_t global_index = read_u16(vm->bc->instructions + ip + 1);
+      uint32_t global_index = read_u16(&instructions[ip + 1]);
       ip += 2;
       vm->globals[global_index] = vm_pop(vm);
       break;
     }
     case OP_GET_GLOBAL: {
-      uint32_t global_index = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t global_index = read_u16(&instructions[ip + 1]);
       ip += 2;
       VM_RESULT r = vm_push(vm, vm->globals[global_index]);
       if (r != VM_OK)
@@ -488,7 +520,7 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_ARRAY: {
-      uint32_t num_elements = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t num_elements = read_u16(&instructions[ip + 1]);
       ip += 2;
       MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
       vm->sp = vm->sp - num_elements;
@@ -503,7 +535,7 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_HASH: {
-      uint32_t num_hashes = read_u16(&vm->bc->instructions[ip + 1]);
+      uint32_t num_hashes = read_u16(&instructions[ip + 1]);
       ip += 2;
       MObject obj;
       VM_RESULT r = build_hash(vm, (vm->sp - num_hashes), vm->sp, &obj);
@@ -529,7 +561,9 @@ VM_RESULT vm_run(VM *vm) {
       fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
       return VM_ERR_UNKNOWN_OPCODE;
     }
-  }
 
+    ip++;
+  }
+  current_frame(vm)->ip = ip;
   return VM_OK;
 }
