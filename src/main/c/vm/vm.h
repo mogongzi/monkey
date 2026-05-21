@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "frame.h"
 #include "mkc.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -42,11 +43,6 @@ struct MObject
     MHash *hash;
   } as;
 };
-
-typedef struct {
-    const MkcFunction *fn;
-    uint32_t ip;
-} Frame;
 
 typedef struct
 {

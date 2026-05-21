@@ -482,3 +482,188 @@ Each pillar tells you something the code alone cannot:
 - **What is correct.** Operational semantics gives you a way to *prove* that your compiler preserves meaning — that the bytecode for `1 + 2` evaluates to the same value as the AST for `1 + 2`.
 
 > Compiler theory is the application layer of formal language theory, graph theory, type theory, lattice theory, and formal semantics. The Monkey project is a small, executable tour of the first two and a taste of the fifth. The same math scales up to LLVM, GHC, and the JVM — only the engineering effort grows.
+
+---
+
+## 13. The call stack on real machines — what a "frame" actually is
+
+Before designing the VM's frame system, it helps to be precise about what "the stack" and "a frame" mean on real hardware. Most of the design freedom we have in our VM exists because real CPUs *don't* have that freedom.
+
+### The stack is just RAM — with hardware assistance
+
+Physically, there is no special "stack chip." The call stack is a region of the process's virtual address space that the OS reserves at startup. What makes it feel special is the hardware that knows about it:
+
+- The CPU has a dedicated **stack pointer register** (`rsp` on x86-64, `sp` on ARM64) that always points to the top of the stack.
+- `push`, `pop`, `call`, and `ret` implicitly read/modify the stack pointer.
+- The hot top of the stack almost always lives in L1 cache, so accesses are nearly as fast as register access.
+- ABIs (System V AMD64, AAPCS, etc.) standardize argument passing, return-address layout, frame-pointer use, alignment, and unwinding info — all relative to `rsp`/`rbp`.
+
+### Stack-pointer conventions: four flavors
+
+"Top of stack" needs disambiguation. There are two axes — two questions about SP — and they combine into four conventions:
+
+| Convention | SP points to… | Grows toward… |
+|---|---|---|
+| **Full Descending** (x86-64, ARM64) | last item | lower addresses |
+| Full Ascending | last item | higher addresses |
+| Empty Descending | next free slot | lower addresses |
+| Empty Ascending | next free slot | higher addresses |
+
+On x86-64, `push rax` is:
+
+```
+rsp = rsp - 8       ; decrement first
+[rsp] = rax         ; then store — so rsp now points AT the new value
+```
+
+ARM32 actually supports all four via `LDM`/`STM` variants (`FD`, `FA`, `ED`, `EA`); the standard ABI picks Full Descending.
+
+Our VM's `vm->sp` is **empty ascending** — it points to the next free slot and `push` writes then increments. Neither convention is "right"; you just have to be consistent.
+
+### Why `rbp` is named `rbp`
+
+`bp` = **base pointer**. It marks the *base* (stable anchor) of the current frame, in contrast to `sp` which drifts as the function pushes and pops within itself. With `rbp` fixed, the compiler can address locals at constant negative offsets (`[rbp-8]`, `[rbp-16]`) and incoming stack arguments at constant positive offsets (`[rbp+16]`, `[rbp+24]`), regardless of what `rsp` has done in between.
+
+The `r` prefix is just the x86 64-bit naming convention, inherited from a long history:
+
+| ISA | Width | Name |
+|---|---|---|
+| 8086 | 16-bit | `bp` |
+| 80386 | 32-bit | `ebp` (extended) |
+| x86-64 | 64-bit | `rbp` (register-extended) |
+
+### What a frame contains, in plain language
+
+When a function is called, the CPU must remember three things for that call:
+
+1. **Where to return to** — the address of the instruction *after* the `call`. This is a snapshot of the **instruction pointer**, not the stack pointer. `call` pushes it; `ret` pops it back into `rip`.
+2. **The arguments** the caller passed in.
+3. **The local variables** the function declares.
+
+All three are bundled into one chunk of memory called a **frame** (or *activation record*). The frame is not a separate gadget beside the stack — it *is* a slice of the stack, marked off for this one call. Because function calls are perfectly nested (most recently called returns first), a stack — LIFO — is the natural container.
+
+That nesting property is why a *generic* stack data structure earns the definite article and becomes **the** call stack: a stack of anything becomes *the* stack once it's dedicated to frames.
+
+### Why real machines can't easily put frames elsewhere
+
+In principle, RAM is RAM — you could maintain frames in any region. In practice, two things pin you down:
+
+- **`call` and `ret` are hardcoded to use `rsp`.** `call` writes the return address to `[rsp]`; `ret` reads it back. You can't redirect them without giving up those instructions.
+- **The ABI** specifies stack-argument layout, the red zone, alignment, and unwinding info at `rsp`/`rbp` offsets. Violate it and you can't call libc, the kernel, or any normally-compiled code.
+
+People do find loopholes:
+
+- **Coroutines / fibers / goroutines** — each task has its own stack region in a separate buffer; the runtime swaps `rsp` on context switch. Many stacks, one active at a time.
+- **Intel CET shadow stacks** (2020+) — a *second* hardware-tracked stack just for return addresses, write-protected, to defeat ROP attacks. Intel literally added silicon for a separate stack.
+- **CPS-converted Scheme/ML compilers** — abandon `call`/`ret`, allocate activation records on the heap, use indirect jumps. Frames outlive their callers, so a real stack wouldn't work.
+
+The constraint is never physical memory — it's the `call`/`ret` instructions and the ABI built around them.
+
+### Why our VM splits into two stacks
+
+Our VM has neither a hardware `call`/`ret` nor an ABI to honor. That freedom lets us split frame data and operand data into **two separate arrays**:
+
+```diagram
+╭──────────────────────────╮       ╭──────────────────────╮
+│  vm->stack[STACK_SIZE]   │       │ vm->frames[MAX_...]  │
+│  (value stack)           │       │ (frame stack)        │
+│                          │       │                      │
+│  holds operands:         │       │  holds Frame*:       │
+│  - OpConstant pushes     │       │  - one per active    │
+│  - OpAdd pops two/pushes │       │    function call     │
+│  - locals live here too  │       │  - push on call      │
+│                          │       │  - pop on return     │
+╰──────────────────────────╯       ╰──────────────────────╯
+```
+
+The frame struct itself stays minimal: the compiled function, the `ip`, and a `basePointer` — an index into the value stack marking where this call's locals begin. The locals and arguments don't live *inside* the frame — they live in the value stack, and the frame just *points* to where they start.
+
+A small but common confusion: **constants ≠ locals.** They're different layers entirely:
+
+| | Lives in | Created when | Per-call? |
+|---|---|---|---|
+| Constant | Constant pool (`vm->constants[]`, loaded from `.mkc`) | Compile time | No — shared |
+| Local variable | Value stack slots | Runtime, on each call | Yes — fresh each call |
+
+`5` as a literal becomes an `OpConstant 0` that pushes `vm->constants[0]`. `let x = 5` is a *local variable* that *happens to be initialized from* that constant. The frame references neither directly: it points into the value stack where locals live, and constants are reached via the VM-wide `constants[]` array, independent of any frame.
+
+> On a real CPU, all of this — return address, arguments, locals, spilled temporaries — must coexist in one region tracked by `rsp`, because that's where `call`/`ret` and the ABI force everything. In our VM, there is no such instruction and no such ABI, so we deliberately split frames out into their own array. Simpler to implement, easier to reason about, and the entire reason Ball can say in Chapter 4: *"We can store frames anywhere we like."*
+
+---
+
+## 14. The theory of virtualization — why we can build a machine on top of another
+
+It's worth pausing on the deeper question: why does any of this work at all? Why can a C program pretend to be a Monkey VM, which can in turn pretend to be… anything? The answer isn't a clever engineering trick — it's a direct consequence of what computation fundamentally *is*.
+
+### The foundational principle: Turing universality
+
+In 1936, Alan Turing proved that a single **Universal Turing Machine** can, given the *description* of any other Turing machine on its tape, simulate that machine exactly — step for step, output for output.
+
+Generalized as the **Church–Turing thesis**:
+
+> Any system capable of expressing certain basic operations (read, write, conditional branch, unbounded memory) is **computationally universal** — it can simulate any other such system.
+
+Once you accept that, virtualization stops being mysterious. A C program on x86 can simulate a Monkey VM. The Monkey VM can simulate anything Monkey is expressive enough to describe. You could write a JVM in Monkey, or an x86 emulator in JavaScript (people have). It's all the same trick, applied at different layers.
+
+### The mechanical "how" — encode guest state as host data
+
+To run a "guest machine" on a "host machine," you only need to do one thing:
+
+> Represent every piece of the guest machine's state as data the host can read and modify, and represent the guest's instructions as host code that performs the corresponding state transitions.
+
+Look at exactly what `vm.c` does:
+
+| Guest (Monkey VM) | Host (C / real CPU) |
+|---|---|
+| Operand stack | `Object* stack[STACK_SIZE]` array |
+| Stack pointer | `int sp` variable |
+| Instruction pointer | `int ip` field in `Frame` |
+| Frame stack | `Frame* frames[MAX_FRAMES]` array |
+| Bytecode dispatch | `switch (opcode) { ... }` |
+| Constants pool | `Object** constants` array |
+
+There is nothing magical here. The Monkey VM has no *real* registers — it has C variables that *play the role of* registers. It has no *real* memory — it has C arrays that *play the role of* memory. The host has more than enough power to represent and update the guest's state.
+
+### It's turtles all the way down
+
+The most underappreciated fact: **every layer of a real computer is already a virtual machine** for the layer above it. Virtualization isn't something you *add* on top — it's how the whole stack already works.
+
+```diagram
+╭──────────────────────────────────╮
+│  Monkey source program           │   ← runs on
+├──────────────────────────────────┤
+│  Monkey VM (our C code)          │   ← runs on
+├──────────────────────────────────┤
+│  C runtime + standard library    │   ← runs on
+├──────────────────────────────────┤
+│  OS processes & syscalls         │   ← runs on
+├──────────────────────────────────┤
+│  ARM64 / x86-64 ISA              │   ← runs on
+├──────────────────────────────────┤
+│  CPU microarchitecture (µops)    │   ← runs on
+├──────────────────────────────────┤
+│  Logic gates                     │   ← runs on
+├──────────────────────────────────┤
+│  Transistors & physics           │
+╰──────────────────────────────────╯
+```
+
+Each layer **defines an abstract machine** — a set of primitives and a model of state — and **implements it using the primitives of the layer below**. The x86 ISA you program against is itself a virtualization: modern Intel CPUs internally decode x86 into completely different *micro-operations* and execute those. The "x86 machine" you think you're running on hasn't physically existed since the Pentium Pro in 1995. You've been running on a VM the whole time.
+
+So "why can we build a machine on top of another machine?" inverts: **there is no bottom**. Every machine humans build is built on top of another. Our Monkey VM is just one more layer.
+
+### Two flavors of virtualization — don't conflate them
+
+- **Language VMs** (JVM, .NET CLR, V8, our Monkey VM): the "machine" is *invented* to be virtualized — its ISA is chosen for portability, safety, and ease of implementation. Stack-based, garbage-collected, with high-level opcodes like `OpCall`. No real chip has this ISA.
+
+- **System VMs / emulators** (VMware, KVM, QEMU, DOSBox): the "machine" is a *real* one being mimicked in software (or with hardware assistance like Intel VT-x). The guest OS thinks it has real hardware.
+
+Different goals, same underlying principle.
+
+### What you give up, and what you gain
+
+- **Cost.** Each guest instruction takes many host instructions to dispatch and execute. A naive switch-based VM is typically 10–100× slower than native code. JITs (V8, HotSpot, LuaJIT) reclaim most of this by compiling hot guest code to host code at runtime — at which point the "VM" is gradually erasing itself.
+
+- **Gain.** Portability (same `.mkc` runs on any host with the VM), safety (the VM mediates every operation), observability (you can inspect every instruction), and decoupling of language design from hardware. None of these are possible if you compile straight to a real ISA.
+
+> The theoretical answer: **Turing universality + layered abstraction.** Any sufficiently powerful machine can pretend to be any other machine by encoding the other machine's state as data and its instructions as behavior. We're doing it; the CPU underneath is doing it; the OS in the middle is doing it. The whole computing stack is virtualization, recursively applied — and our Monkey VM is just the next layer up.
