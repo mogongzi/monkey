@@ -146,7 +146,7 @@ static void run_vm_tests(VmTestCase *tests, int count) {
     FILE *f = fopen(tests[i].fixture_path, "rb");
     assert(f != NULL);
 
-    MkcBytecode bc;
+    ByteCode bc;
     assert(mkc_read(f, &bc) == 0);
     fclose(f);
     VM *vm = vm_init(&bc);
@@ -154,7 +154,7 @@ static void run_vm_tests(VmTestCase *tests, int count) {
     assert(vm_run(vm) == VM_OK && "vm_run failed");
     test_expected_object(tests[i].expected, vm_last_popped_stack_elem(vm));
     vm_free(vm);
-    mkc_free(&bc);
+    free_bytecode(&bc);
     printf("  PASS  %s\n", tests[i].fixture_path);
   }
 }

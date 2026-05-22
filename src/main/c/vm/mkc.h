@@ -1,6 +1,7 @@
 #ifndef MKC_H
 #define MKC_H
 
+#include "bytecode.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,32 +10,6 @@
 #define TAG_STRING 0x02
 #define TAG_FUNCTION 0x03
 
-typedef struct {
-  uint32_t byte_len;
-  char *value;
-} MkcString;
-
-typedef struct {
-  uint32_t num_instructions;
-  uint8_t *instructions;
-} MkcFunction;
-
-typedef struct {
-  uint8_t tag;
-  union {
-    int64_t integer;
-    MkcString string;
-    MkcFunction function;
-  } as;
-} MkcConstant;
-
-typedef struct {
-  uint16_t num_constants;
-  MkcConstant *constants;
-  MkcFunction fn;
-} MkcBytecode;
-
-int mkc_read(FILE *f, MkcBytecode *out);
-void mkc_free(MkcBytecode *bc);
+int mkc_read(FILE *f, ByteCode *out);
 
 #endif

@@ -1,8 +1,8 @@
-#include "mkc.h"
+#include "object.h"
 
 typedef struct {
-    const MkcFunction *fn;
+    const MCompiledFunction *fn;
     uint32_t ip;
 } Frame;
 
-static Frame *new_frame()
+static Frame *new_frame();

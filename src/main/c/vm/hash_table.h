@@ -1,7 +1,7 @@
 #ifndef HASH_TABLE_H
 #define HASH_TABLE_H
 
-#include "vm.h"
+#include "object.h"
 
 #define INITIAL_BUCKET_COUNT 16
 
@@ -26,11 +26,11 @@ struct HashEntry {
   HashEntry *next; // chaining for hash collision
 };
 
-typedef struct MHash {
+struct MHash {
   HashEntry **buckets; // array of pointers
   size_t capacity;
   size_t count;
-} MHash;
+};
 
 MHash *new_hash(int capacity);
 void free_hash(MHash *table);

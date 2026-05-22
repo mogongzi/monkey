@@ -1,7 +1,7 @@
 #include "vm.h"
+#include "bytecode.h"
 #include "bytes.h"
 #include "hash_table.h"
-#include "mkc.h"
 #include "opcodes.h"
 #include <assert.h>
 #include <stddef.h>
@@ -10,54 +10,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int mobject_from_mkc_constant(const MkcConstant *constant,
-                                     MObject *out) {
-  switch (constant->tag) {
-  case TAG_INTEGER:
-    out->type = MINTEGER;
-    out->as.integer = constant->as.integer;
-    return 0;
-  case TAG_STRING:
-    out->type = MSTRING;
-    out->as.string = constant->as.string.value;
-    return 0;
-  default:
-    return -1;
-  }
-}
-
-VM *vm_init(const MkcBytecode *bc) {
+VM *vm_init(const ByteCode *bc) {
   VM *vm = malloc(sizeof(VM));
   if (!vm)
     return NULL;
   vm->bc = bc;
   vm->sp = 0;
   vm->constants = NULL;
-  vm->frames = malloc(sizeof(Frame) * MAX_FRAME_SIZE);
-  if (!vm->frames) {
-    free(vm);
-    return NULL;
-  }
-  vm->frames[0].fn = &bc->fn;
+
+  vm->main_fn.instructions = bc->instructions;
+  vm->main_fn.num_instructions = bc->num_instructions;
+  vm->frames[0].fn = &vm->main_fn;
   vm->frames[0].ip = 0;
   vm->frames_index = 1;
   if (bc->num_constants > 0) {
-    vm->constants = malloc(sizeof(MObject) * (bc->num_constants));
-    if (!vm->constants) {
-      free(vm->frames);
-      free(vm);
-      return NULL;
-    }
-
-    for (uint16_t i = 0; i < bc->num_constants; i++) {
-      if (mobject_from_mkc_constant(&bc->constants[i], &vm->constants[i]) !=
-          VM_OK) {
-        free(vm->constants);
-        free(vm->frames);
-        free(vm);
-        return NULL;
-      }
-    }
+    vm->constants = bc->constants;
   }
 
   vm->allocated_strings = NULL;
@@ -81,7 +48,8 @@ static Frame *current_frame(VM *vm) {
 
 static void push_frame(VM *vm, Frame *frame) {
   if (vm->frames_index >= MAX_FRAME_SIZE) {
-    fprintf(stderr, "call stack overflow: exceeded maximum frames of %d\n", MAX_FRAME_SIZE);
+    fprintf(stderr, "call stack overflow: exceeded maximum frames of %d\n",
+            MAX_FRAME_SIZE);
     abort();
   }
   vm->frames[vm->frames_index] = *frame;
@@ -170,8 +138,6 @@ void vm_free(VM *vm) {
     free_hash(vm->allocated_hashs[i]);
   }
   free(vm->allocated_hashs);
-
-  free(vm->constants);
   free(vm);
 }
 
@@ -378,19 +344,6 @@ static VM_RESULT vm_exec_index_expression(VM *vm) {
   }
 }
 
-static bool is_truthy(MObject *obj) {
-  switch (obj->type) {
-  case MBOOLEAN:
-    return obj->as.boolean;
-  case MNULL:
-    return false;
-  case MINTEGER:
-    return true;
-  default:
-    return true;
-  }
-}
-
 static MObject build_array(VM *vm, uint32_t start, uint32_t end) {
   size_t len = end - start;
   MArray *arr = malloc(sizeof(MArray));
@@ -493,7 +446,8 @@ VM_RESULT vm_run(VM *vm) {
       uint32_t pos = read_u16(&instructions[ip + 1]);
       ip += 2;
       MObject condition = vm_pop(vm);
-      if (!is_truthy(&condition)) // skip to 'pos' if top-of-stack is falsy
+      if (!mobject_is_truthy(
+              &condition)) // skip to 'pos' if top-of-stack is falsy
       {
         ip = pos - 1;
       }

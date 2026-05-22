@@ -35,14 +35,14 @@ static void test_empty_program(void)
       0x00, 0x00, 0x00, 0x00};
 
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) == 0);
   fclose(f);
   assert(bc.num_constants == 0);
   assert(bc.constants == NULL);
-  assert(bc.fn.num_instructions == 0);
-  assert(bc.fn.instructions == NULL);
-  mkc_free(&bc);
+  assert(bc.num_constants == 0);
+  assert(bc.instructions == NULL);
+  free_bytecode(&bc);
   printf("  PASS test_empty_program\n");
 }
 
@@ -55,14 +55,14 @@ static void test_one_integer(void)
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, // constant[0]: 42
       0x00, 0x00, 0x00, 0x00};
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) == 0);
   fclose(f);
   assert(bc.num_constants == 1);
-  assert(bc.constants[0].tag == TAG_INTEGER);
+  assert(bc.constants[0].type == MINTEGER);
   assert(bc.constants[0].as.integer == 42);
-  assert(bc.fn.num_instructions == 0);
-  mkc_free(&bc);
+  assert(bc.num_instructions == 0);
+  free_bytecode(&bc);
   printf("  PASS test_one_integer\n");
 }
 
@@ -76,11 +76,11 @@ static void test_negative_integer(void)
       0x00, 0x00, 0x00, 0x00};
 
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) == 0);
   fclose(f);
   assert(bc.constants[0].as.integer == -42);
-  mkc_free(&bc);
+  free_bytecode(&bc);
   printf("  PASS test_negative_integer\n");
 }
 
@@ -101,7 +101,7 @@ static void test_two_constants_with_instructions(void)
   assert(sizeof(data) == 30);
 
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) == 0);
   fclose(f);
   // constants
@@ -110,15 +110,15 @@ static void test_two_constants_with_instructions(void)
   assert(bc.constants[1].as.integer == 2);
 
   // instructions
-  assert(bc.fn.num_instructions == 6);
-  assert(bc.fn.instructions[0] == 0x00);
-  assert(bc.fn.instructions[1] == 0x00);
-  assert(bc.fn.instructions[2] == 0x00);
-  assert(bc.fn.instructions[3] == 0x00);
-  assert(bc.fn.instructions[4] == 0x00);
-  assert(bc.fn.instructions[5] == 0x01);
+  assert(bc.num_instructions == 6);
+  assert(bc.instructions[0] == 0x00);
+  assert(bc.instructions[1] == 0x00);
+  assert(bc.instructions[2] == 0x00);
+  assert(bc.instructions[3] == 0x00);
+  assert(bc.instructions[4] == 0x00);
+  assert(bc.instructions[5] == 0x01);
 
-  mkc_free(&bc);
+  free_bytecode(&bc);
   printf("  PASS test_two_constants_with_instructions\n");
 }
 
@@ -132,7 +132,7 @@ static void test_truncated_constants(void)
   };
 
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) != 0);
   fclose(f);
   printf("  PASS test_truncated_constants\n");
@@ -147,7 +147,7 @@ static void test_trailing_bytes(void)
       0xFF};
 
   FILE *f = bytes_to_stream(data, sizeof(data));
-  MkcBytecode bc;
+  ByteCode bc;
   assert(mkc_read(f, &bc) != 0);
   fclose(f);
   printf("  PASS test_trailing_bytes\n");
@@ -167,18 +167,18 @@ static void test_function_call(void) {
     assert(sizeof(data) == 12);
 
     FILE *f = bytes_to_stream(data, sizeof(data));
-    MkcBytecode bc;
+    ByteCode bc;
     assert(mkc_read(f, &bc) == 0);
     fclose(f);
     assert(bc.num_constants == 1);
-    assert(bc.constants[0].tag == TAG_FUNCTION);
-    assert(bc.constants[0].as.function.num_instructions == 1);
-    assert(bc.constants[0].as.function.instructions[0] == OP_RETURN);
+    assert(bc.constants[0].type == MCOMPILED_FUNCTION);
+    assert(bc.constants[0].as.function->num_instructions == 1);
+    assert(bc.constants[0].as.function->instructions[0] == OP_RETURN);
 
-    assert(bc.fn.num_instructions == 0);
-    assert(bc.fn.instructions == NULL);
+    assert(bc.num_instructions == 0);
+    assert(bc.instructions == NULL);
 
-    mkc_free(&bc);
+    free_bytecode(&bc);
     printf("  PASS test_function_call\n");
 }
 

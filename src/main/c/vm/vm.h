@@ -1,8 +1,9 @@
 #ifndef VM_H
 #define VM_H
 
+#include "bytecode.h"
 #include "frame.h"
-#include "mkc.h"
+#include "object.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -11,48 +12,16 @@
 #define GLOBALS_SIZE 65535
 #define MAX_FRAME_SIZE 1024
 
-typedef enum
-{
-  MINTEGER,
-  MBOOLEAN,
-  MNULL,
-  MSTRING,
-  MARRAY,
-  MHASH,
-} MObjectType;
-
-// forward declarations - just names, no layout yet for resovling circular type problem in C.
-typedef struct MObject MObject;
-typedef struct MArray MArray;
-typedef struct MHash MHash;
-
-struct MArray {
-    MObject *elements;
-    size_t len;
-};
-
-struct MObject
-{
-  MObjectType type;
-  union
-  {
-    int64_t integer;
-    bool boolean;
-    char *string;
-    MArray *array;
-    MHash *hash;
-  } as;
-};
-
 typedef struct
 {
-  const MkcBytecode *bc;
-  MObject *constants;
+  const ByteCode *bc;
+  MCompiledFunction main_fn;
+  const MObject *constants;
   MObject stack[STACK_SIZE];
   MObject globals[GLOBALS_SIZE];
   uint32_t sp;
 
-  Frame *frames;
+  Frame frames[MAX_FRAME_SIZE];
   uint32_t frames_index;
 
   char **allocated_strings;
@@ -79,7 +48,7 @@ typedef enum
   VM_ERR_UNHASHABLE_KEY,
 } VM_RESULT;
 
-VM *vm_init(const MkcBytecode *bc);
+VM *vm_init(const ByteCode *bc);
 void vm_free(VM *vm);
 const MObject *vm_stack_top(const VM *vm);
 const MObject *vm_last_popped_stack_elem(const VM *vm);

@@ -1,5 +1,7 @@
 #include "mkc.h"
+#include "bytecode.h"
 #include "bytes.h"
+#include "object.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +11,7 @@ static int read_exact(FILE *f, uint8_t *buf, size_t n) {
   return fread(buf, 1, n, f) == n ? 0 : -1;
 }
 
-int mkc_read(FILE *f, MkcBytecode *out) {
+int mkc_read(FILE *f, ByteCode *out) {
   if (!f || !out) {
     fprintf(stderr, "mkc: NULL file or output pointer\n");
     return -1;
@@ -26,7 +28,7 @@ int mkc_read(FILE *f, MkcBytecode *out) {
 
   out->num_constants = read_u16(const_count_bytes);
   if (out->num_constants > 0) {
-    out->constants = calloc(out->num_constants, sizeof(MkcConstant));
+    out->constants = calloc(out->num_constants, sizeof(MObject));
     if (!out->constants) {
       fprintf(stderr, "mkc: out of memory (constants)\n");
       goto fail;
@@ -39,7 +41,6 @@ int mkc_read(FILE *f, MkcBytecode *out) {
       fprintf(stderr, "mkc: truncated constant tag at index %u\n", i);
       goto fail;
     }
-    out->constants[i].tag = tag;
 
     switch (tag) {
     case TAG_INTEGER: {
@@ -48,6 +49,7 @@ int mkc_read(FILE *f, MkcBytecode *out) {
         fprintf(stderr, "mkc: truncated integer at index %u\n", i);
         goto fail;
       }
+      out->constants[i].type = MINTEGER;
       out->constants[i].as.integer = read_i64(int_bytes);
       break;
     }
@@ -58,21 +60,18 @@ int mkc_read(FILE *f, MkcBytecode *out) {
         goto fail;
       }
       uint32_t len = read_u32(len_bytes); // length of MString
-      out->constants[i].as.string.byte_len = len;
-      out->constants[i].as.string.value =
-          malloc(len + 1); // string gets allocated on Heap
-      if (out->constants[i].as.string.value == NULL) {
+      char *s = malloc(len + 1);
+      if (!s) {
         fprintf(stderr, "mkc: out of memory (string constant)\n");
         goto fail;
       }
-
-      if (read_exact(f, (uint8_t *)out->constants[i].as.string.value, len) !=
-          0) {
+      if (read_exact(f, (uint8_t *)s, len) != 0) {
         fprintf(stderr, "mkc: truncated string at index %u\n", i);
         goto fail;
       }
-
-      out->constants[i].as.string.value[len] = '\0';
+      s[len] = '\0';
+      out->constants[i].type = MSTRING;
+      out->constants[i].as.string = s;
       break;
     }
     case TAG_FUNCTION: {
@@ -82,18 +81,29 @@ int mkc_read(FILE *f, MkcBytecode *out) {
         goto fail;
       }
       uint32_t len = read_u32(len_bytes); // length of MFunction
-      out->constants[i].as.function.num_instructions = len;
-      out->constants[i].as.function.instructions = malloc(len);
-      if (out->constants[i].as.function.instructions == NULL) {
+      uint8_t *insn = malloc(len);
+      if (!insn) {
         fprintf(stderr, "mkc: out of memory (function instructions)\n");
         goto fail;
       }
 
-      if (read_exact(f, out->constants[i].as.function.instructions, len) != 0) {
+      if (read_exact(f, insn, len) != 0) {
+        free(insn);
         fprintf(stderr, "mkc: truncated function instructions at index %u\n",
                 i);
         goto fail;
       }
+      MCompiledFunction *fn = malloc(sizeof(*fn));
+      if (!fn) {
+        free(insn);
+        fprintf(stderr, "mkc: out of memory (MCompiledFunction object)\n");
+        goto fail;
+      }
+
+      fn->instructions = insn;
+      fn->num_instructions = (int)len;
+      out->constants[i].type = MCOMPILED_FUNCTION;
+      out->constants[i].as.function = fn;
       break;
     }
     default:
@@ -109,15 +119,15 @@ int mkc_read(FILE *f, MkcBytecode *out) {
     goto fail;
   }
 
-  out->fn.num_instructions = read_u32(insn_len_bytes);
-  if (out->fn.num_instructions > 0) {
-    out->fn.instructions = malloc(out->fn.num_instructions);
-    if (!out->fn.instructions) {
+  out->num_instructions = read_u32(insn_len_bytes);
+  if (out->num_instructions > 0) {
+    out->instructions = malloc(out->num_instructions);
+    if (!out->instructions) {
       fprintf(stderr, "mkc: out of memory (instructions)\n");
       goto fail;
     }
 
-    if (read_exact(f, out->fn.instructions, out->fn.num_instructions) != 0) {
+    if (read_exact(f, out->instructions, out->num_instructions) != 0) {
       fprintf(stderr, "mkc: truncated instructions\n");
       goto fail;
     }
@@ -136,21 +146,6 @@ int mkc_read(FILE *f, MkcBytecode *out) {
   return 0;
 
 fail:
-  mkc_free(out);
+  free_bytecode(out);
   return -1;
-}
-
-void mkc_free(MkcBytecode *bc) {
-  if (bc->constants) {
-    for (uint16_t i = 0; i < bc->num_constants; i++) {
-      if (bc->constants[i].tag == TAG_STRING) {
-        free(bc->constants[i].as.string.value);
-      } else if (bc->constants[i].tag == TAG_FUNCTION) {
-        free(bc->constants[i].as.function.instructions);
-      }
-    }
-  }
-  free(bc->constants);
-  free(bc->fn.instructions);
-  memset(bc, 0, sizeof(*bc));
 }

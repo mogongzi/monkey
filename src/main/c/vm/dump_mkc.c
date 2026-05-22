@@ -1,9 +1,12 @@
+#include "bytecode.h"
 #include "bytes.h"
 #include "mkc.h"
+#include "object.h"
 #include "opcodes.h"
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 static void dump_instructions(const uint8_t *instructions,
                               uint32_t num_instructions, const char *indent) {
@@ -164,26 +167,26 @@ static void dump_instructions(const uint8_t *instructions,
   }
 }
 
-static void dump(const MkcBytecode *bc) {
+static void dump(const ByteCode *bc) {
   // decode constant pool
   printf("constants: %u\n", bc->num_constants);
   for (uint16_t i = 0; i < bc->num_constants; i++) {
-    const MkcConstant *c = &bc->constants[i];
-    switch (c->tag) {
-    case TAG_INTEGER:
+    const MObject *c = &bc->constants[i];
+    switch (c->type) {
+    case MINTEGER:
       printf("  [%u] INTEGER %" PRId64 "\n", i, c->as.integer);
       break;
-    case TAG_STRING:
-      printf("  [%u] STRING len=%u value=\"%.*s\"\n", i, c->as.string.byte_len,
-             (int)c->as.string.byte_len, c->as.string.value);
+    case MSTRING:
+      printf("  [%u] STRING value=\"%s\"\n", i, c->as.string);
       break;
-    case TAG_FUNCTION:
-      printf("  [%u] FUNCTION len=%u\n", i, c->as.function.num_instructions);
-      dump_instructions(c->as.function.instructions,
-                        c->as.function.num_instructions, "    ");
+      break;
+    case MCOMPILED_FUNCTION:
+      printf("  [%u] FUNCTION len=%u\n", i, c->as.function->num_instructions);
+      dump_instructions(c->as.function->instructions,
+                        c->as.function->num_instructions, "    ");
       break;
     default:
-      printf("  [%u] UNKNOW tag=0x%02x\n", i, c->tag);
+      printf("  [%u] UNKNOW tag=0x%02x\n", i, c->type);
       break;
     }
   }
@@ -194,10 +197,10 @@ static void dump(const MkcBytecode *bc) {
 }
 
 int main(void) {
-  MkcBytecode bc;
+  ByteCode bc = {0};
   if (mkc_read(stdin, &bc) != 0)
     return 1;
   dump(&bc);
-  mkc_free(&bc);
+  free_bytecode(&bc);
   return 0;
 }
