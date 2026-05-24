@@ -2,6 +2,7 @@
 #include "bytecode.h"
 #include "bytes.h"
 #include "hash_table.h"
+#include "object.h"
 #include "opcodes.h"
 #include <assert.h>
 #include <stddef.h>
@@ -35,7 +36,7 @@ VM *vm_init(const ByteCode *bc) {
   vm->allocated_array_count = 0;
   vm->allocated_array_capacity = 0;
 
-  vm->allocated_hashs = NULL;
+  vm->allocated_hashes = NULL;
   vm->allocated_hash_count = 0;
   vm->allocated_hash_capacity = 0;
 
@@ -106,16 +107,16 @@ static int vm_track_allocated_hash(VM *vm, MHash *hash) {
     size_t new_capacity =
         vm->allocated_hash_capacity == 0 ? 16 : vm->allocated_hash_capacity * 2;
     MHash **new_allocated_hashs =
-        realloc(vm->allocated_hashs, sizeof(MHash *) * new_capacity);
+        realloc(vm->allocated_hashes, sizeof(MHash *) * new_capacity);
     if (!new_allocated_hashs) {
       return -1;
     }
 
-    vm->allocated_hashs = new_allocated_hashs;
+    vm->allocated_hashes = new_allocated_hashs;
     vm->allocated_hash_capacity = new_capacity;
   }
 
-  vm->allocated_hashs[vm->allocated_hash_count] = hash;
+  vm->allocated_hashes[vm->allocated_hash_count] = hash;
   vm->allocated_hash_count++;
   return 0;
 }
@@ -135,9 +136,9 @@ void vm_free(VM *vm) {
   free(vm->allocated_arrays);
 
   for (size_t i = 0; i < vm->allocated_hash_count; i++) {
-    free_hash(vm->allocated_hashs[i]);
+    free_hash(vm->allocated_hashes[i]);
   }
-  free(vm->allocated_hashs);
+  free(vm->allocated_hashes);
   free(vm);
 }
 
@@ -160,10 +161,13 @@ VM_RESULT vm_push(VM *vm, MObject obj) {
   return VM_OK;
 }
 
-static MObject vm_pop(VM *vm) {
-  MObject obj = vm->stack[vm->sp - 1];
+static VM_RESULT vm_pop(VM *vm, MObject *out) {
+  if (vm->sp == 0) {
+    return VM_ERR_STACK_UNDERFLOW;
+  }
   vm->sp--;
-  return obj;
+  *out = vm->stack[vm->sp];
+  return VM_OK;
 }
 
 static VM_RESULT vm_exec_binary_integer_operation(VM *vm, uint8_t opcode,
@@ -218,8 +222,15 @@ static VM_RESULT vm_exec_string_concat(VM *vm, MObject left, MObject right) {
 }
 
 static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
-  MObject right = vm_pop(vm);
-  MObject left = vm_pop(vm);
+  MObject right;
+  MObject left;
+
+  VM_RESULT r = vm_pop(vm, &right);
+  if (r != VM_OK)
+    return r;
+  r = vm_pop(vm, &left);
+  if (r != VM_OK)
+    return r;
 
   if (left.type == MINTEGER && right.type == MINTEGER) {
     return vm_exec_binary_integer_operation(vm, opcode, left.as.integer,
@@ -239,8 +250,8 @@ static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
   return VM_ERR_UNKNOWN_OPERATOR;
 }
 
-static VM_RESULT vm_execute_integer_comparision(VM *vm, uint8_t opcode,
-                                                int64_t left, int64_t right) {
+static VM_RESULT vm_execute_integer_comparison(VM *vm, uint8_t opcode,
+                                               int64_t left, int64_t right) {
   bool result;
   switch (opcode) {
   case OP_EQUAL:
@@ -260,12 +271,19 @@ static VM_RESULT vm_execute_integer_comparision(VM *vm, uint8_t opcode,
 }
 
 static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
-  MObject right = vm_pop(vm);
-  MObject left = vm_pop(vm);
+  MObject right;
+  MObject left;
+
+  VM_RESULT r = vm_pop(vm, &right);
+  if (r != VM_OK)
+    return r;
+  r = vm_pop(vm, &left);
+  if (r != VM_OK)
+    return r;
 
   if (left.type == MINTEGER && right.type == MINTEGER) {
-    return vm_execute_integer_comparision(vm, opcode, left.as.integer,
-                                          right.as.integer);
+    return vm_execute_integer_comparison(vm, opcode, left.as.integer,
+                                         right.as.integer);
   }
 
   bool result;
@@ -285,17 +303,24 @@ static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
 }
 
 static VM_RESULT vm_exec_minus_operator(VM *vm) {
-  MObject operand = vm_pop(vm);
+  MObject operand;
+  VM_RESULT r = vm_pop(vm, &operand);
+  if (r != VM_OK)
+    return r;
   if (operand.type != MINTEGER) {
-    fprintf(stderr, "unsupported type for negation: %d", operand.type);
-    return VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION;
+    fprintf(stderr, "unsupported type for negation: %d\n", operand.type);
+    return VM_ERR_UNSUPPORTED_TYPE_FOR_NEGATION;
   }
   int64_t value = -(operand.as.integer);
   return vm_push(vm, (MObject){.type = MINTEGER, .as.integer = value});
 }
 
 static VM_RESULT vm_exec_bang_operator(VM *vm) {
-  MObject operand = vm_pop(vm);
+  MObject operand;
+  VM_RESULT r = vm_pop(vm, &operand);
+  if (r != VM_OK)
+    return r;
+
   bool result;
   switch (operand.type) {
   case MBOOLEAN:
@@ -332,8 +357,14 @@ static VM_RESULT vm_exec_hash_index(VM *vm, MHash *hash, MObject index) {
 }
 
 static VM_RESULT vm_exec_index_expression(VM *vm) {
-  MObject index = vm_pop(vm);
-  MObject left = vm_pop(vm);
+  MObject index;
+  MObject left;
+  VM_RESULT r = vm_pop(vm, &index);
+  if (r != VM_OK)
+    return r;
+  r = vm_pop(vm, &left);
+  if (r != VM_OK)
+    return r;
 
   if (left.type == MARRAY && index.type == MINTEGER) {
     return vm_exec_array_index(vm, left.as.array, index.as.integer);
@@ -395,7 +426,10 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_POP: {
-      vm_pop(vm);
+      MObject popped;
+      VM_RESULT r = vm_pop(vm, &popped);
+      if (r != VM_OK)
+        return r;
       break;
     }
     case OP_ADD:
@@ -431,12 +465,18 @@ VM_RESULT vm_run(VM *vm) {
         return r;
       break;
     }
-    case OP_MINUS:
-      vm_exec_minus_operator(vm);
+    case OP_MINUS: {
+      VM_RESULT r = vm_exec_minus_operator(vm);
+      if (r != VM_OK)
+        return r;
       break;
-    case OP_BANG:
-      vm_exec_bang_operator(vm);
+    }
+    case OP_BANG: {
+      VM_RESULT r = vm_exec_bang_operator(vm);
+      if (r != VM_OK)
+        return r;
       break;
+    }
     case OP_JUMP: {
       uint32_t pos = read_u16(&instructions[ip + 1]);
       ip = pos - 1;
@@ -445,7 +485,10 @@ VM_RESULT vm_run(VM *vm) {
     case OP_JUMP_NOT_TRUTHY: {
       uint32_t pos = read_u16(&instructions[ip + 1]);
       ip += 2;
-      MObject condition = vm_pop(vm);
+      MObject condition;
+      VM_RESULT r = vm_pop(vm, &condition);
+      if (r != VM_OK)
+        return r;
       if (!mobject_is_truthy(
               &condition)) // skip to 'pos' if top-of-stack is falsy
       {
@@ -462,7 +505,9 @@ VM_RESULT vm_run(VM *vm) {
     case OP_SET_GLOBAL: {
       uint32_t global_index = read_u16(&instructions[ip + 1]);
       ip += 2;
-      vm->globals[global_index] = vm_pop(vm);
+      VM_RESULT r = vm_pop(vm, &vm->globals[global_index]);
+      if (r != VM_OK)
+        return r;
       break;
     }
     case OP_GET_GLOBAL: {

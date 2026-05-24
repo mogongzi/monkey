@@ -1,6 +1,4 @@
 #include "hash_table.h"
-#include "mkc.h"
-#include "vm.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>

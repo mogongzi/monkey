@@ -6,9 +6,9 @@
 
 typedef struct {
   uint8_t * instructions;
-  int num_instructions;
+  uint32_t num_instructions;
   MObject *constants;
-  int num_constants;
+  uint32_t num_constants;
 } ByteCode;
 
 void free_bytecode(ByteCode *bc);

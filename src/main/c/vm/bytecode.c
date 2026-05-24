@@ -1,5 +1,6 @@
 #include "bytecode.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,7 @@ void free_bytecode(ByteCode *bc) {
   if (!bc)
     return;
   if (bc->constants) {
-    for (int i = 0; i < bc->num_constants; i++) {
+    for (uint32_t i = 0; i < bc->num_constants; i++) {
       switch (bc->constants[i].type) {
       case MSTRING:
         free(bc->constants[i].as.string);

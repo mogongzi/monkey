@@ -1,4 +1,5 @@
 #include "bytes.h"
+#include <stdint.h>
 
 uint16_t read_u16(const uint8_t *buf)
 {
@@ -12,10 +13,15 @@ uint32_t read_u32(const uint8_t *buf)
 
 int64_t read_i64(const uint8_t *buf)
 {
-  uint64_t v = 0;
+  uint64_t u = 0;
   for (int i = 0; i < 8; i++)
   {
-    v = (v << 8) | buf[i];
+    u = (u << 8) | (uint64_t)buf[i];
   }
-  return (int64_t)v;
+
+  const uint64_t sign_bit = UINT64_C(1) << 63;
+  if ((u & sign_bit) == 0) {
+    return (int64_t)u;
+  }
+  return INT64_MIN + (int64_t)(u - sign_bit);
 }

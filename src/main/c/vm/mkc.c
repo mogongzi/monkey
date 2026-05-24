@@ -66,6 +66,7 @@ int mkc_read(FILE *f, ByteCode *out) {
         goto fail;
       }
       if (read_exact(f, (uint8_t *)s, len) != 0) {
+        free(s);
         fprintf(stderr, "mkc: truncated string at index %u\n", i);
         goto fail;
       }

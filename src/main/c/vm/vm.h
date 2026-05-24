@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #define STACK_SIZE 2048
-#define GLOBALS_SIZE 65535
+#define GLOBALS_SIZE 65536
 #define MAX_FRAME_SIZE 1024
 
 typedef struct
@@ -32,7 +32,7 @@ typedef struct
   size_t allocated_array_count;
   size_t allocated_array_capacity;
 
-  MHash **allocated_hashs;
+  MHash **allocated_hashes;
   size_t allocated_hash_count;
   size_t allocated_hash_capacity;
 } VM;
@@ -42,8 +42,9 @@ typedef enum
   VM_OK = 0,
   VM_ERR_UNKNOWN_OPCODE,
   VM_ERR_STACK_OVERFLOW,
+  VM_ERR_STACK_UNDERFLOW,
   VM_ERR_UNKNOWN_OPERATOR,
-  VM_ERR_UNSUPPORT_TYPE_FOR_NEGATION,
+  VM_ERR_UNSUPPORTED_TYPE_FOR_NEGATION,
   VM_ERR_OUT_OF_MEMORY,
   VM_ERR_UNHASHABLE_KEY,
 } VM_RESULT;

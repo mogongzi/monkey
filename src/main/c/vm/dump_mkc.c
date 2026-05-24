@@ -179,14 +179,13 @@ static void dump(const ByteCode *bc) {
     case MSTRING:
       printf("  [%u] STRING value=\"%s\"\n", i, c->as.string);
       break;
-      break;
     case MCOMPILED_FUNCTION:
       printf("  [%u] FUNCTION len=%u\n", i, c->as.function->num_instructions);
       dump_instructions(c->as.function->instructions,
                         c->as.function->num_instructions, "    ");
       break;
     default:
-      printf("  [%u] UNKNOW tag=0x%02x\n", i, c->type);
+      printf("  [%u] UNKNOWN tag=0x%02x\n", i, c->type);
       break;
     }
   }

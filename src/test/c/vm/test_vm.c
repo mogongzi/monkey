@@ -1,5 +1,6 @@
 #include "../../../main/c/vm/hash_table.h"
 #include "../../../main/c/vm/mkc.h"
+#include "../../../main/c/vm/opcodes.h"
 #include "../../../main/c/vm/vm.h"
 #include <assert.h>
 #include <stddef.h>
@@ -298,7 +299,26 @@ static void test_index_expressions(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_stack_underflow(void) {
+  uint8_t instructions[] = {
+      OP_POP,
+  };
+
+  ByteCode bc = {
+      .instructions = instructions,
+      .num_instructions = sizeof(instructions),
+      .constants = NULL,
+      .num_constants = 0,
+  };
+
+  VM *vm = vm_init(&bc);
+  assert(vm != NULL);
+  assert(vm_run(vm) == VM_ERR_STACK_UNDERFLOW);
+  vm_free(vm);
+}
+
 int main(void) {
+  test_stack_underflow();
   test_integer_arithmetic();
   test_boolean_expressions();
   test_conditionals();

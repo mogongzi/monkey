@@ -182,6 +182,22 @@ static void test_function_call(void) {
     printf("  PASS test_function_call\n");
 }
 
+// test10: test truncated string
+static void test_truncated_string_payload(void) {
+  uint8_t data[] = {
+    0x00, 0x01,
+    TAG_STRING,
+    0x00, 0x00, 0x00, 0x05,
+    'h', 'i'
+  };
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  ByteCode bc;
+  assert(mkc_read(f, &bc) != 0);
+  fclose(f);
+  printf("  PASS test_truncated_string_payload\n");
+}
+
 int main(void)
 {
   printf("Running mkc tests...\n");
@@ -192,6 +208,7 @@ int main(void)
   test_truncated_constants();
   test_trailing_bytes();
   test_function_call();
+  test_truncated_string_payload();
   printf("All tests passed.\n");
   return 0;
 }
