@@ -306,6 +306,7 @@ static void test_calling_functions_without_arguments(void) {
       {"src/test/fixtures/function_call_nested_no_args.mkc", expected_integer(3)},
       {"src/test/fixtures/function_early_return.mkc", expected_integer(99)},
       {"src/test/fixtures/function_double_return.mkc", expected_integer(99)},
+      {"src/test/fixtures/function_first_class.mkc", expected_integer(1)},
   };
 
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));

@@ -127,6 +127,11 @@ fun main() {
             noReturn();
             noReturnTwo();
         """.trimIndent(),
+        "src/test/fixtures/function_first_class.mkc" to """
+            let returnsOne = fn() { 1; };
+            let returnsOneReturner = fn() { returnsOne; };
+            returnsOneReturner()();
+        """.trimIndent(),
     )
 
     for ((path, source) in cases) {
