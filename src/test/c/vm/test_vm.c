@@ -301,8 +301,13 @@ static void test_index_expressions(void) {
 
 static void test_calling_functions_without_arguments(void) {
   VmTestCase tests[] = {
-      {"src/test/fixtures/function_call_no_args.mkc", expected_integer(15)}
+      {"src/test/fixtures/function_call_no_args.mkc", expected_integer(15)},
+      {"src/test/fixtures/function_call_multiple_no_args.mkc", expected_integer(3)},
+      {"src/test/fixtures/function_call_nested_no_args.mkc", expected_integer(3)},
+      {"src/test/fixtures/function_early_return.mkc", expected_integer(99)},
+      {"src/test/fixtures/function_double_return.mkc", expected_integer(99)},
   };
+
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 

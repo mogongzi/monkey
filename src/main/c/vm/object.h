@@ -29,7 +29,7 @@ struct MArray {
 
 struct MCompiledFunction {
   const uint8_t *instructions;
-  int num_instructions;
+  uint32_t num_instructions;
 };
 
 struct MObject {

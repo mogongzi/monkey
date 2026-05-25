@@ -98,6 +98,35 @@ fun main() {
             let fivePlusTen = fn() { 5 + 10; };
             fivePlusTen();
         """.trimIndent(),
+        "src/test/fixtures/function_call_multiple_no_args.mkc" to """
+            let one = fn() { 1; };
+            let two = fn() { 2; };
+            one() + two()
+        """.trimIndent(),
+        "src/test/fixtures/function_call_nested_no_args.mkc" to """
+            let a = fn() { 1 };
+            let b = fn() { a() + 1 };
+            let c = fn() { b() + 1 };
+            c();
+        """.trimIndent(),
+        "src/test/fixtures/function_early_return.mkc" to """
+            let earlyExit = fn() { return 99; 100; };
+            earlyExit();
+        """.trimIndent(),
+        "src/test/fixtures/function_double_return.mkc" to """
+            let earlyExit = fn() { return 99; return 100; };
+            earlyExit();
+        """.trimIndent(),
+        "src/test/fixtures/function_no_return_value.mkc" to """
+            let noReturn = fn() { };
+            noReturn();
+        """.trimIndent(),
+        "src/test/fixtures/function_calls_void_function.mkc" to """
+            let noReturn = fn() { };
+            let noReturnTwo = fn() { noReturn(); };
+            noReturn();
+            noReturnTwo();
+        """.trimIndent(),
     )
 
     for ((path, source) in cases) {

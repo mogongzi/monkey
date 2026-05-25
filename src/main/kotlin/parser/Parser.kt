@@ -217,8 +217,7 @@ class Parser(private val lexer: Lexer) {
         return BooleanLiteral(curToken, curTokenIs(TRUE))
     }
 
-
-    //     Parse the first token as a "prefix" — could be a literal (1), identifier (x),
+//     Parse the first token as a "prefix" — could be a literal (1), identifier (x),
 //     or a prefix operator (-x, !x) which itself recurses into parseExpression.
 //
 //     Then, repeatedly try to combine leftExp with the next infix operator.

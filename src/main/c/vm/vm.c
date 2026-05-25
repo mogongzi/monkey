@@ -566,11 +566,50 @@ VM_RESULT vm_run(VM *vm) {
       if (r != VM_OK)
         return r;
       pop_frame(vm);
-      MObject _; // throw away.
-      r = vm_pop(vm, &_);
+      /**
+       * ─── before OpCall ──────────────────────────────
+       * sp →                  (free)
+       *                       CompiledFunction  ← pushed by OpGetGlobal
+       *                       ...
+       * ─── after OpCall (function body about to run) ──
+       * sp →                  (free)
+       *                       CompiledFunction  ← still here, untouched
+       *                       ...
+       * ─── after function body executes 5 + 10 ───────
+       * sp →                  (free)
+       *                       15                ← return value
+       *                       CompiledFunction  ← STILL here!
+       *                       ...
+       * ─── OpReturnValue cleanup ─────────────────────
+       * Step 1: pop returned_value           → 15
+       * Step 2: pop_frame                    → discard call frame
+       * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover
+       CompiledFunction
+       * Step 4: push(returned_value)         → put 15 where the fn used to be
+       * ─── final state ───────────────────────────────
+       * sp →                  (free)
+       *                       15                ← caller now sees the return
+       value
+       *                      ...                 in the slot the fn used to
+       occupy
+       */
+      MObject leftover_compiled_function;
+      r = vm_pop(vm, &leftover_compiled_function);
       if (r != VM_OK)
         return r;
       r = vm_push(vm, returned_value);
+      if (r != VM_OK)
+        return r;
+      break;
+    }
+    case OP_RETURN: {
+      pop_frame(vm);
+      MObject _;
+      VM_RESULT r;
+      r = vm_pop(vm, &_);
+      if (r != VM_OK)
+        return r;
+      r = vm_push(vm, (MObject){.type = MNULL});
       if (r != VM_OK)
         return r;
       break;
