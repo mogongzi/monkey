@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "bytecode.h"
 #include "bytes.h"
+#include "frame.h"
 #include "hash_table.h"
 #include "object.h"
 #include "opcodes.h"
@@ -47,20 +48,16 @@ static Frame *current_frame(VM *vm) {
   return &vm->frames[vm->frames_index - 1];
 }
 
-static void push_frame(VM *vm, Frame *frame) {
+static void push_frame(VM *vm, const MCompiledFunction *fn) {
   if (vm->frames_index >= MAX_FRAME_SIZE) {
     fprintf(stderr, "call stack overflow: exceeded maximum frames of %d\n",
             MAX_FRAME_SIZE);
     abort();
   }
-  vm->frames[vm->frames_index] = *frame;
-  vm->frames_index++;
+  vm->frames[vm->frames_index++] = (Frame){.fn = fn, .ip = 0};
 }
 
-static Frame *pop_frame(VM *vm) {
-  vm->frames_index--;
-  return &vm->frames[vm->frames_index];
-}
+static Frame *pop_frame(VM *vm) { return &vm->frames[--vm->frames_index]; }
 
 static int vm_track_allocated_string(VM *vm, char *value) {
   if (vm->allocated_string_count == vm->allocated_string_capacity) {
@@ -409,20 +406,19 @@ static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
 }
 
 VM_RESULT vm_run(VM *vm) {
-  Frame *frame = current_frame(vm);
-  const uint8_t *instructions = frame->fn->instructions;
-  uint32_t ip = frame->ip;
-  uint32_t num_instructions = frame->fn->num_instructions;
-  while (ip < num_instructions) {
-    uint8_t opcode = instructions[ip];
+  while (current_frame(vm)->ip < current_frame(vm)->fn->num_instructions) {
+    Frame *frame = current_frame(vm);
+    const uint8_t *instructions = frame->fn->instructions;
+    uint8_t opcode = instructions[frame->ip];
+    frame->ip++;
     switch (opcode) {
     case OP_CONSTANT: {
-      uint32_t idx = read_u16(&instructions[ip + 1]);
+      uint32_t idx = read_u16(&instructions[frame->ip]);
       VM_RESULT result = vm_push(vm, vm->constants[idx]);
       if (result != VM_OK) {
         return result;
       }
-      ip += 2;
+      frame->ip += 2;
       break;
     }
     case OP_POP: {
@@ -478,13 +474,13 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_JUMP: {
-      uint32_t pos = read_u16(&instructions[ip + 1]);
-      ip = pos - 1;
+      uint32_t pos = read_u16(&instructions[frame->ip]);
+      frame->ip = pos;
       break;
     }
     case OP_JUMP_NOT_TRUTHY: {
-      uint32_t pos = read_u16(&instructions[ip + 1]);
-      ip += 2;
+      uint32_t pos = read_u16(&instructions[frame->ip]);
+      frame->ip += 2;
       MObject condition;
       VM_RESULT r = vm_pop(vm, &condition);
       if (r != VM_OK)
@@ -492,7 +488,7 @@ VM_RESULT vm_run(VM *vm) {
       if (!mobject_is_truthy(
               &condition)) // skip to 'pos' if top-of-stack is falsy
       {
-        ip = pos - 1;
+        frame->ip = pos;
       }
       break;
     }
@@ -503,24 +499,24 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_SET_GLOBAL: {
-      uint32_t global_index = read_u16(&instructions[ip + 1]);
-      ip += 2;
+      uint32_t global_index = read_u16(&instructions[frame->ip]);
+      frame->ip += 2;
       VM_RESULT r = vm_pop(vm, &vm->globals[global_index]);
       if (r != VM_OK)
         return r;
       break;
     }
     case OP_GET_GLOBAL: {
-      uint32_t global_index = read_u16(&instructions[ip + 1]);
-      ip += 2;
+      uint32_t global_index = read_u16(&instructions[frame->ip]);
+      frame->ip += 2;
       VM_RESULT r = vm_push(vm, vm->globals[global_index]);
       if (r != VM_OK)
         return r;
       break;
     }
     case OP_ARRAY: {
-      uint32_t num_elements = read_u16(&instructions[ip + 1]);
-      ip += 2;
+      uint32_t num_elements = read_u16(&instructions[frame->ip]);
+      frame->ip += 2;
       MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
       vm->sp = vm->sp - num_elements;
       VM_RESULT r = vm_push(vm, obj);
@@ -534,8 +530,8 @@ VM_RESULT vm_run(VM *vm) {
       break;
     }
     case OP_HASH: {
-      uint32_t num_hashes = read_u16(&instructions[ip + 1]);
-      ip += 2;
+      uint32_t num_hashes = read_u16(&instructions[frame->ip]);
+      frame->ip += 2;
       MObject obj;
       VM_RESULT r = build_hash(vm, (vm->sp - num_hashes), vm->sp, &obj);
       if (r != VM_OK)
@@ -556,13 +552,34 @@ VM_RESULT vm_run(VM *vm) {
         return r;
       break;
     }
+    case OP_CALL: {
+      MObject callee = vm->stack[vm->sp - 1];
+      if (callee.type != MCOMPILED_FUNCTION)
+        return VM_ERR_NON_FUNCTION_CALL;
+      MCompiledFunction *fn = callee.as.function;
+      push_frame(vm, fn);
+      break;
+    }
+    case OP_RETURN_VALUE: {
+      MObject returned_value;
+      VM_RESULT r = vm_pop(vm, &returned_value);
+      if (r != VM_OK)
+        return r;
+      pop_frame(vm);
+      MObject _; // throw away.
+      r = vm_pop(vm, &_);
+      if (r != VM_OK)
+        return r;
+      r = vm_push(vm, returned_value);
+      if (r != VM_OK)
+        return r;
+      break;
+    }
     default:
-      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode, ip);
+      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode,
+              frame->ip - 1);
       return VM_ERR_UNKNOWN_OPCODE;
     }
-
-    ip++;
   }
-  current_frame(vm)->ip = ip;
   return VM_OK;
 }

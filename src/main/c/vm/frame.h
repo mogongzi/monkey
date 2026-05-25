@@ -1,3 +1,7 @@
+#ifndef FRAME_H
+#define FRAME_H
+
+#include "bytecode.h"
 #include "object.h"
 
 typedef struct {
@@ -5,4 +9,4 @@ typedef struct {
     uint32_t ip;
 } Frame;
 
-static Frame *new_frame();
+#endif

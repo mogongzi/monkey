@@ -299,6 +299,13 @@ static void test_index_expressions(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_calling_functions_without_arguments(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/function_call_no_args.mkc", expected_integer(15)}
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 static void test_stack_underflow(void) {
   uint8_t instructions[] = {
       OP_POP,
@@ -327,5 +334,6 @@ int main(void) {
   test_array_literals();
   test_hash_literals();
   test_index_expressions();
+  test_calling_functions_without_arguments();
   return 0;
 }
