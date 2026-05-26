@@ -1,12 +1,13 @@
-#include "../../../main/c/vm/hash_table.h"
-#include "../../../main/c/vm/mkc.h"
-#include "../../../main/c/vm/opcodes.h"
-#include "../../../main/c/vm/vm.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "../../../main/c/vm/hash_table.h"
+#include "../../../main/c/vm/mkc.h"
+#include "../../../main/c/vm/opcodes.h"
+#include "../../../main/c/vm/vm.h"
 
 typedef struct {
   HashKey key;
@@ -117,28 +118,28 @@ static void test_hash_object(const MObject *obj,
 static void test_expected_object(ExpectedObject expected,
                                  const MObject *actual) {
   switch (expected.type) {
-  case MINTEGER:
-    test_integer_object(actual, expected.value.integer);
-    break;
-  case MBOOLEAN:
-    test_boolean_object(actual, expected.value.boolean);
-    break;
-  case MNULL:
-    test_null_object(actual);
-    break;
-  case MSTRING:
-    test_string_object(actual, expected.value.string);
-    break;
-  case MARRAY:
-    test_array_object(actual, expected.value.array.elements,
-                      expected.value.array.len);
-    break;
-  case MHASH:
-    test_hash_object(actual, expected.value.hash.pairs,
-                     expected.value.hash.len);
-    break;
-  default:
-    assert(false && "unhandled expected object type");
+    case MINTEGER:
+      test_integer_object(actual, expected.value.integer);
+      break;
+    case MBOOLEAN:
+      test_boolean_object(actual, expected.value.boolean);
+      break;
+    case MNULL:
+      test_null_object(actual);
+      break;
+    case MSTRING:
+      test_string_object(actual, expected.value.string);
+      break;
+    case MARRAY:
+      test_array_object(actual, expected.value.array.elements,
+                        expected.value.array.len);
+      break;
+    case MHASH:
+      test_hash_object(actual, expected.value.hash.pairs,
+                       expected.value.hash.len);
+      break;
+    default:
+      assert(false && "unhandled expected object type");
   }
 }
 
@@ -302,8 +303,10 @@ static void test_index_expressions(void) {
 static void test_calling_functions_without_arguments(void) {
   VmTestCase tests[] = {
       {"src/test/fixtures/function_call_no_args.mkc", expected_integer(15)},
-      {"src/test/fixtures/function_call_multiple_no_args.mkc", expected_integer(3)},
-      {"src/test/fixtures/function_call_nested_no_args.mkc", expected_integer(3)},
+      {"src/test/fixtures/function_call_multiple_no_args.mkc",
+       expected_integer(3)},
+      {"src/test/fixtures/function_call_nested_no_args.mkc",
+       expected_integer(3)},
       {"src/test/fixtures/function_early_return.mkc", expected_integer(99)},
       {"src/test/fixtures/function_double_return.mkc", expected_integer(99)},
       {"src/test/fixtures/function_first_class.mkc", expected_integer(1)},

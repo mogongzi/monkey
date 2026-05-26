@@ -15,19 +15,19 @@ typedef struct {
 } HashKey;
 
 typedef struct {
-    MObject original_key;
-    MObject value;
-} HashPair ;
+  MObject original_key;
+  MObject value;
+} HashPair;
 
 typedef struct HashEntry HashEntry;
 struct HashEntry {
   HashKey hash_key;
   HashPair pair;
-  HashEntry *next; // chaining for hash collision
+  HashEntry *next;  // chaining for hash collision
 };
 
 struct MHash {
-  HashEntry **buckets; // array of pointers
+  HashEntry **buckets;  // array of pointers
   size_t capacity;
   size_t count;
 };

@@ -5,8 +5,8 @@
 #include "object.h"
 
 typedef struct {
-    const MCompiledFunction *fn;
-    uint32_t ip;
+  const MCompiledFunction *fn;
+  uint32_t ip;
 } Frame;
 
 #endif

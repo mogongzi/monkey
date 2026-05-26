@@ -1,10 +1,5 @@
 #include "vm.h"
-#include "bytecode.h"
-#include "bytes.h"
-#include "frame.h"
-#include "hash_table.h"
-#include "object.h"
-#include "opcodes.h"
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,10 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bytecode.h"
+#include "bytes.h"
+#include "frame.h"
+#include "hash_table.h"
+#include "object.h"
+#include "opcodes.h"
+
 VM *vm_init(const ByteCode *bc) {
   VM *vm = malloc(sizeof(VM));
-  if (!vm)
-    return NULL;
+  if (!vm) return NULL;
   vm->bc = bc;
   vm->sp = 0;
   vm->constants = NULL;
@@ -119,16 +120,15 @@ static int vm_track_allocated_hash(VM *vm, MHash *hash) {
 }
 
 void vm_free(VM *vm) {
-  if (!vm)
-    return;
+  if (!vm) return;
   for (size_t i = 0; i < vm->allocated_string_count; i++) {
     free(vm->allocated_strings[i]);
   }
   free(vm->allocated_strings);
 
   for (size_t i = 0; i < vm->allocated_array_count; i++) {
-    free(vm->allocated_arrays[i]->elements); // the MObject[] buffer
-    free(vm->allocated_arrays[i]);           // the MArray struct itself
+    free(vm->allocated_arrays[i]->elements);  // the MObject[] buffer
+    free(vm->allocated_arrays[i]);            // the MArray struct itself
   }
   free(vm->allocated_arrays);
 
@@ -140,8 +140,7 @@ void vm_free(VM *vm) {
 }
 
 const MObject *vm_stack_top(const VM *vm) {
-  if (vm->sp == 0)
-    return NULL;
+  if (vm->sp == 0) return NULL;
   return &(vm->stack[vm->sp - 1]);
 }
 
@@ -172,21 +171,21 @@ static VM_RESULT vm_exec_binary_integer_operation(VM *vm, uint8_t opcode,
   int64_t result;
 
   switch (opcode) {
-  case OP_ADD:
-    result = left + right;
-    break;
-  case OP_SUB:
-    result = left - right;
-    break;
-  case OP_MUL:
-    result = left * right;
-    break;
-  case OP_DIV:
-    result = left / right;
-    break;
-  default:
-    fprintf(stderr, "unknown integer operator: %d\n", opcode);
-    return VM_ERR_UNKNOWN_OPERATOR;
+    case OP_ADD:
+      result = left + right;
+      break;
+    case OP_SUB:
+      result = left - right;
+      break;
+    case OP_MUL:
+      result = left * right;
+      break;
+    case OP_DIV:
+      result = left / right;
+      break;
+    default:
+      fprintf(stderr, "unknown integer operator: %d\n", opcode);
+      return VM_ERR_UNKNOWN_OPERATOR;
   }
   // the below 3 lines can be rewrite in C99: compound literal
   // MObject obj;
@@ -223,11 +222,9 @@ static VM_RESULT vm_exec_binary_op(VM *vm, uint8_t opcode) {
   MObject left;
 
   VM_RESULT r = vm_pop(vm, &right);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
   r = vm_pop(vm, &left);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
 
   if (left.type == MINTEGER && right.type == MINTEGER) {
     return vm_exec_binary_integer_operation(vm, opcode, left.as.integer,
@@ -251,18 +248,18 @@ static VM_RESULT vm_execute_integer_comparison(VM *vm, uint8_t opcode,
                                                int64_t left, int64_t right) {
   bool result;
   switch (opcode) {
-  case OP_EQUAL:
-    result = (left == right);
-    break;
-  case OP_NOT_EQUAL:
-    result = (left != right);
-    break;
-  case OP_GREATER_THAN:
-    result = (left > right);
-    break;
-  default:
-    fprintf(stderr, "unknown operator: %d\n", opcode);
-    return VM_ERR_UNKNOWN_OPERATOR;
+    case OP_EQUAL:
+      result = (left == right);
+      break;
+    case OP_NOT_EQUAL:
+      result = (left != right);
+      break;
+    case OP_GREATER_THAN:
+      result = (left > right);
+      break;
+    default:
+      fprintf(stderr, "unknown operator: %d\n", opcode);
+      return VM_ERR_UNKNOWN_OPERATOR;
   }
   return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
@@ -272,11 +269,9 @@ static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
   MObject left;
 
   VM_RESULT r = vm_pop(vm, &right);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
   r = vm_pop(vm, &left);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
 
   if (left.type == MINTEGER && right.type == MINTEGER) {
     return vm_execute_integer_comparison(vm, opcode, left.as.integer,
@@ -285,16 +280,16 @@ static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
 
   bool result;
   switch (opcode) {
-  case OP_EQUAL:
-    result = (left.as.boolean == right.as.boolean);
-    break;
-  case OP_NOT_EQUAL:
-    result = (left.as.boolean != right.as.boolean);
-    break;
-  default:
-    fprintf(stderr, "unknown operator: %d (%d %d)\n", opcode, left.type,
-            right.type);
-    return VM_ERR_UNKNOWN_OPERATOR;
+    case OP_EQUAL:
+      result = (left.as.boolean == right.as.boolean);
+      break;
+    case OP_NOT_EQUAL:
+      result = (left.as.boolean != right.as.boolean);
+      break;
+    default:
+      fprintf(stderr, "unknown operator: %d (%d %d)\n", opcode, left.type,
+              right.type);
+      return VM_ERR_UNKNOWN_OPERATOR;
   }
   return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
@@ -302,8 +297,7 @@ static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
 static VM_RESULT vm_exec_minus_operator(VM *vm) {
   MObject operand;
   VM_RESULT r = vm_pop(vm, &operand);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
   if (operand.type != MINTEGER) {
     fprintf(stderr, "unsupported type for negation: %d\n", operand.type);
     return VM_ERR_UNSUPPORTED_TYPE_FOR_NEGATION;
@@ -315,20 +309,19 @@ static VM_RESULT vm_exec_minus_operator(VM *vm) {
 static VM_RESULT vm_exec_bang_operator(VM *vm) {
   MObject operand;
   VM_RESULT r = vm_pop(vm, &operand);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
 
   bool result;
   switch (operand.type) {
-  case MBOOLEAN:
-    result = !operand.as.boolean;
-    break;
-  case MNULL:
-    result = true;
-    break;
-  default:
-    result = false;
-    break;
+    case MBOOLEAN:
+      result = !operand.as.boolean;
+      break;
+    case MNULL:
+      result = true;
+      break;
+    default:
+      result = false;
+      break;
   }
   return vm_push(vm, (MObject){.type = MBOOLEAN, .as.boolean = result});
 }
@@ -357,11 +350,9 @@ static VM_RESULT vm_exec_index_expression(VM *vm) {
   MObject index;
   MObject left;
   VM_RESULT r = vm_pop(vm, &index);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
   r = vm_pop(vm, &left);
-  if (r != VM_OK)
-    return r;
+  if (r != VM_OK) return r;
 
   if (left.type == MARRAY && index.type == MINTEGER) {
     return vm_exec_array_index(vm, left.as.array, index.as.integer);
@@ -412,212 +403,193 @@ VM_RESULT vm_run(VM *vm) {
     uint8_t opcode = instructions[frame->ip];
     frame->ip++;
     switch (opcode) {
-    case OP_CONSTANT: {
-      uint32_t idx = read_u16(&instructions[frame->ip]);
-      VM_RESULT result = vm_push(vm, vm->constants[idx]);
-      if (result != VM_OK) {
-        return result;
+      case OP_CONSTANT: {
+        uint32_t idx = read_u16(&instructions[frame->ip]);
+        VM_RESULT result = vm_push(vm, vm->constants[idx]);
+        if (result != VM_OK) {
+          return result;
+        }
+        frame->ip += 2;
+        break;
       }
-      frame->ip += 2;
-      break;
-    }
-    case OP_POP: {
-      MObject popped;
-      VM_RESULT r = vm_pop(vm, &popped);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_ADD:
-    case OP_SUB:
-    case OP_MUL:
-    case OP_DIV: {
-      VM_RESULT r = vm_exec_binary_op(vm, opcode);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_TRUE: {
-      MObject obj = {.type = MBOOLEAN, .as.boolean = true};
-      VM_RESULT result = vm_push(vm, obj);
-      if (result != VM_OK) {
-        return result;
+      case OP_POP: {
+        MObject popped;
+        VM_RESULT r = vm_pop(vm, &popped);
+        if (r != VM_OK) return r;
+        break;
       }
-      break;
-    }
-    case OP_FALSE: {
-      MObject obj = {.type = MBOOLEAN, .as.boolean = false};
-      VM_RESULT result = vm_push(vm, obj);
-      if (result != VM_OK) {
-        return result;
+      case OP_ADD:
+      case OP_SUB:
+      case OP_MUL:
+      case OP_DIV: {
+        VM_RESULT r = vm_exec_binary_op(vm, opcode);
+        if (r != VM_OK) return r;
+        break;
       }
-      break;
-    }
-    case OP_EQUAL:
-    case OP_NOT_EQUAL:
-    case OP_GREATER_THAN: {
-      VM_RESULT r = vm_execute_comparison(vm, opcode);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_MINUS: {
-      VM_RESULT r = vm_exec_minus_operator(vm);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_BANG: {
-      VM_RESULT r = vm_exec_bang_operator(vm);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_JUMP: {
-      uint32_t pos = read_u16(&instructions[frame->ip]);
-      frame->ip = pos;
-      break;
-    }
-    case OP_JUMP_NOT_TRUTHY: {
-      uint32_t pos = read_u16(&instructions[frame->ip]);
-      frame->ip += 2;
-      MObject condition;
-      VM_RESULT r = vm_pop(vm, &condition);
-      if (r != VM_OK)
-        return r;
-      if (!mobject_is_truthy(
-              &condition)) // skip to 'pos' if top-of-stack is falsy
-      {
+      case OP_TRUE: {
+        MObject obj = {.type = MBOOLEAN, .as.boolean = true};
+        VM_RESULT result = vm_push(vm, obj);
+        if (result != VM_OK) {
+          return result;
+        }
+        break;
+      }
+      case OP_FALSE: {
+        MObject obj = {.type = MBOOLEAN, .as.boolean = false};
+        VM_RESULT result = vm_push(vm, obj);
+        if (result != VM_OK) {
+          return result;
+        }
+        break;
+      }
+      case OP_EQUAL:
+      case OP_NOT_EQUAL:
+      case OP_GREATER_THAN: {
+        VM_RESULT r = vm_execute_comparison(vm, opcode);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_MINUS: {
+        VM_RESULT r = vm_exec_minus_operator(vm);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_BANG: {
+        VM_RESULT r = vm_exec_bang_operator(vm);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_JUMP: {
+        uint32_t pos = read_u16(&instructions[frame->ip]);
         frame->ip = pos;
+        break;
       }
-      break;
-    }
-    case OP_NULL: {
-      VM_RESULT r = vm_push(vm, (MObject){.type = MNULL});
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_SET_GLOBAL: {
-      uint32_t global_index = read_u16(&instructions[frame->ip]);
-      frame->ip += 2;
-      VM_RESULT r = vm_pop(vm, &vm->globals[global_index]);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_GET_GLOBAL: {
-      uint32_t global_index = read_u16(&instructions[frame->ip]);
-      frame->ip += 2;
-      VM_RESULT r = vm_push(vm, vm->globals[global_index]);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_ARRAY: {
-      uint32_t num_elements = read_u16(&instructions[frame->ip]);
-      frame->ip += 2;
-      MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
-      vm->sp = vm->sp - num_elements;
-      VM_RESULT r = vm_push(vm, obj);
-      if (vm_track_allocated_array(vm, obj.as.array) != 0) {
-        free(obj.as.array->elements); // don't forget this one
-        free(obj.as.array);
-        return VM_ERR_OUT_OF_MEMORY;
+      case OP_JUMP_NOT_TRUTHY: {
+        uint32_t pos = read_u16(&instructions[frame->ip]);
+        frame->ip += 2;
+        MObject condition;
+        VM_RESULT r = vm_pop(vm, &condition);
+        if (r != VM_OK) return r;
+        if (!mobject_is_truthy(
+                &condition))  // skip to 'pos' if top-of-stack is falsy
+        {
+          frame->ip = pos;
+        }
+        break;
       }
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_HASH: {
-      uint32_t num_hashes = read_u16(&instructions[frame->ip]);
-      frame->ip += 2;
-      MObject obj;
-      VM_RESULT r = build_hash(vm, (vm->sp - num_hashes), vm->sp, &obj);
-      if (r != VM_OK)
-        return r;
-      vm->sp = vm->sp - num_hashes;
-      r = vm_push(vm, obj);
-      if (vm_track_allocated_hash(vm, obj.as.hash) != 0) {
-        free_hash(obj.as.hash);
-        return VM_ERR_OUT_OF_MEMORY;
+      case OP_NULL: {
+        VM_RESULT r = vm_push(vm, (MObject){.type = MNULL});
+        if (r != VM_OK) return r;
+        break;
       }
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_INDEX: {
-      VM_RESULT r = vm_exec_index_expression(vm);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_CALL: {
-      MObject callee = vm->stack[vm->sp - 1];
-      if (callee.type != MCOMPILED_FUNCTION)
-        return VM_ERR_NON_FUNCTION_CALL;
-      MCompiledFunction *fn = callee.as.function;
-      push_frame(vm, fn);
-      break;
-    }
-    case OP_RETURN_VALUE: {
-      MObject returned_value;
-      VM_RESULT r = vm_pop(vm, &returned_value);
-      if (r != VM_OK)
-        return r;
-      pop_frame(vm);
-      /**
-       * ─── before OpCall ──────────────────────────────
-       * sp →                  (free)
-       *                       CompiledFunction  ← pushed by OpGetGlobal
-       *                       ...
-       * ─── after OpCall (function body about to run) ──
-       * sp →                  (free)
-       *                       CompiledFunction  ← still here, untouched
-       *                       ...
-       * ─── after function body executes 5 + 10 ───────
-       * sp →                  (free)
-       *                       15                ← return value
-       *                       CompiledFunction  ← STILL here!
-       *                       ...
-       * ─── OpReturnValue cleanup ─────────────────────
-       * Step 1: pop returned_value           → 15
-       * Step 2: pop_frame                    → discard call frame
-       * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover
-       CompiledFunction
-       * Step 4: push(returned_value)         → put 15 where the fn used to be
-       * ─── final state ───────────────────────────────
-       * sp →                  (free)
-       *                       15                ← caller now sees the return
-       value
-       *                      ...                 in the slot the fn used to
-       occupy
-       */
-      MObject leftover_compiled_function;
-      r = vm_pop(vm, &leftover_compiled_function);
-      if (r != VM_OK)
-        return r;
-      r = vm_push(vm, returned_value);
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    case OP_RETURN: {
-      pop_frame(vm);
-      MObject _;
-      VM_RESULT r;
-      r = vm_pop(vm, &_);
-      if (r != VM_OK)
-        return r;
-      r = vm_push(vm, (MObject){.type = MNULL});
-      if (r != VM_OK)
-        return r;
-      break;
-    }
-    default:
-      fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode,
-              frame->ip - 1);
-      return VM_ERR_UNKNOWN_OPCODE;
+      case OP_SET_GLOBAL: {
+        uint32_t global_index = read_u16(&instructions[frame->ip]);
+        frame->ip += 2;
+        VM_RESULT r = vm_pop(vm, &vm->globals[global_index]);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_GET_GLOBAL: {
+        uint32_t global_index = read_u16(&instructions[frame->ip]);
+        frame->ip += 2;
+        VM_RESULT r = vm_push(vm, vm->globals[global_index]);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_ARRAY: {
+        uint32_t num_elements = read_u16(&instructions[frame->ip]);
+        frame->ip += 2;
+        MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
+        vm->sp = vm->sp - num_elements;
+        VM_RESULT r = vm_push(vm, obj);
+        if (vm_track_allocated_array(vm, obj.as.array) != 0) {
+          free(obj.as.array->elements);  // don't forget this one
+          free(obj.as.array);
+          return VM_ERR_OUT_OF_MEMORY;
+        }
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_HASH: {
+        uint32_t num_hashes = read_u16(&instructions[frame->ip]);
+        frame->ip += 2;
+        MObject obj;
+        VM_RESULT r = build_hash(vm, (vm->sp - num_hashes), vm->sp, &obj);
+        if (r != VM_OK) return r;
+        vm->sp = vm->sp - num_hashes;
+        r = vm_push(vm, obj);
+        if (vm_track_allocated_hash(vm, obj.as.hash) != 0) {
+          free_hash(obj.as.hash);
+          return VM_ERR_OUT_OF_MEMORY;
+        }
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_INDEX: {
+        VM_RESULT r = vm_exec_index_expression(vm);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_CALL: {
+        MObject callee = vm->stack[vm->sp - 1];
+        if (callee.type != MCOMPILED_FUNCTION) return VM_ERR_NON_FUNCTION_CALL;
+        MCompiledFunction *fn = callee.as.function;
+        push_frame(vm, fn);
+        break;
+      }
+      case OP_RETURN_VALUE: {
+        MObject returned_value;
+        VM_RESULT r = vm_pop(vm, &returned_value);
+        if (r != VM_OK) return r;
+        pop_frame(vm);
+        /**
+         * ─── before OpCall ──────────────────────────────
+         * sp →                  (free)
+         *                       CompiledFunction  ← pushed by OpGetGlobal
+         *                       ...
+         * ─── after OpCall (function body about to run) ──
+         * sp →                  (free)
+         *                       CompiledFunction  ← still here, untouched
+         *                       ...
+         * ─── after function body executes 5 + 10 ───────
+         * sp →                  (free)
+         *                       15                ← return value
+         *                       CompiledFunction  ← STILL here!
+         *                       ...
+         * ─── OpReturnValue cleanup ─────────────────────
+         * Step 1: pop returned_value           → 15
+         * Step 2: pop_frame                    → discard call frame
+         * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover
+         CompiledFunction
+         * Step 4: push(returned_value)         → put 15 where the fn used to be
+         * ─── final state ───────────────────────────────
+         * sp →                  (free)
+         *                       15                ← caller now sees the return
+         value
+         *                      ...                 in the slot the fn used to
+         occupy
+         */
+        MObject leftover_compiled_function;
+        r = vm_pop(vm, &leftover_compiled_function);
+        if (r != VM_OK) return r;
+        r = vm_push(vm, returned_value);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_RETURN: {
+        pop_frame(vm);
+        MObject _;
+        VM_RESULT r;
+        r = vm_pop(vm, &_);
+        if (r != VM_OK) return r;
+        r = vm_push(vm, (MObject){.type = MNULL});
+        if (r != VM_OK) return r;
+        break;
+      }
+      default:
+        fprintf(stderr, "unknown opcode 0x%02x at ip=%u\n", opcode,
+                frame->ip - 1);
+        return VM_ERR_UNKNOWN_OPCODE;
     }
   }
   return VM_OK;

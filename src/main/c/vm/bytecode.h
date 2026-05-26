@@ -1,11 +1,12 @@
 #ifndef BYTECODE_H
 #define BYTECODE_H
 
-#include "object.h"
 #include <stdint.h>
 
+#include "object.h"
+
 typedef struct {
-  uint8_t * instructions;
+  uint8_t *instructions;
   uint32_t num_instructions;
   MObject *constants;
   uint32_t num_constants;

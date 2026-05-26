@@ -1,11 +1,13 @@
 #include "mkc.h"
-#include "bytecode.h"
-#include "bytes.h"
-#include "object.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "bytecode.h"
+#include "bytes.h"
+#include "object.h"
 
 static int read_exact(FILE *f, uint8_t *buf, size_t n) {
   return fread(buf, 1, n, f) == n ? 0 : -1;
@@ -43,73 +45,73 @@ int mkc_read(FILE *f, ByteCode *out) {
     }
 
     switch (tag) {
-    case TAG_INTEGER: {
-      uint8_t int_bytes[8];
-      if (read_exact(f, int_bytes, 8) != 0) {
-        fprintf(stderr, "mkc: truncated integer at index %u\n", i);
-        goto fail;
+      case TAG_INTEGER: {
+        uint8_t int_bytes[8];
+        if (read_exact(f, int_bytes, 8) != 0) {
+          fprintf(stderr, "mkc: truncated integer at index %u\n", i);
+          goto fail;
+        }
+        out->constants[i].type = MINTEGER;
+        out->constants[i].as.integer = read_i64(int_bytes);
+        break;
       }
-      out->constants[i].type = MINTEGER;
-      out->constants[i].as.integer = read_i64(int_bytes);
-      break;
-    }
-    case TAG_STRING: {
-      uint8_t len_bytes[4];
-      if (read_exact(f, len_bytes, 4) != 0) {
-        fprintf(stderr, "mkc: truncated string length at index %u\n", i);
-        goto fail;
+      case TAG_STRING: {
+        uint8_t len_bytes[4];
+        if (read_exact(f, len_bytes, 4) != 0) {
+          fprintf(stderr, "mkc: truncated string length at index %u\n", i);
+          goto fail;
+        }
+        uint32_t len = read_u32(len_bytes);  // length of MString
+        char *s = malloc(len + 1);
+        if (!s) {
+          fprintf(stderr, "mkc: out of memory (string constant)\n");
+          goto fail;
+        }
+        if (read_exact(f, (uint8_t *)s, len) != 0) {
+          free(s);
+          fprintf(stderr, "mkc: truncated string at index %u\n", i);
+          goto fail;
+        }
+        s[len] = '\0';
+        out->constants[i].type = MSTRING;
+        out->constants[i].as.string = s;
+        break;
       }
-      uint32_t len = read_u32(len_bytes); // length of MString
-      char *s = malloc(len + 1);
-      if (!s) {
-        fprintf(stderr, "mkc: out of memory (string constant)\n");
-        goto fail;
-      }
-      if (read_exact(f, (uint8_t *)s, len) != 0) {
-        free(s);
-        fprintf(stderr, "mkc: truncated string at index %u\n", i);
-        goto fail;
-      }
-      s[len] = '\0';
-      out->constants[i].type = MSTRING;
-      out->constants[i].as.string = s;
-      break;
-    }
-    case TAG_FUNCTION: {
-      uint8_t len_bytes[4];
-      if (read_exact(f, len_bytes, 4) != 0) {
-        fprintf(stderr, "mkc: truncated MFunction length at index %u\n", i);
-        goto fail;
-      }
-      uint32_t len = read_u32(len_bytes); // length of MFunction
-      uint8_t *insn = malloc(len);
-      if (!insn) {
-        fprintf(stderr, "mkc: out of memory (function instructions)\n");
-        goto fail;
-      }
+      case TAG_FUNCTION: {
+        uint8_t len_bytes[4];
+        if (read_exact(f, len_bytes, 4) != 0) {
+          fprintf(stderr, "mkc: truncated MFunction length at index %u\n", i);
+          goto fail;
+        }
+        uint32_t len = read_u32(len_bytes);  // length of MFunction
+        uint8_t *insn = malloc(len);
+        if (!insn) {
+          fprintf(stderr, "mkc: out of memory (function instructions)\n");
+          goto fail;
+        }
 
-      if (read_exact(f, insn, len) != 0) {
-        free(insn);
-        fprintf(stderr, "mkc: truncated function instructions at index %u\n",
-                i);
-        goto fail;
-      }
-      MCompiledFunction *fn = malloc(sizeof(*fn));
-      if (!fn) {
-        free(insn);
-        fprintf(stderr, "mkc: out of memory (MCompiledFunction object)\n");
-        goto fail;
-      }
+        if (read_exact(f, insn, len) != 0) {
+          free(insn);
+          fprintf(stderr, "mkc: truncated function instructions at index %u\n",
+                  i);
+          goto fail;
+        }
+        MCompiledFunction *fn = malloc(sizeof(*fn));
+        if (!fn) {
+          free(insn);
+          fprintf(stderr, "mkc: out of memory (MCompiledFunction object)\n");
+          goto fail;
+        }
 
-      fn->instructions = insn;
-      fn->num_instructions = (int)len;
-      out->constants[i].type = MCOMPILED_FUNCTION;
-      out->constants[i].as.function = fn;
-      break;
-    }
-    default:
-      fprintf(stderr, "mkc: unknow tag 0x%02x at index %u\n", tag, i);
-      goto fail;
+        fn->instructions = insn;
+        fn->num_instructions = (int)len;
+        out->constants[i].type = MCOMPILED_FUNCTION;
+        out->constants[i].as.function = fn;
+        break;
+      }
+      default:
+        fprintf(stderr, "mkc: unknow tag 0x%02x at index %u\n", tag, i);
+        goto fail;
     }
   }
 

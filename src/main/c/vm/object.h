@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// forward declarations - just names, no layout yet for resovling circular type
+// forward declarations - just names, no layout yet for resolving circular type
 // problem in C.
 typedef struct MObject MObject;
 typedef struct MArray MArray;

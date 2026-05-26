@@ -1,19 +1,19 @@
 #ifndef VM_H
 #define VM_H
 
-#include "bytecode.h"
-#include "frame.h"
-#include "object.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "bytecode.h"
+#include "frame.h"
+#include "object.h"
 
 #define STACK_SIZE 2048
 #define GLOBALS_SIZE 65536
 #define MAX_FRAME_SIZE 1024
 
-typedef struct
-{
+typedef struct {
   const ByteCode *bc;
   MCompiledFunction main_fn;
   const MObject *constants;
@@ -37,8 +37,7 @@ typedef struct
   size_t allocated_hash_capacity;
 } VM;
 
-typedef enum
-{
+typedef enum {
   VM_OK = 0,
   VM_ERR_UNKNOWN_OPCODE,
   VM_ERR_STACK_OVERFLOW,

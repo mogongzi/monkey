@@ -1,10 +1,11 @@
 #ifndef MKC_H
 #define MKC_H
 
-#include "bytecode.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+
+#include "bytecode.h"
 
 #define TAG_INTEGER 0x01
 #define TAG_STRING 0x02
