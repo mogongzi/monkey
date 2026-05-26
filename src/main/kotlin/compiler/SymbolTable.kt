@@ -6,7 +6,7 @@ enum class SymbolScope {
 
 data class Symbol(val name: String, val scope: SymbolScope, val index: Int)
 
-class SymbolTable() {
+class SymbolTable(val outer: SymbolTable? = null) {
     private val store = mutableMapOf<String, Symbol>()
     private var numDefinitions: Int = 0
 

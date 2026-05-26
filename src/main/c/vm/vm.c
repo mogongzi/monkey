@@ -559,15 +559,12 @@ VM_RESULT vm_run(VM *vm) {
          * ─── OpReturnValue cleanup ─────────────────────
          * Step 1: pop returned_value           → 15
          * Step 2: pop_frame                    → discard call frame
-         * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover
-         CompiledFunction
+         * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover CompiledFunction
          * Step 4: push(returned_value)         → put 15 where the fn used to be
          * ─── final state ───────────────────────────────
          * sp →                  (free)
-         *                       15                ← caller now sees the return
-         value
-         *                      ...                 in the slot the fn used to
-         occupy
+         *                       15                ← caller now sees the return value
+         *                      ...                 in the slot the fn used to occupy
          */
         MObject leftover_compiled_function;
         r = vm_pop(vm, &leftover_compiled_function);
