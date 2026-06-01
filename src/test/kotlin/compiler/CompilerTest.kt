@@ -9,12 +9,15 @@ import me.ryan.interpreter.eval.MObject
 import me.ryan.interpreter.eval.MString
 import me.ryan.interpreter.lexer.Lexer
 import me.ryan.interpreter.parser.Parser
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalUnsignedTypes::class)
-data class CompilerTestCase(val input: String, val expectedConstants: List<Any>, val expectedInstructions: List<Instructions>)
+data class CompilerTestCase(
+    val input: String,
+    val expectedConstants: List<Any>,
+    val expectedInstructions: List<Instructions>
+)
 
 @JvmInline
 @OptIn(ExperimentalUnsignedTypes::class)
@@ -274,6 +277,87 @@ class CompilerTest {
     }
 
     @Test
+    fun testLetStatementScopes() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = """
+                    let num = 55;
+                    fn() { num }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    55,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetGlobal, 0),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpConstant, 1),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = """
+                    fn() {
+                      let num = 55;
+                      num
+                    }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    55,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpSetLocal, 0),
+                            make(OpGetLocal, 0),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 1),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = """
+                    fn() {
+                      let a = 55;
+                      let b = 77;
+                      a + b;
+                    }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    55,
+                    77,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 0),
+                            make(OpSetLocal, 0),
+                            make(OpConstant, 1),
+                            make(OpSetLocal, 1),
+                            make(OpGetLocal, 0),
+                            make(OpGetLocal, 1),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 2),
+                    make(OpPop),
+                )
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    @Test
     fun testStringExpressions() {
         val tests = listOf(
             CompilerTestCase(
@@ -489,9 +573,10 @@ class CompilerTest {
     }
 
     @Test
-    fun testCompilerScope() {
+    fun testCompilerScopes() {
         val compiler = Compiler()
         assertEquals(0, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex, want=0")
+        val globalSymbolTable = compiler.symbolTable
         compiler.emit(OpMul)
         compiler.enterScope()
         assertEquals(1, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex, want=1")
@@ -503,8 +588,11 @@ class CompilerTest {
         )
         var last = compiler.scopes[compiler.scopeIndex].lastInstruction
         assertEquals(OpSub, last!!.opcode, "lastInstruction.Opcode wrong. got=${last.opcode}, want=$OpSub")
+        assertSame(globalSymbolTable, compiler.symbolTable.outer, "compiler did not enclose symbolTable")
         compiler.leaveScope()
         assertEquals(0, compiler.scopeIndex, "scopeIndex wrong. got=$compiler.scopeIndex")
+        assertSame(globalSymbolTable, compiler.symbolTable, "compiler did not restore global symbol table")
+        assertNull(compiler.symbolTable.outer, "compiler modified global symbol table incorrectly")
         compiler.emit(OpAdd)
         assertEquals(
             2,
@@ -544,13 +632,15 @@ class CompilerTest {
         val tests = listOf(
             CompilerTestCase(
                 input = "fn() { 24 }();",
-                expectedConstants = listOf(24,
+                expectedConstants = listOf(
+                    24,
                     FunctionInstructions(
                         listOf(
                             make(OpConstant, 0),
                             make(OpReturnValue),
                         )
-                    )),
+                    )
+                ),
                 expectedInstructions = listOf(
                     make(OpConstant, 1),
                     make(OpCall),

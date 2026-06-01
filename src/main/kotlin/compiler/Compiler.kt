@@ -23,9 +23,10 @@ class CompilationScope(
 class Compiler() {
     internal val scopes = arrayListOf(CompilationScope())
     internal var scopeIndex: Int = 0
+    internal var symbolTable = SymbolTable()
 
     private val constants: MutableList<MObject> = mutableListOf()
-    private val symbolTable = SymbolTable()
+
 
     fun compile(node: Node) {
         when (node) {
@@ -156,7 +157,11 @@ class Compiler() {
             is LetStatement -> {
                 compile(node.value)
                 val symbol = symbolTable.define(node.name.value)
-                emit(OpSetGlobal, symbol.index)
+                if (symbol.scope == SymbolScope.GLOBAL) {
+                    emit(OpSetGlobal, symbol.index)
+                } else {
+                    emit(OpSetLocal, symbol.index)
+                }
             }
 
             is ReturnStatement -> {
@@ -167,7 +172,11 @@ class Compiler() {
             is Identifier -> {
                 val symbol = symbolTable.resolve(node.value)
                     ?: error("undefined variable ${node.value}")
-                emit(OpGetGlobal, symbol.index)
+                if (symbol.scope == SymbolScope.GLOBAL) {
+                    emit(OpGetGlobal, symbol.index)
+                } else {
+                    emit(OpGetLocal, symbol.index)
+                }
             }
         }
     }
@@ -237,12 +246,14 @@ class Compiler() {
         val scope = CompilationScope()
         scopes += scope
         scopeIndex++
+        symbolTable = SymbolTable(symbolTable)
     }
 
     internal fun leaveScope(): Instructions {
         val instructions = currentScope().instructions
         scopes.removeLast()
         scopeIndex--
+        symbolTable = symbolTable.outer ?: error("leaveScope on global")
         return instructions
     }
 }

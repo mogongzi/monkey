@@ -1,7 +1,8 @@
 package me.ryan.interpreter.compiler
 
 enum class SymbolScope {
-    GLOBAL
+    GLOBAL,
+    LOCAL,
 }
 
 data class Symbol(val name: String, val scope: SymbolScope, val index: Int)
@@ -11,13 +12,18 @@ class SymbolTable(val outer: SymbolTable? = null) {
     private var numDefinitions: Int = 0
 
     fun define(name: String): Symbol {
-        val symbol = Symbol(name, SymbolScope.GLOBAL, index = numDefinitions)
+        val scope = if (outer == null) SymbolScope.GLOBAL else SymbolScope.LOCAL
+        val symbol = Symbol(name, scope, index = numDefinitions)
         store[name] = symbol
         numDefinitions++
         return symbol
     }
 
-    fun resolve(name: String) : Symbol? {
-        return store[name]
+    fun resolve(name: String): Symbol? {
+        val local = store[name]
+        if (local != null) {
+            return local
+        }
+        return outer?.resolve(name)
     }
 }
