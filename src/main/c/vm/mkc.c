@@ -84,8 +84,8 @@ int mkc_read(FILE *f, ByteCode *out) {
           goto fail;
         }
         uint32_t len = read_u32(len_bytes);  // length of MFunction
-        uint8_t *insn = malloc(len);
-        if (!insn) {
+        uint8_t *insn = len > 0 ? malloc(len) : NULL;
+        if (len > 0 && !insn) {
           fprintf(stderr, "mkc: out of memory (function instructions)\n");
           goto fail;
         }
@@ -104,7 +104,7 @@ int mkc_read(FILE *f, ByteCode *out) {
         }
 
         fn->instructions = insn;
-        fn->num_instructions = (int)len;
+        fn->num_instructions = len;
         out->constants[i].type = MCOMPILED_FUNCTION;
         out->constants[i].as.function = fn;
         break;

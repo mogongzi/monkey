@@ -3,16 +3,11 @@ package ast
 import me.ryan.interpreter.ast.Identifier
 import me.ryan.interpreter.ast.LetStatement
 import me.ryan.interpreter.ast.Program
-import me.ryan.interpreter.ast.ReturnStatement
-import me.ryan.interpreter.ast.Statement
-import me.ryan.interpreter.lexer.Lexer
-import me.ryan.interpreter.parser.Parser
 import me.ryan.interpreter.token.IDENT
 import me.ryan.interpreter.token.LET
 import me.ryan.interpreter.token.Token
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import kotlin.test.fail
 
 class AstTest {
     @Test

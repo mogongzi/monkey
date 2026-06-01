@@ -28,6 +28,9 @@ const val OpIndex: Opcode = 0x14u
 const val OpCall: Opcode = 0x15u
 const val OpReturnValue: Opcode = 0x16u
 const val OpReturn: Opcode = 0x17u
+const val OpGetLocal: Opcode = 0x18u
+const val OpSetLocal: Opcode = 0x19u
+
 
 data class Definition(val name: String, val operandWidths: List<Int>)
 
@@ -57,6 +60,8 @@ val definitions = mapOf(
     OpCall to Definition("OpCall", emptyList()),
     OpReturnValue to Definition("OpReturnValue", emptyList()),
     OpReturn to Definition("OpReturn", emptyList()),
+    OpGetLocal to Definition("OpGetLocal", listOf(1)),
+    OpSetLocal to Definition("OpSetLocal", listOf(1)),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]
@@ -77,6 +82,9 @@ fun make(opcode: Opcode, vararg operands: Int): Instructions {
                 // Equivalent to Java's: (op >> 8) & 0xFF and op & 0xFF
                 instruction[offset] = (op shr 8 and 0xFF).toUByte()
                 instruction[offset + 1] = (op and 0xFF).toUByte()
+            }
+            1 -> {
+                instruction[offset] = op.toUByte()
             }
         }
         offset += width
@@ -121,6 +129,7 @@ fun readOperands(def: Definition, ins: Instructions): Pair<IntArray, Int> {
     def.operandWidths.forEachIndexed { index, width ->
         when(width) {
             2 -> operands[index] = readUint16(ins.sliceArray(offset until offset + 2))
+            1 -> operands[index] = ins[offset].toInt()
         }
         offset += width
     }

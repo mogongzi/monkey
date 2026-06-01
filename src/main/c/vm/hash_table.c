@@ -41,10 +41,14 @@ static uint64_t compute_hash(HashKey key) {
   return hash;
 }
 
-static void resize(MHash *table) {
+static bool resize(MHash *table) {
   // 1. create a new array of buckets which size is twice of the current one.
   size_t new_capacity = table->capacity * 2;
   HashEntry **new_bucket = calloc(new_capacity, sizeof(HashEntry *));
+  if (!new_bucket) {
+    fprintf(stderr, "out of memory (Hash)\n");
+    return false;
+  }
 
   // 2. iterate over the old array and recalculate the hash key and insert it
   // into new one.
@@ -65,6 +69,7 @@ static void resize(MHash *table) {
   free(table->buckets);
   table->buckets = new_bucket;
   table->capacity = new_capacity;
+  return true;
 }
 
 bool hashkey_equal(HashKey first, HashKey second) {
@@ -104,9 +109,18 @@ MHash *new_hash(int capacity) {
     capacity = INITIAL_BUCKET_COUNT;
   }
   MHash *table = malloc(sizeof(MHash));
+  if (!table) {
+    fprintf(stderr, "out of memory (Hash)\n");
+    return NULL;
+  }
   table->capacity = capacity;
   table->count = 0;
   table->buckets = calloc(capacity, sizeof(HashEntry *));
+  if (!table->buckets) {
+    free(table);
+    fprintf(stderr, "out of memory (Entries in Hash)\n");
+    return NULL;
+  }
   return table;
 }
 
@@ -130,7 +144,7 @@ void free_hash(MHash *table) {
 bool hash_set(MHash *table, HashKey key, HashPair pair) {
   if (table->count * 4 >=
       table->capacity * 3) {  // equivalent to count >= capacity * 0.75
-    resize(table);
+    if (!resize(table)) return false;
   }
   size_t index = compute_hash(key) % table->capacity;
   HashEntry *entry = table->buckets[index];
@@ -144,6 +158,10 @@ bool hash_set(MHash *table, HashKey key, HashPair pair) {
                           // walking
   }
   entry = malloc(sizeof(HashEntry));
+  if (!entry) {
+    fprintf(stderr, "out of memory (Hash Entry)\n");
+    return false;
+  }
   entry->hash_key = key;
   entry->pair = pair;
   entry->next = table->buckets[index];

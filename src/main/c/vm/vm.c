@@ -181,6 +181,14 @@ static VM_RESULT vm_exec_binary_integer_operation(VM *vm, uint8_t opcode,
       result = left * right;
       break;
     case OP_DIV:
+      if (right == 0) {
+        fprintf(stderr, "division by zero\n");
+        return VM_ERR_DIVISION_BY_ZERO;
+      }
+      if (left == INT64_MIN && right == -1) {
+        fprintf(stderr, "integer overflow (INT64_MIN / -1)\n");
+        return VM_ERR_INTEGER_OVERFLOW;
+      }
       result = left / right;
       break;
     default:
@@ -278,6 +286,11 @@ static VM_RESULT vm_execute_comparison(VM *vm, uint8_t opcode) {
                                          right.as.integer);
   }
 
+  if (left.type != MBOOLEAN && right.type != MBOOLEAN) {
+    fprintf(stderr, "unsupported type for comparision\n");
+    return VM_ERR_UNSUPPORTED_TYPE_FOR_COMPARISION;
+  }
+
   bool result;
   switch (opcode) {
     case OP_EQUAL:
@@ -327,15 +340,14 @@ static VM_RESULT vm_exec_bang_operator(VM *vm) {
 }
 
 static VM_RESULT vm_exec_array_index(VM *vm, MArray *array, uint64_t index) {
-  if (index < 0 || index >= array->len)
-    return vm_push(vm, (MObject){.type = MNULL});
+  if (index >= array->len) return vm_push(vm, (MObject){.type = MNULL});
   return vm_push(vm, array->elements[index]);
 }
 
 static VM_RESULT vm_exec_hash_index(VM *vm, MHash *hash, MObject index) {
   HashKey hash_key;
   if (!hashkey_from_mobject(&index, &hash_key)) {
-    return VM_ERR_UNHASHABLE_KEY;
+    return VM_ERR_INVALID_HASH_KEY;
   }
   HashPair pair;
   if (hash_get(hash, hash_key, &pair)) {
@@ -363,34 +375,49 @@ static VM_RESULT vm_exec_index_expression(VM *vm) {
   }
 }
 
-static MObject build_array(VM *vm, uint32_t start, uint32_t end) {
+static VM_RESULT build_array(VM *vm, uint32_t start, uint32_t end,
+                             MObject *out) {
   size_t len = end - start;
   MArray *arr = malloc(sizeof(MArray));
-  arr->elements = malloc(sizeof(MObject) * len);
+  if (!arr) {
+    fprintf(stderr, "out of memory(MArray)\n");
+    return VM_ERR_OUT_OF_MEMORY;
+  }
+  arr->elements = len > 0 ? malloc(sizeof(MObject) * len) : NULL;
+  if (len > 0 && !arr->elements) {
+    fprintf(stderr, "out of memory(MArray - elements)\n");
+    free(arr);
+    return VM_ERR_OUT_OF_MEMORY;
+  }
   arr->len = len;
   for (size_t i = 0; i < len; i++) {
     arr->elements[i] = vm->stack[start + i];
   }
-  return (MObject){.type = MARRAY, .as.array = arr};
+  *out = (MObject){.type = MARRAY, .as.array = arr};
+  return VM_OK;
 }
 
 static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
                             MObject *out) {
   MHash *hash = new_hash(0);
+  if (!hash) return VM_ERR_OUT_OF_MEMORY;
   for (size_t i = start; i < end; i += 2) {
     MObject key = vm->stack[i];
     MObject value = vm->stack[i + 1];
     HashKey hash_key;
     if (!hashkey_from_mobject(&key, &hash_key)) {
       free_hash(hash);
-      return VM_ERR_UNHASHABLE_KEY;
+      return VM_ERR_INVALID_HASH_KEY;
     }
 
     HashPair pair;
     pair.original_key = key;
     pair.value = value;
 
-    hash_set(hash, hash_key, pair);
+    if (!hash_set(hash, hash_key, pair)) {
+      free_hash(hash);
+      return VM_ERR_OUT_OF_MEMORY;
+    };
   }
   *out = (MObject){.type = MHASH, .as.hash = hash};
   return VM_OK;
@@ -499,9 +526,11 @@ VM_RESULT vm_run(VM *vm) {
       case OP_ARRAY: {
         uint32_t num_elements = read_u16(&instructions[frame->ip]);
         frame->ip += 2;
-        MObject obj = build_array(vm, (vm->sp - num_elements), vm->sp);
+        MObject obj;
+        VM_RESULT r = build_array(vm, (vm->sp - num_elements), vm->sp, &obj);
+        if (r != VM_OK) return r;
         vm->sp = vm->sp - num_elements;
-        VM_RESULT r = vm_push(vm, obj);
+        r = vm_push(vm, obj);
         if (vm_track_allocated_array(vm, obj.as.array) != 0) {
           free(obj.as.array->elements);  // don't forget this one
           free(obj.as.array);

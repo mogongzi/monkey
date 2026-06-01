@@ -1,16 +1,6 @@
 package code
 
-import me.ryan.interpreter.code.OpAdd
-import me.ryan.interpreter.code.OpConstant
-import me.ryan.interpreter.code.OpDiv
-import me.ryan.interpreter.code.OpMul
-import me.ryan.interpreter.code.OpPop
-import me.ryan.interpreter.code.OpSub
-import me.ryan.interpreter.code.Opcode
-import me.ryan.interpreter.code.lookup
-import me.ryan.interpreter.code.make
-import me.ryan.interpreter.code.readOperands
-import me.ryan.interpreter.code.string
+import me.ryan.interpreter.code.*
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,6 +24,11 @@ class CodeTest {
                 intArrayOf(),
                 ubyteArrayOf(OpAdd)
             ),
+            TestCase(
+                OpGetLocal,
+                intArrayOf(255),
+                ubyteArrayOf(OpGetLocal, 255u)
+            )
         )
 
         for (test in tests) {
@@ -57,16 +52,16 @@ class CodeTest {
     fun testInstructionsString() {
         val instructions = listOf(
             make(OpAdd),
-            make(OpConstant, 1),
+            make(OpGetLocal, 1),
             make(OpConstant, 2),
             make(OpConstant, 65535),
         )
 
         val expected = """
             0000 OpAdd
-            0001 OpConstant 1
-            0004 OpConstant 2
-            0007 OpConstant 65535
+            0001 OpGetLocal 1
+            0003 OpConstant 2
+            0006 OpConstant 65535
         """.trimIndent()
 
         val concatted = instructions.reduce { acc, ins -> acc + ins }
@@ -79,6 +74,7 @@ class CodeTest {
     fun testReadOperands() {
         val tests = listOf(
             Triple(OpConstant, intArrayOf(65535), 2),
+            Triple(OpGetLocal, intArrayOf(255), 1),
         )
 
         for ((op, operands, bytesRead) in tests) {
