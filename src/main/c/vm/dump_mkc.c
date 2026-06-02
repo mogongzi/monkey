@@ -180,7 +180,8 @@ static void dump(const ByteCode *bc) {
         printf("  [%u] STRING value=\"%s\"\n", i, c->as.string);
         break;
       case MCOMPILED_FUNCTION:
-        printf("  [%u] FUNCTION len=%u\n", i, c->as.function->num_instructions);
+        printf("  [%u] FUNCTION num_locals=%u len=%u\n", i,
+               c->as.function->num_locals, c->as.function->num_instructions);
         dump_instructions(c->as.function->instructions,
                           c->as.function->num_instructions, "    ");
         break;

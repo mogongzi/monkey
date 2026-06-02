@@ -23,8 +23,7 @@ VM *vm_init(const ByteCode *bc) {
 
   vm->main_fn.instructions = bc->instructions;
   vm->main_fn.num_instructions = bc->num_instructions;
-  vm->frames[0].fn = &vm->main_fn;
-  vm->frames[0].ip = 0;
+  vm->frames[0] = (Frame){.fn = &vm->main_fn, .ip = 0, .bp = 0};
   vm->frames_index = 1;
   if (bc->num_constants > 0) {
     vm->constants = bc->constants;
@@ -49,13 +48,13 @@ static Frame *current_frame(VM *vm) {
   return &vm->frames[vm->frames_index - 1];
 }
 
-static void push_frame(VM *vm, const MCompiledFunction *fn) {
+static void push_frame(VM *vm, Frame frame) {
   if (vm->frames_index >= MAX_FRAME_SIZE) {
     fprintf(stderr, "call stack overflow: exceeded maximum frames of %d\n",
             MAX_FRAME_SIZE);
     abort();
   }
-  vm->frames[vm->frames_index++] = (Frame){.fn = fn, .ip = 0};
+  vm->frames[vm->frames_index++] = frame;
 }
 
 static Frame *pop_frame(VM *vm) { return &vm->frames[--vm->frames_index]; }
@@ -510,16 +509,30 @@ VM_RESULT vm_run(VM *vm) {
         break;
       }
       case OP_SET_GLOBAL: {
-        uint32_t global_index = read_u16(&instructions[frame->ip]);
+        uint32_t global_operand_idx = read_u16(&instructions[frame->ip]);
         frame->ip += 2;
-        VM_RESULT r = vm_pop(vm, &vm->globals[global_index]);
+        VM_RESULT r = vm_pop(vm, &vm->globals[global_operand_idx]);
         if (r != VM_OK) return r;
         break;
       }
       case OP_GET_GLOBAL: {
-        uint32_t global_index = read_u16(&instructions[frame->ip]);
+        uint32_t global_operand_idx = read_u16(&instructions[frame->ip]);
         frame->ip += 2;
-        VM_RESULT r = vm_push(vm, vm->globals[global_index]);
+        VM_RESULT r = vm_push(vm, vm->globals[global_operand_idx]);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_SET_LOCAL: {
+        uint8_t local_operand_idx = read_u8(&instructions[frame->ip]);
+        frame->ip += 1;
+        VM_RESULT r = vm_pop(vm, &vm->stack[frame->bp + local_operand_idx]);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_GET_LOCAL: {
+        uint8_t local_operand_idx = read_u8(&instructions[frame->ip]);
+        frame->ip += 1;
+        VM_RESULT r = vm_push(vm, vm->stack[frame->bp + local_operand_idx]);
         if (r != VM_OK) return r;
         break;
       }
@@ -563,52 +576,25 @@ VM_RESULT vm_run(VM *vm) {
         MObject callee = vm->stack[vm->sp - 1];
         if (callee.type != MCOMPILED_FUNCTION) return VM_ERR_NON_FUNCTION_CALL;
         MCompiledFunction *fn = callee.as.function;
-        push_frame(vm, fn);
+        uint32_t bp = vm->sp;
+        push_frame(vm, (Frame){.fn = fn, .ip = 0, .bp = bp});
+        vm->sp = bp + fn->num_locals;
         break;
       }
       case OP_RETURN_VALUE: {
         MObject returned_value;
         VM_RESULT r = vm_pop(vm, &returned_value);
         if (r != VM_OK) return r;
-        pop_frame(vm);
-        /**
-         * ─── before OpCall ──────────────────────────────
-         * sp →                  (free)
-         *                       CompiledFunction  ← pushed by OpGetGlobal
-         *                       ...
-         * ─── after OpCall (function body about to run) ──
-         * sp →                  (free)
-         *                       CompiledFunction  ← still here, untouched
-         *                       ...
-         * ─── after function body executes 5 + 10 ───────
-         * sp →                  (free)
-         *                       15                ← return value
-         *                       CompiledFunction  ← STILL here!
-         *                       ...
-         * ─── OpReturnValue cleanup ─────────────────────
-         * Step 1: pop returned_value           → 15
-         * Step 2: pop_frame                    → discard call frame
-         * Step 3: vm_pop(&_)  ← THIS ONE       → discards the leftover CompiledFunction
-         * Step 4: push(returned_value)         → put 15 where the fn used to be
-         * ─── final state ───────────────────────────────
-         * sp →                  (free)
-         *                       15                ← caller now sees the return value
-         *                      ...                 in the slot the fn used to occupy
-         */
-        MObject leftover_compiled_function;
-        r = vm_pop(vm, &leftover_compiled_function);
-        if (r != VM_OK) return r;
+        Frame *popped = pop_frame(vm);
+        vm->sp = popped->bp - 1;
         r = vm_push(vm, returned_value);
         if (r != VM_OK) return r;
         break;
       }
       case OP_RETURN: {
-        pop_frame(vm);
-        MObject _;
-        VM_RESULT r;
-        r = vm_pop(vm, &_);
-        if (r != VM_OK) return r;
-        r = vm_push(vm, (MObject){.type = MNULL});
+        Frame *popped = pop_frame(vm);
+        vm->sp = popped->bp - 1;
+        VM_RESULT r = vm_push(vm, (MObject){.type = MNULL});
         if (r != VM_OK) return r;
         break;
       }

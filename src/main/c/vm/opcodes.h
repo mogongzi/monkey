@@ -27,5 +27,7 @@
 #define OP_CALL 0x15
 #define OP_RETURN_VALUE 0x16
 #define OP_RETURN 0x17
+#define OP_GET_LOCAL 0x18
+#define OP_SET_LOCAL 0x19
 
 #endif

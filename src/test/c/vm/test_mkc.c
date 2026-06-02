@@ -138,12 +138,13 @@ static void test_function_call(void) {
       0x00,         0x01,              // 1 constant
       TAG_FUNCTION,                    // constant tag
       0x00,         0x00, 0x00, 0x01,  // function instruction length = 1
+      0x00,         0x00,              // num_locals = 0
       OP_RETURN,                       // function instructions
       0x00,         0x00, 0x00, 0x00   // main instruction length = 0
   };
 
   // verify size matches
-  assert(sizeof(data) == 12);
+  assert(sizeof(data) == 14);
 
   FILE *f = bytes_to_stream(data, sizeof(data));
   ByteCode bc;
@@ -152,6 +153,7 @@ static void test_function_call(void) {
   assert(bc.num_constants == 1);
   assert(bc.constants[0].type == MCOMPILED_FUNCTION);
   assert(bc.constants[0].as.function->num_instructions == 1);
+  assert(bc.constants[0].as.function->num_locals == 0);
   assert(bc.constants[0].as.function->instructions[0] == OP_RETURN);
 
   assert(bc.num_instructions == 0);
@@ -172,6 +174,33 @@ static void test_truncated_string_payload(void) {
   printf("  PASS test_truncated_string_payload\n");
 }
 
+// test11: test function with locals
+static void test_function_with_locals(void) {
+  uint8_t data[] = {
+      0x00,         0x01,              // 1 constant
+      TAG_FUNCTION,                    // constant tag
+      0x00,         0x00, 0x00, 0x01,  // function instruction length = 1
+      0x00,         0x03,              // num_locals = 3
+      OP_RETURN,                       // function instructions
+      0x00,         0x00, 0x00, 0x00   // main instruction length = 0
+  };
+
+  assert(sizeof(data) == 14);
+
+  FILE *f = bytes_to_stream(data, sizeof(data));
+  ByteCode bc;
+  assert(mkc_read(f, &bc) == 0);
+  fclose(f);
+  assert(bc.num_constants == 1);
+  assert(bc.constants[0].type == MCOMPILED_FUNCTION);
+  assert(bc.constants[0].as.function->num_locals == 3);
+  assert(bc.constants[0].as.function->num_instructions == 1);
+  assert(bc.constants[0].as.function->instructions[0] == OP_RETURN);
+
+  free_bytecode(&bc);
+  printf("  PASS test_function_with_locals\n");
+}
+
 int main(void) {
   printf("Running mkc tests...\n");
   test_empty_program();
@@ -182,6 +211,7 @@ int main(void) {
   test_trailing_bytes();
   test_function_call();
   test_truncated_string_payload();
+  test_function_with_locals();
   printf("All tests passed.\n");
   return 0;
 }

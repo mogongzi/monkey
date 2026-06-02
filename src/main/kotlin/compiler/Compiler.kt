@@ -115,8 +115,9 @@ class Compiler() {
                 if (!lastInstructionIs(OpReturnValue)) {
                     emit(OpReturn)
                 }
+                val numLocals = symbolTable.numDefinitions
                 val instructions = leaveScope()
-                val compiledFn = MCompiledFunction(instructions)
+                val compiledFn = MCompiledFunction(instructions, numLocals)
                 emit(OpConstant, addConstant(compiledFn))
             }
 

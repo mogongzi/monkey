@@ -35,6 +35,10 @@ object BytecodeWriter {
                     val bytes = obj.instructions.toByteArray()
                     dos.writeByte(TAG_FUNCTION.toInt())
                     dos.writeInt(bytes.size)
+                    require(obj.numLocals in 0..0xFFFF) {
+                        "numLocals does not fit in 2 bytes: ${obj.numLocals}"
+                    }
+                    dos.writeShort(obj.numLocals)
                     dos.write(bytes)
                 }
 

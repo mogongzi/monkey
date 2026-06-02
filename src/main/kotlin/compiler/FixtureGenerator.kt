@@ -132,7 +132,38 @@ fun main() {
             let returnsOneReturner = fn() { returnsOne; };
             returnsOneReturner()();
         """.trimIndent(),
-    )
+        // function calls with local bindings
+        "src/test/fixtures/function_local_binding.mkc" to """
+            let one = fn() { let one = 1; one };
+            one();
+        """.trimIndent(),
+                "src/test/fixtures/function_local_bindings_sum.mkc" to """
+            let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+            oneAndTwo();
+        """.trimIndent(),
+                "src/test/fixtures/function_multiple_with_locals.mkc" to """
+            let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+            let threeAndFour = fn() { let three = 3; let four = 4; three + four; };
+            oneAndTwo() + threeAndFour();
+        """.trimIndent(),
+                "src/test/fixtures/function_same_local_name.mkc" to """
+            let firstFoobar = fn() { let foobar = 50; foobar; };
+            let secondFoobar = fn() { let foobar = 100; foobar; };
+            firstFoobar() + secondFoobar();
+        """.trimIndent(),
+                "src/test/fixtures/function_global_and_local.mkc" to """
+            let globalSeed = 50;
+            let minusOne = fn() {
+                let num = 1;
+                globalSeed - num;
+            }
+            let minusTwo = fn() {
+                let num = 2;
+                globalSeed - num;
+            }
+            minusOne() + minusTwo();
+        """.trimIndent(),
+        )
 
     for ((path, source) in cases) {
         val program = parse(source)

@@ -7,6 +7,7 @@
 typedef struct {
   const MCompiledFunction *fn;
   uint32_t ip;
+  uint32_t bp;  // base pointer
 } Frame;
 
 #endif
