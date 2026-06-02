@@ -315,6 +315,20 @@ static void test_calling_functions_without_arguments(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_calling_functions_with_bindings(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/function_local_binding.mkc", expected_integer(1)},
+      {"src/test/fixtures/function_local_bindings_sum.mkc",
+       expected_integer(3)},
+      {"src/test/fixtures/function_multiple_with_locals.mkc",
+       expected_integer(10)},
+      {"src/test/fixtures/function_same_local_name.mkc", expected_integer(150)},
+      {"src/test/fixtures/function_global_and_local.mkc", expected_integer(97)},
+  };
+
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 static void test_stack_underflow(void) {
   uint8_t instructions[] = {
       OP_POP,
@@ -344,5 +358,6 @@ int main(void) {
   test_hash_literals();
   test_index_expressions();
   test_calling_functions_without_arguments();
+  test_calling_functions_with_bindings();
   return 0;
 }
