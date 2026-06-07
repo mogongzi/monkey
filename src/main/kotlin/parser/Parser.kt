@@ -217,55 +217,141 @@ class Parser(private val lexer: Lexer) {
         return BooleanLiteral(curToken, curTokenIs(TRUE))
     }
 
-//     Parse the first token as a "prefix" — could be a literal (1), identifier (x),
-//     or a prefix operator (-x, !x) which itself recurses into parseExpression.
-//
-//     Then, repeatedly try to combine leftExp with the next infix operator.
-//
-//	 precedence = "how tightly my caller holds onto me"
-//	   - LOWEST: anyone can take me (top-level call from parseExpressionStatement)
-//	   - SUM: only operators with higher precedence than SUM can take me
-//	   - PREFIX: almost nobody can take me (prefix binds tighter than infix ops;
-//	             CALL would bind even tighter once implemented)
-//
-//	 The loop STOPS when precedence >= peekPrecedence():
-//	   → leftExp is returned to the caller, becoming THEIR operand.
-//	 The loop CONTINUES when precedence < peekPrecedence():
-//	   → the next operator grabs leftExp as its left child.
-//
-//     Example: "1 + 2 + 3" (left associativity via loop iteration)
-//       parseExpression(LOWEST):
-//         leftExp = 1
-//         iteration 1: peek=+, LOWEST < SUM → true
-//           infix(1) → parseInfixExpression calls parseExpression(SUM)
-//             leftExp = 2, peek=+, SUM < SUM → false → returns 2
-//           → returns InfixExpression(1 + 2)
-//           leftExp = (1 + 2)
-//         iteration 2: peek=+, LOWEST < SUM → true
-//           infix((1+2)) → parseInfixExpression calls parseExpression(SUM)
-//             leftExp = 3, peek=EOF → stops → returns 3
-//           → returns InfixExpression((1+2) + 3)
-//           leftExp = ((1+2) + 3)
-//         loop ends → returns ((1+2) + 3)
-//
-//     Example: "1 + 2 * 3" (higher precedence recurses deeper)
-//       parseExpression(LOWEST):
-//         leftExp = 1
-//         iteration 1: peek=+, LOWEST < SUM → true
-//           infix(1) → parseInfixExpression calls parseExpression(SUM)
-//             leftExp = 2, peek=*, SUM < PRODUCT → true
-//               infix(2) → parseInfixExpression calls parseExpression(PRODUCT)
-//                 leftExp = 3, peek=EOF → stops → returns 3
-//               → returns InfixExpression(2 * 3)
-//               leftExp = (2 * 3), loop ends → returns (2 * 3)
-//           → returns InfixExpression(1 + (2 * 3))
-//           leftExp = (1 + (2 * 3))
-//         loop ends → returns (1 + (2 * 3))
-//
-//     Example: "-1 + 2" (PREFIX precedence prevents stealing)
-//       parsePrefixExpression calls parseExpression(PREFIX):
-//         leftExp = 1, peek=+, PREFIX < SUM → false → returns 1 immediately
-//       So "-" grabs only 1, result is ((-1) + 2), not (-(1 + 2))
+    /**
+     * Parse an expression using Pratt parsing.
+     *
+     * **Step 1: parse the current token as a prefix**
+     *
+     * The current token starts the expression, so parse it with its prefix parser:
+     * - literal: `1`, `"hello"`, `true`
+     * - identifier: `x`
+     * - prefix operator: `-x`, `!x`
+     *
+     * A prefix operator recurses back into `parseExpression(...)` to parse its operand.
+     *
+     * **Step 2: grow the expression to the right**
+     *
+     * After building the initial `leftExp`, repeatedly look at the *next* token.
+     * If the next token is an infix operator with higher precedence, let it grab
+     * `leftExp` as its left child and continue building a bigger tree.
+     *
+     * **Mental model**
+     *
+     * `precedence` = "how tightly my caller is already holding onto me"
+     *
+     * - `LOWEST`  → almost anything to the right may extend me
+     * - `SUM`     → only tighter operators may extend me
+     * - `PREFIX`  → prefix operands stop before looser infix operators
+     * - `CALL`    → would bind even tighter once implemented
+     *
+     * **Core rule**
+     *
+     * - If `precedence >= peekPrecedence()`: STOP
+     *   - return `leftExp` to the caller
+     *   - the caller now owns this subtree
+     *
+     * - If `precedence < peekPrecedence()`: CONTINUE
+     *   - consume the infix operator
+     *   - let it attach to `leftExp`
+     *   - parse the right-hand side at that operator's precedence
+     *
+     * **Visual picture**
+     *
+     * `leftExp` starts small and grows:
+     *
+     * `1`
+     * `1 + 2`
+     * `(1 + 2) + 3`
+     *
+     * or, with tighter precedence:
+     *
+     * `1 + 2`
+     * `1 + (2 * 3)`
+     *
+     * ---
+     *
+     * **Example 1: `1 + 2 + 3`**
+     *
+     * Left associativity comes from the loop repeatedly folding the next `+`
+     * into the current `leftExp`.
+     *
+     * `parseExpression(LOWEST)`
+     * - `leftExp = 1`
+     * - peek = `+`, and `LOWEST < SUM` → continue
+     *   - parse infix `+` with left = `1`
+     *   - right side is parsed as `parseExpression(SUM)`
+     *   - that returns `2`
+     *   - new `leftExp = (1 + 2)`
+     * - peek = `+`, and `LOWEST < SUM` → continue
+     *   - parse infix `+` with left = `(1 + 2)`
+     *   - right side is parsed as `parseExpression(SUM)`
+     *   - that returns `3`
+     *   - new `leftExp = ((1 + 2) + 3)`
+     * - end → return `((1 + 2) + 3)`
+     *
+     * Tree shape:
+     *
+     * <pre>
+     *        +
+     *       / \
+     *      +   3
+     *     / \
+     *    1   2
+     * </pre>
+     *
+     * ---
+     *
+     * **Example 2: `1 + 2 * 3`**
+     *
+     * The `*` binds tighter than `+`, so it gets to form a deeper subtree first.
+     *
+     * `parseExpression(LOWEST)`
+     * - `leftExp = 1`
+     * - peek = `+`, and `LOWEST < SUM` → continue
+     *   - parse infix `+` with left = `1`
+     *   - right side is parsed as `parseExpression(SUM)`
+     *   - inside that call:
+     *     - `leftExp = 2`
+     *     - peek = `*`, and `SUM < PRODUCT` → continue
+     *     - parse infix `*` with left = `2`
+     *     - right side becomes `3`
+     *     - return `(2 * 3)`
+     *   - new `leftExp = (1 + (2 * 3))`
+     * - end → return `(1 + (2 * 3))`
+     *
+     * Tree shape:
+     *
+     * <pre>
+     *      +
+     *     / \
+     *    1   *
+     *       / \
+     *      2   3
+     * </pre>
+     *
+     * ---
+     *
+     * **Example 3: `-1 + 2`**
+     *
+     * `parsePrefixExpression(...)` parses its operand with `PREFIX` precedence.
+     * That prevents the looser `+` from being swallowed into the prefix operand.
+     *
+     * `parsePrefixExpression`
+     * - sees `-`
+     * - calls `parseExpression(PREFIX)`
+     * - that parses only `1`
+     * - peek = `+`, but `parseExpression(PREFIX)` stops here because `+`
+     *   is looser than the precedence used for parsing the prefix operand
+     * - result of prefix part = `(-1)`
+     *
+     * Then the outer expression continues and becomes:
+     *
+     * `((-1) + 2)`
+     *
+     * not:
+     *
+     * `(-(1 + 2))`
+     */
     fun parseExpression(precedence: Precedence): Expression? {
         val prefix = prefixParseFns[curToken.type]
         if (prefix == null) {
