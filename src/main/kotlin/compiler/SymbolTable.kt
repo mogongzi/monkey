@@ -3,6 +3,7 @@ package me.ryan.interpreter.compiler
 enum class SymbolScope {
     GLOBAL,
     LOCAL,
+    BUILTIN,
 }
 
 data class Symbol(val name: String, val scope: SymbolScope, val index: Int)
@@ -25,5 +26,11 @@ class SymbolTable(val outer: SymbolTable? = null) {
             return local
         }
         return outer?.resolve(name)
+    }
+
+    fun defineBuiltin(index: Int, name: String): Symbol {
+        val symbol = Symbol(name, SymbolScope.BUILTIN, index)
+        store[name] = symbol
+        return symbol
     }
 }

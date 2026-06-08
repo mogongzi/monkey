@@ -4,7 +4,7 @@ import me.ryan.interpreter.compiler.Symbol
 import me.ryan.interpreter.compiler.SymbolScope
 import me.ryan.interpreter.compiler.SymbolTable
 import org.junit.jupiter.api.Assertions.*
-import kotlin.test.Test
+import org.junit.jupiter.api.Test
 
 data class TestCase(val table: SymbolTable, val expectedSymbols: List<Symbol>)
 
@@ -114,6 +114,30 @@ class SymbolTableTest {
         for (test in tests) {
             for (sym in test.expectedSymbols) {
                 val result = test.table.resolve(sym.name)
+                assertNotNull(result, "name ${sym.name} not resolvable")
+                assertEquals(sym, result, "expected ${sym.name} to resolve to $sym, got=$result")
+            }
+        }
+    }
+
+    @Test
+    fun testDefineResolveBuiltins() {
+        val global = SymbolTable()
+        val firstLocal = SymbolTable(global)
+        val secondLocal = SymbolTable(firstLocal)
+
+        val expected = listOf(
+            Symbol("a", SymbolScope.BUILTIN, 0),
+            Symbol("c", SymbolScope.BUILTIN, 1),
+            Symbol("e", SymbolScope.BUILTIN, 2),
+            Symbol("f", SymbolScope.BUILTIN, 3),
+        )
+
+        expected.forEachIndexed { i, v -> global.defineBuiltin(i, v.name)  }
+
+        for (table in listOf(global, firstLocal, secondLocal)) {
+            for (sym in expected) {
+                val result = table.resolve(sym.name)
                 assertNotNull(result, "name ${sym.name} not resolvable")
                 assertEquals(sym, result, "expected ${sym.name} to resolve to $sym, got=$result")
             }

@@ -19,6 +19,15 @@ class CompilationScope(
     var previousInstruction: EmittedInstruction? = null
 )
 
+val builtins = listOf(
+    "len",
+    "puts",
+    "first",
+    "last",
+    "rest",
+    "push",
+)
+
 @OptIn(ExperimentalUnsignedTypes::class)
 class Compiler() {
     internal val scopes = arrayListOf(CompilationScope())
@@ -26,6 +35,12 @@ class Compiler() {
     internal var symbolTable = SymbolTable()
 
     private val constants: MutableList<MObject> = mutableListOf()
+
+    init {
+        builtins.forEachIndexed { index, name ->
+            symbolTable.defineBuiltin(index, name)
+        }
+    }
 
 
     fun compile(node: Node) {
@@ -180,10 +195,10 @@ class Compiler() {
             is Identifier -> {
                 val symbol = symbolTable.resolve(node.value)
                     ?: error("undefined variable ${node.value}")
-                if (symbol.scope == SymbolScope.GLOBAL) {
-                    emit(OpGetGlobal, symbol.index)
-                } else {
-                    emit(OpGetLocal, symbol.index)
+                when (symbol.scope) {
+                    SymbolScope.GLOBAL -> emit(OpGetGlobal, symbol.index)
+                    SymbolScope.LOCAL -> emit(OpGetLocal, symbol.index)
+                    SymbolScope.BUILTIN -> emit(OpGetBuiltin, symbol.index)
                 }
             }
         }

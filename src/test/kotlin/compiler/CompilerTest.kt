@@ -728,6 +728,49 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testBuiltins() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = """
+                    len([]);
+                    push([], 1);
+                """.trimIndent(),
+                expectedConstants = listOf(1),
+                expectedInstructions = listOf(
+                    make(OpGetBuiltin, 0),
+                    make(OpArray, 0),
+                    make(OpCall, 1),
+                    make(OpPop),
+                    make(OpGetBuiltin, 5),
+                    make(OpArray, 0),
+                    make(OpConstant, 0),
+                    make(OpCall, 2),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = "fn() { len([]) }",
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetBuiltin, 0),
+                            make(OpArray, 0),
+                            make(OpCall, 1),
+                            make(OpReturnValue),
+                        )
+                    )
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpPop),
+                )
+            ),
+        )
+
+        runCompilerTests(tests)
+    }
+
     private fun runCompilerTests(tests: List<CompilerTestCase>) {
         for (test in tests) {
             val program = parse(test.input)
