@@ -163,7 +163,68 @@ fun main() {
             }
             minusOne() + minusTwo();
         """.trimIndent(),
-        )
+        "src/test/fixtures/function_first_class_local.mkc" to """
+            let returnsOneReturner = fn() {
+                let returnsOne = fn() { 1; };
+                returnsOne;
+            };
+            returnsOneReturner()();
+        """.trimIndent(),
+        // function calls with arguments and bindings
+        "src/test/fixtures/function_arg_identity.mkc" to """
+            let identity = fn(a) { a; };
+            identity(4);
+        """.trimIndent(),
+                "src/test/fixtures/function_arg_sum.mkc" to """
+            let sum = fn(a, b) { a + b; };
+            sum(1, 2);
+        """.trimIndent(),
+        "src/test/fixtures/function_arg_sum_local.mkc" to """
+            let sum = fn(a, b) {
+                let c = a + b;
+                c;
+            };
+            sum(1, 2);
+        """.trimIndent(),
+                "src/test/fixtures/function_arg_sum_twice.mkc" to """
+            let sum = fn(a, b) {
+                let c = a + b;
+                c;
+            };
+            sum(1, 2) + sum(3, 4);
+        """.trimIndent(),
+                "src/test/fixtures/function_arg_outer.mkc" to """
+            let sum = fn(a, b) {
+                let c = a + b;
+                c;
+            };
+            let outer = fn() {
+                sum(1, 2) + sum(3, 4);
+            };
+            outer();
+        """.trimIndent(),
+        "src/test/fixtures/function_arg_globals.mkc" to """
+            let globalNum = 10;
+            let sum = fn(a, b) {
+                let c = a + b;
+                c + globalNum;
+            };
+            let outer = fn() {
+                sum(1, 2) + sum(3, 4) + globalNum;
+            };
+            outer() + globalNum;
+        """.trimIndent(),
+        // function calls with wrong number of arguments (runtime errors)
+        "src/test/fixtures/function_wrong_args_0_1.mkc" to """
+            fn() { 1; }(1);
+        """.trimIndent(),
+                "src/test/fixtures/function_wrong_args_1_0.mkc" to """
+            fn(a) { a; }();
+        """.trimIndent(),
+                "src/test/fixtures/function_wrong_args_2_1.mkc" to """
+            fn(a, b) { a + b; }(1);
+        """.trimIndent(),
+    )
 
     for ((path, source) in cases) {
         val program = parse(source)

@@ -643,7 +643,7 @@ class CompilerTest {
                 ),
                 expectedInstructions = listOf(
                     make(OpConstant, 1),
-                    make(OpCall),
+                    make(OpCall, 0),
                     make(OpPop),
                 )
             ),
@@ -665,10 +665,64 @@ class CompilerTest {
                     make(OpConstant, 1),
                     make(OpSetGlobal, 0),
                     make(OpGetGlobal, 0),
-                    make(OpCall),
+                    make(OpCall, 0),
                     make(OpPop),
                 )
-            )
+            ),
+            CompilerTestCase(
+                input = """
+                    let oneArg = fn(a) { a };
+                    oneArg(24);
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetLocal, 0),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    24,
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpConstant, 1),
+                    make(OpCall, 1),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = """
+                    let manyArg = fn(a, b, c) { a; b; c };
+                    manyArg(24, 25, 26);
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetLocal, 0),
+                            make(OpPop),
+                            make(OpGetLocal, 1),
+                            make(OpPop),
+                            make(OpGetLocal, 2),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    24,
+                    25,
+                    26,
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpConstant, 1),
+                    make(OpConstant, 2),
+                    make(OpConstant, 3),
+                    make(OpCall, 3),
+                    make(OpPop),
+                )
+            ),
         )
 
         runCompilerTests(tests)

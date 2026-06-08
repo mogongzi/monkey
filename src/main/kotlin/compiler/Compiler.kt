@@ -108,6 +108,10 @@ class Compiler() {
 
             is FunctionLiteral -> {
                 enterScope()
+                for (identifier in node.parameters) {
+                    symbolTable.define(identifier.value)
+                }
+
                 compile(node.body)
                 if (lastInstructionIs(OpPop)) {
                     replaceLastPopWithReturn()
@@ -117,7 +121,7 @@ class Compiler() {
                 }
                 val numLocals = symbolTable.numDefinitions
                 val instructions = leaveScope()
-                val compiledFn = MCompiledFunction(instructions, numLocals)
+                val compiledFn = MCompiledFunction(instructions, numLocals, node.parameters.size)
                 emit(OpConstant, addConstant(compiledFn))
             }
 
@@ -146,7 +150,10 @@ class Compiler() {
 
             is CallExpression -> {
                 compile(node.function)
-                emit(OpCall)
+                for (argument in node.arguments) {
+                    compile(argument)
+                }
+                emit(OpCall, node.arguments.size)
             }
 
             is BlockStatement -> {

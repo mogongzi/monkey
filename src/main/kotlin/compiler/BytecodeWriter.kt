@@ -39,6 +39,10 @@ object BytecodeWriter {
                         "numLocals does not fit in 2 bytes: ${obj.numLocals}"
                     }
                     dos.writeShort(obj.numLocals)
+                    require(obj.numParams in 0..0xFFFF) {
+                        "numParams does not fit in 2 bytes: ${obj.numParams}"
+                    }
+                    dos.writeShort(obj.numParams)
                     dos.write(bytes)
                 }
 

@@ -81,7 +81,7 @@ class MFunction(val parameters: List<Identifier>, val body: BlockStatement, val 
 
 // bytecode representation rather than AST for compiler/vm usage.
 @OptIn(ExperimentalUnsignedTypes::class)
-class MCompiledFunction(val instructions: Instructions, val numLocals: Int) : MObject {
+class MCompiledFunction(val instructions: Instructions, val numLocals: Int, val numParams: Int) : MObject {
     override fun inspect(): String = "CompiledFunction[${"0x%08x".format(System.identityHashCode(this))}]"
 }
 

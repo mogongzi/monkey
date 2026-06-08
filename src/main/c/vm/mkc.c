@@ -85,12 +85,18 @@ int mkc_read(FILE *f, ByteCode *out) {
         }
         uint32_t len = read_u32(len_bytes);  // length of MFunction
         // Read 2 bytes for num_locals
-        uint8_t num_locals_bytes[2];
-        if (read_exact(f, num_locals_bytes, 2) != 0) {
+        uint8_t u16_bytes[2];
+        if (read_exact(f, u16_bytes, 2) != 0) {
           fprintf(stderr, "mkc: truncated num_locals at index %u\n", i);
           goto fail;
         }
-        uint16_t num_locals = read_u16(num_locals_bytes);
+        uint16_t num_locals = read_u16(u16_bytes);
+        // Read 2 bytes for num_params
+        if (read_exact(f, u16_bytes, 2) != 0) {
+          fprintf(stderr, "mkc: truncated num_params at index %u\n", i);
+          goto fail;
+        }
+        uint16_t num_params = read_u16(u16_bytes);
 
         uint8_t *insn = len > 0 ? malloc(len) : NULL;
         if (len > 0 && !insn) {
@@ -114,6 +120,7 @@ int mkc_read(FILE *f, ByteCode *out) {
         fn->instructions = insn;
         fn->num_instructions = len;
         fn->num_locals = num_locals;
+        fn->num_params = num_params;
         out->constants[i].type = MCOMPILED_FUNCTION;
         out->constants[i].as.function = fn;
         break;

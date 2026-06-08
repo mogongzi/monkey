@@ -31,6 +31,7 @@ struct MCompiledFunction {
   const uint8_t *instructions;
   uint32_t num_instructions;
   uint16_t num_locals;
+  uint16_t num_params;
 };
 
 struct MObject {

@@ -424,7 +424,7 @@ static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
 
 VM_RESULT vm_run(VM *vm) {
   while (current_frame(vm)->ip < current_frame(vm)->fn->num_instructions) {
-    Frame *frame = current_frame(vm);
+    Frame *frame = current_frame(vm);  // refresh frame every iteration
     const uint8_t *instructions = frame->fn->instructions;
     uint8_t opcode = instructions[frame->ip];
     frame->ip++;
@@ -573,10 +573,13 @@ VM_RESULT vm_run(VM *vm) {
         break;
       }
       case OP_CALL: {
-        MObject callee = vm->stack[vm->sp - 1];
+        uint8_t num_args = read_u8(&instructions[frame->ip]);
+        frame->ip += 1;
+        MObject callee = vm->stack[vm->sp - 1 - num_args];
         if (callee.type != MCOMPILED_FUNCTION) return VM_ERR_NON_FUNCTION_CALL;
         MCompiledFunction *fn = callee.as.function;
-        uint32_t bp = vm->sp;
+        if (num_args != fn->num_params) return VM_ERR_WRONG_NUMBER_OF_ARGUMENTS;
+        uint32_t bp = vm->sp - num_args;
         push_frame(vm, (Frame){.fn = fn, .ip = 0, .bp = bp});
         vm->sp = bp + fn->num_locals;
         break;

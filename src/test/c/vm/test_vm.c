@@ -36,6 +36,11 @@ typedef struct {
   ExpectedObject expected;
 } VmTestCase;
 
+typedef struct {
+  const char *fixture_path;
+  VM_RESULT expected_err;
+} VmErrorTestCase;
+
 static ExpectedObject expected_integer(int64_t value) {
   return (ExpectedObject){.type = MINTEGER, .value.integer = value};
 }
@@ -143,6 +148,37 @@ static void test_expected_object(ExpectedObject expected,
   }
 }
 
+static const char *vm_err_name(VM_RESULT r) {
+  switch (r) {
+    case VM_OK:
+      return "VM_OK";
+    case VM_ERR_UNKNOWN_OPCODE:
+      return "VM_ERR_UNKNOW_OPCODE";
+    case VM_ERR_STACK_OVERFLOW:
+      return "VM_ERR_STACK_OVERFLOW";
+    case VM_ERR_STACK_UNDERFLOW:
+      return "VM_ERR_STACK_UNDERFLOW";
+    case VM_ERR_UNKNOWN_OPERATOR:
+      return "VM_ERR_UNKNOWN_OPERATOR";
+    case VM_ERR_UNSUPPORTED_TYPE_FOR_NEGATION:
+      return "VM_ERR_UNSUPPORTED_TYPE_FOR_NEGATION";
+    case VM_ERR_OUT_OF_MEMORY:
+      return "VM_ERR_OUT_OF_MEMORY";
+    case VM_ERR_INVALID_HASH_KEY:
+      return "VM_ERR_INVALID_HASH_KEY";
+    case VM_ERR_NON_FUNCTION_CALL:
+      return "VM_ERR_NON_FUNCTION_CALL";
+    case VM_ERR_DIVISION_BY_ZERO:
+      return "VM_ERR_DIVISION_BY_ZERO";
+    case VM_ERR_UNSUPPORTED_TYPE_FOR_COMPARISION:
+      return "VM_ERR_UNSUPPORTED_TYPE_FOR_COMPARISION";
+    case VM_ERR_INTEGER_OVERFLOW:
+      return "VM_ERR_INTEGER_OVERFLOW";
+    default:
+      return "VM_ERR_???";
+  }
+}
+
 static void run_vm_tests(VmTestCase *tests, int count) {
   for (int i = 0; i < count; i++) {
     FILE *f = fopen(tests[i].fixture_path, "rb");
@@ -153,8 +189,38 @@ static void run_vm_tests(VmTestCase *tests, int count) {
     fclose(f);
     VM *vm = vm_init(&bc);
     assert(vm != NULL && "vm_init failed");
-    assert(vm_run(vm) == VM_OK && "vm_run failed");
+    VM_RESULT r = vm_run(vm);
+    if (r != VM_OK) {
+      fprintf(stderr, "FAIL %s: vm_run -> %s (%d)\n", tests[i].fixture_path,
+              vm_err_name(r), r);
+    }
+    assert(r == VM_OK);
     test_expected_object(tests[i].expected, vm_last_popped_stack_elem(vm));
+    vm_free(vm);
+    free_bytecode(&bc);
+    printf("  PASS  %s\n", tests[i].fixture_path);
+  }
+}
+
+static void run_vm_error_tests(VmErrorTestCase *tests, int count) {
+  for (int i = 0; i < count; i++) {
+    FILE *f = fopen(tests[i].fixture_path, "rb");
+    assert(f != NULL);
+
+    ByteCode bc;
+    assert(mkc_read(f, &bc) == 0);  // must still compile cleanly
+    fclose(f);
+
+    VM *vm = vm_init(&bc);
+    assert(vm != NULL && "vm_init failed");
+
+    VM_RESULT r = vm_run(vm);
+    if (r != tests[i].expected_err) {
+      fprintf(stderr, "FAIL %s: vm_run -> %s, want %s\n", tests[i].fixture_path,
+              vm_err_name(r), vm_err_name(tests[i].expected_err));
+    }
+    assert(r == tests[i].expected_err);
+
     vm_free(vm);
     free_bytecode(&bc);
     printf("  PASS  %s\n", tests[i].fixture_path);
@@ -324,9 +390,36 @@ static void test_calling_functions_with_bindings(void) {
        expected_integer(10)},
       {"src/test/fixtures/function_same_local_name.mkc", expected_integer(150)},
       {"src/test/fixtures/function_global_and_local.mkc", expected_integer(97)},
+      {"src/test/fixtures/function_first_class_local.mkc", expected_integer(1)},
   };
 
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+static void test_calling_functions_with_arguments_and_bindings(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/function_arg_identity.mkc", expected_integer(4)},
+      {"src/test/fixtures/function_arg_sum.mkc", expected_integer(3)},
+      {"src/test/fixtures/function_arg_sum_local.mkc", expected_integer(3)},
+      {"src/test/fixtures/function_arg_sum_twice.mkc", expected_integer(10)},
+      {"src/test/fixtures/function_arg_outer.mkc", expected_integer(10)},
+      {"src/test/fixtures/function_arg_globals.mkc", expected_integer(50)},
+  };
+
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
+static void test_calling_functions_with_wrong_arguments(void) {
+  VmErrorTestCase tests[] = {
+      {"src/test/fixtures/function_wrong_args_0_1.mkc",
+       VM_ERR_WRONG_NUMBER_OF_ARGUMENTS},  // fn(){1}(1);
+      {"src/test/fixtures/function_wrong_args_1_0.mkc",
+       VM_ERR_WRONG_NUMBER_OF_ARGUMENTS},  // fn(a){a}();
+      {"src/test/fixtures/function_wrong_args_2_1.mkc",
+       VM_ERR_WRONG_NUMBER_OF_ARGUMENTS},  // fn(a,b){a+b}(1);
+  };
+
+  run_vm_error_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
 static void test_stack_underflow(void) {
@@ -359,5 +452,7 @@ int main(void) {
   test_index_expressions();
   test_calling_functions_without_arguments();
   test_calling_functions_with_bindings();
+  test_calling_functions_with_arguments_and_bindings();
+  test_calling_functions_with_wrong_arguments();
   return 0;
 }

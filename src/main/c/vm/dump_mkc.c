@@ -149,7 +149,7 @@ static void dump_instructions(const uint8_t *instructions,
         break;
       case OP_CALL:
         printf("%s%04u OpCall\n", indent, ip);
-        ip += 1;
+        ip += 2;
         break;
       case OP_RETURN_VALUE:
         printf("%s%04u OpReturnValue\n", indent, ip);

@@ -57,7 +57,7 @@ val definitions = mapOf(
     OpArray to Definition("OpArray", listOf(2)),
     OpHash to Definition("OpHash", listOf(2)),
     OpIndex to Definition("OpIndex", emptyList()),
-    OpCall to Definition("OpCall", emptyList()),
+    OpCall to Definition("OpCall", listOf(1)),
     OpReturnValue to Definition("OpReturnValue", emptyList()),
     OpReturn to Definition("OpReturn", emptyList()),
     OpGetLocal to Definition("OpGetLocal", listOf(1)),
