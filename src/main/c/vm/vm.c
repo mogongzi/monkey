@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "builtins.h"
 #include "bytecode.h"
 #include "bytes.h"
 #include "frame.h"
@@ -572,16 +573,49 @@ VM_RESULT vm_run(VM *vm) {
         if (r != VM_OK) return r;
         break;
       }
+      case OP_GET_BUILTIN: {
+        uint8_t idx = read_u8(&instructions[frame->ip]);
+        frame->ip += 1;
+        MObject obj = {.type = MBUILTIN, .as.builtin = builtin_fns[idx]};
+        VM_RESULT r = vm_push(vm, obj);
+        if (r != VM_OK) return r;
+        break;
+      }
       case OP_CALL: {
         uint8_t num_args = read_u8(&instructions[frame->ip]);
         frame->ip += 1;
         MObject callee = vm->stack[vm->sp - 1 - num_args];
-        if (callee.type != MCOMPILED_FUNCTION) return VM_ERR_NON_FUNCTION_CALL;
-        MCompiledFunction *fn = callee.as.function;
-        if (num_args != fn->num_params) return VM_ERR_WRONG_NUMBER_OF_ARGUMENTS;
-        uint32_t bp = vm->sp - num_args;
-        push_frame(vm, (Frame){.fn = fn, .ip = 0, .bp = bp});
-        vm->sp = bp + fn->num_locals;
+        if (callee.type == MCOMPILED_FUNCTION) {
+          MCompiledFunction *fn = callee.as.function;
+          if (num_args != fn->num_params)
+            return VM_ERR_WRONG_NUMBER_OF_ARGUMENTS;
+          uint32_t bp = vm->sp - num_args;
+          push_frame(vm, (Frame){.fn = fn, .ip = 0, .bp = bp});
+          vm->sp = bp + fn->num_locals;
+        } else if (callee.type == MBUILTIN) {
+          // args sit on the stack: stack[sp - num_args] .. stack[sp - 1]
+          MObject *args = &vm->stack[vm->sp - num_args];
+          MObject result = callee.as.builtin(args, num_args);
+          // Track any heap allocations the builtin made
+          if (result.type == MARRAY) {
+            if (vm_track_allocated_array(vm, result.as.array) != 0) {
+              free(result.as.array->elements);
+              free(result.as.array);
+              return VM_ERR_OUT_OF_MEMORY;
+            }
+          } else if (result.type == MSTRING) {
+            if (vm_track_allocated_string(vm, result.as.string) != 0) {
+              free(result.as.string);
+              return VM_ERR_OUT_OF_MEMORY;
+            }
+          }
+          // pop callee + args, push result
+          vm->sp = vm->sp - 1 - num_args;
+          VM_RESULT r = vm_push(vm, result);
+          if (r != VM_OK) return r;
+        } else {
+          return VM_ERR_NON_FUNCTION_CALL;
+        }
         break;
       }
       case OP_RETURN_VALUE: {

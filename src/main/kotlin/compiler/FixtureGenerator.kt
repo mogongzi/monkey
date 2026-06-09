@@ -224,6 +224,25 @@ fun main() {
                 "src/test/fixtures/function_wrong_args_2_1.mkc" to """
             fn(a, b) { a + b; }(1);
         """.trimIndent(),
+        // builtin functions
+        "src/test/fixtures/builtin_len_empty_string.mkc" to "len(\"\")",
+        "src/test/fixtures/builtin_len_four.mkc" to "len(\"four\")",
+        "src/test/fixtures/builtin_len_hello_world.mkc" to "len(\"hello world\")",
+        "src/test/fixtures/builtin_len_int.mkc" to "len(1)",
+        "src/test/fixtures/builtin_len_two_args.mkc" to "len(\"one\", \"two\")",
+        "src/test/fixtures/builtin_len_array.mkc" to "len([1, 2, 3])",
+        "src/test/fixtures/builtin_len_empty_array.mkc" to "len([])",
+        "src/test/fixtures/builtin_puts.mkc" to "puts(\"hello\", \"world!\")",
+        "src/test/fixtures/builtin_first_array.mkc" to "first([1, 2, 3])",
+        "src/test/fixtures/builtin_first_empty.mkc" to "first([])",
+        "src/test/fixtures/builtin_first_int.mkc" to "first(1)",
+        "src/test/fixtures/builtin_last_array.mkc" to "last([1, 2, 3])",
+        "src/test/fixtures/builtin_last_empty.mkc" to "last([])",
+        "src/test/fixtures/builtin_last_int.mkc" to "last(1)",
+        "src/test/fixtures/builtin_rest_array.mkc" to "rest([1, 2, 3])",
+        "src/test/fixtures/builtin_rest_empty.mkc" to "rest([])",
+        "src/test/fixtures/builtin_push_empty.mkc" to "push([], 1)",
+        "src/test/fixtures/builtin_push_int.mkc" to "push(1, 1)",
     )
 
     for ((path, source) in cases) {

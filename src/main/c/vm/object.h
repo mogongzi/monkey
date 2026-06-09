@@ -11,6 +11,7 @@ typedef struct MObject MObject;
 typedef struct MArray MArray;
 typedef struct MHash MHash; /* full layout lives in hash_table.h */
 typedef struct MCompiledFunction MCompiledFunction;
+typedef MObject (*BuiltinFn)(MObject *params, size_t num_params);
 
 typedef enum {
   MINTEGER,
@@ -20,6 +21,8 @@ typedef enum {
   MARRAY,
   MHASH,
   MCOMPILED_FUNCTION,
+  MBUILTIN,
+  MERROR,
 } MObjectType;
 
 struct MArray {
@@ -43,6 +46,8 @@ struct MObject {
     MArray *array;
     MHash *hash;
     MCompiledFunction *function;
+    BuiltinFn builtin;
+    char *error;
   } as;
 };
 

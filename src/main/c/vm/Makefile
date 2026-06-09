@@ -5,7 +5,7 @@ BUILD_DIR = ../../../../build
 
 # Source groupings — every target needs the loader; only the VM needs the runtime.
 LOADER_SRCS  = mkc.c bytecode.c object.c bytes.c
-RUNTIME_SRCS = vm.c hash_table.c frame.c
+RUNTIME_SRCS = vm.c hash_table.c frame.c builtins.c
 
 all: test_mkc test_vm dump_mkc
 

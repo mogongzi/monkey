@@ -29,5 +29,6 @@
 #define OP_RETURN 0x17
 #define OP_GET_LOCAL 0x18
 #define OP_SET_LOCAL 0x19
+#define OP_GET_BUILTIN 0x1A
 
 #endif

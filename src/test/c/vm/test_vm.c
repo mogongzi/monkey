@@ -69,6 +69,10 @@ static ExpectedObject expected_hash(const ExpectedHashPair *pairs, size_t len) {
   };
 }
 
+static ExpectedObject expected_error(const char *message) {
+  return (ExpectedObject){.type = MERROR, .value.string = message};
+}
+
 static void test_integer_object(const MObject *obj, int64_t expected) {
   assert(obj != NULL && "expected integer object, got NULL");
   assert(obj->type == MINTEGER && "object is not an Integer");
@@ -120,6 +124,12 @@ static void test_hash_object(const MObject *obj,
   }
 }
 
+static void test_error_object(const MObject *obj, const char *expected) {
+  assert(obj != NULL && "expected error object, got NULL");
+  assert(obj->type == MERROR && "object is not an Error");
+  assert(strcmp(obj->as.error, expected) == 0 && "error message mismatch");
+}
+
 static void test_expected_object(ExpectedObject expected,
                                  const MObject *actual) {
   switch (expected.type) {
@@ -142,6 +152,9 @@ static void test_expected_object(ExpectedObject expected,
     case MHASH:
       test_hash_object(actual, expected.value.hash.pairs,
                        expected.value.hash.len);
+      break;
+    case MERROR:
+      test_error_object(actual, expected.value.string);
       break;
     default:
       assert(false && "unhandled expected object type");
@@ -422,6 +435,37 @@ static void test_calling_functions_with_wrong_arguments(void) {
   run_vm_error_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_builtin_functions(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/builtin_len_empty_string.mkc", expected_integer(0)},
+      {"src/test/fixtures/builtin_len_four.mkc", expected_integer(4)},
+      {"src/test/fixtures/builtin_len_hello_world.mkc", expected_integer(11)},
+      {"src/test/fixtures/builtin_len_int.mkc",
+       expected_error("argument to `len` not supported")},
+      {"src/test/fixtures/builtin_len_two_args.mkc",
+       expected_error("wrong number of arguments. want=1")},
+      {"src/test/fixtures/builtin_len_array.mkc", expected_integer(3)},
+      {"src/test/fixtures/builtin_len_empty_array.mkc", expected_integer(0)},
+      {"src/test/fixtures/builtin_puts.mkc", expected_null()},
+      {"src/test/fixtures/builtin_first_array.mkc", expected_integer(1)},
+      {"src/test/fixtures/builtin_first_empty.mkc", expected_null()},
+      {"src/test/fixtures/builtin_first_int.mkc",
+       expected_error("argument to `first` must be MARRAY")},
+      {"src/test/fixtures/builtin_last_array.mkc", expected_integer(3)},
+      {"src/test/fixtures/builtin_last_empty.mkc", expected_null()},
+      {"src/test/fixtures/builtin_last_int.mkc",
+       expected_error("argument to `last` must be MARRAY")},
+      {"src/test/fixtures/builtin_rest_array.mkc",
+       expected_array((int64_t[]){2, 3}, 2)},
+      {"src/test/fixtures/builtin_rest_empty.mkc", expected_null()},
+      {"src/test/fixtures/builtin_push_empty.mkc",
+       expected_array((int64_t[]){1}, 1)},
+      {"src/test/fixtures/builtin_push_int.mkc",
+       expected_error("argument to `push` must be MARRAY")},
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 static void test_stack_underflow(void) {
   uint8_t instructions[] = {
       OP_POP,
@@ -454,5 +498,6 @@ int main(void) {
   test_calling_functions_with_bindings();
   test_calling_functions_with_arguments_and_bindings();
   test_calling_functions_with_wrong_arguments();
+  test_builtin_functions();
   return 0;
 }
