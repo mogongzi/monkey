@@ -30,18 +30,7 @@ VM *vm_init(const ByteCode *bc) {
     vm->constants = bc->constants;
   }
 
-  vm->allocated_strings = NULL;
-  vm->allocated_string_count = 0;
-  vm->allocated_string_capacity = 0;
-
-  vm->allocated_arrays = NULL;
-  vm->allocated_array_count = 0;
-  vm->allocated_array_capacity = 0;
-
-  vm->allocated_hashes = NULL;
-  vm->allocated_hash_count = 0;
-  vm->allocated_hash_capacity = 0;
-
+  vm->arena = arena_new(4096);  // 4KB initial block
   return vm;
 }
 
@@ -60,82 +49,9 @@ static void push_frame(VM *vm, Frame frame) {
 
 static Frame *pop_frame(VM *vm) { return &vm->frames[--vm->frames_index]; }
 
-static int vm_track_allocated_string(VM *vm, char *value) {
-  if (vm->allocated_string_count == vm->allocated_string_capacity) {
-    size_t new_capacity = vm->allocated_string_capacity == 0
-                              ? 16
-                              : vm->allocated_string_capacity * 2;
-    char **new_allocated_strings =
-        realloc(vm->allocated_strings, sizeof(char *) * new_capacity);
-    if (!new_allocated_strings) {
-      return -1;
-    }
-
-    vm->allocated_strings = new_allocated_strings;
-    vm->allocated_string_capacity = new_capacity;
-  }
-
-  vm->allocated_strings[vm->allocated_string_count] = value;
-  vm->allocated_string_count++;
-  return 0;
-}
-
-static int vm_track_allocated_array(VM *vm, MArray *array) {
-  if (vm->allocated_array_count == vm->allocated_array_capacity) {
-    size_t new_capacity = vm->allocated_array_capacity == 0
-                              ? 16
-                              : vm->allocated_array_capacity * 2;
-    MArray **new_allocated_arrays =
-        realloc(vm->allocated_arrays, sizeof(MArray *) * new_capacity);
-    if (!new_allocated_arrays) {
-      return -1;
-    }
-
-    vm->allocated_arrays = new_allocated_arrays;
-    vm->allocated_array_capacity = new_capacity;
-  }
-
-  vm->allocated_arrays[vm->allocated_array_count] = array;
-  vm->allocated_array_count++;
-  return 0;
-}
-
-static int vm_track_allocated_hash(VM *vm, MHash *hash) {
-  if (vm->allocated_hash_count == vm->allocated_hash_capacity) {
-    size_t new_capacity =
-        vm->allocated_hash_capacity == 0 ? 16 : vm->allocated_hash_capacity * 2;
-    MHash **new_allocated_hashs =
-        realloc(vm->allocated_hashes, sizeof(MHash *) * new_capacity);
-    if (!new_allocated_hashs) {
-      return -1;
-    }
-
-    vm->allocated_hashes = new_allocated_hashs;
-    vm->allocated_hash_capacity = new_capacity;
-  }
-
-  vm->allocated_hashes[vm->allocated_hash_count] = hash;
-  vm->allocated_hash_count++;
-  return 0;
-}
-
 void vm_free(VM *vm) {
   if (!vm) return;
-  for (size_t i = 0; i < vm->allocated_string_count; i++) {
-    free(vm->allocated_strings[i]);
-  }
-  free(vm->allocated_strings);
-
-  for (size_t i = 0; i < vm->allocated_array_count; i++) {
-    free(vm->allocated_arrays[i]->elements);  // the MObject[] buffer
-    free(vm->allocated_arrays[i]);            // the MArray struct itself
-  }
-  free(vm->allocated_arrays);
-
-  for (size_t i = 0; i < vm->allocated_hash_count; i++) {
-    free_hash(vm->allocated_hashes[i]);
-  }
-  free(vm->allocated_hashes);
+  arena_free_all(&vm->arena);
   free(vm);
 }
 
@@ -208,20 +124,12 @@ static VM_RESULT vm_exec_string_concat(VM *vm, MObject left, MObject right) {
   size_t right_len = strlen(right.as.string);
   size_t result_len = left_len + right_len;
 
-  char *result = malloc(result_len + 1);
-  if (!result) {
-    return VM_ERR_OUT_OF_MEMORY;
-  }
+  char *result = arena_alloc(&vm->arena, result_len + 1);
+  if (!result) return VM_ERR_OUT_OF_MEMORY;
 
   memcpy(result, left.as.string, left_len);
   memcpy(result + left_len, right.as.string, right_len);
   result[result_len] = '\0';
-
-  if (vm_track_allocated_string(vm, result) != 0) {
-    free(result);
-    return VM_ERR_OUT_OF_MEMORY;
-  }
-
   return vm_push(vm, (MObject){.type = MSTRING, .as.string = result});
 }
 
@@ -378,17 +286,12 @@ static VM_RESULT vm_exec_index_expression(VM *vm) {
 static VM_RESULT build_array(VM *vm, uint32_t start, uint32_t end,
                              MObject *out) {
   size_t len = end - start;
-  MArray *arr = malloc(sizeof(MArray));
-  if (!arr) {
-    fprintf(stderr, "out of memory(MArray)\n");
-    return VM_ERR_OUT_OF_MEMORY;
-  }
-  arr->elements = len > 0 ? malloc(sizeof(MObject) * len) : NULL;
-  if (len > 0 && !arr->elements) {
-    fprintf(stderr, "out of memory(MArray - elements)\n");
-    free(arr);
-    return VM_ERR_OUT_OF_MEMORY;
-  }
+  MArray *arr = arena_alloc(&vm->arena, sizeof(MArray));
+  if (!arr) return VM_ERR_OUT_OF_MEMORY;
+  arr->elements =
+      len > 0 ? arena_alloc(&vm->arena, sizeof(MObject) * len) : NULL;
+  if (len > 0 && !arr->elements) return VM_ERR_OUT_OF_MEMORY;
+
   arr->len = len;
   for (size_t i = 0; i < len; i++) {
     arr->elements[i] = vm->stack[start + i];
@@ -399,14 +302,13 @@ static VM_RESULT build_array(VM *vm, uint32_t start, uint32_t end,
 
 static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
                             MObject *out) {
-  MHash *hash = new_hash(0);
+  MHash *hash = new_hash(0, &vm->arena);
   if (!hash) return VM_ERR_OUT_OF_MEMORY;
   for (size_t i = start; i < end; i += 2) {
     MObject key = vm->stack[i];
     MObject value = vm->stack[i + 1];
     HashKey hash_key;
     if (!hashkey_from_mobject(&key, &hash_key)) {
-      free_hash(hash);
       return VM_ERR_INVALID_HASH_KEY;
     }
 
@@ -414,8 +316,7 @@ static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
     pair.original_key = key;
     pair.value = value;
 
-    if (!hash_set(hash, hash_key, pair)) {
-      free_hash(hash);
+    if (!hash_set(hash, hash_key, pair, &vm->arena)) {
       return VM_ERR_OUT_OF_MEMORY;
     };
   }
@@ -545,11 +446,6 @@ VM_RESULT vm_run(VM *vm) {
         if (r != VM_OK) return r;
         vm->sp = vm->sp - num_elements;
         r = vm_push(vm, obj);
-        if (vm_track_allocated_array(vm, obj.as.array) != 0) {
-          free(obj.as.array->elements);  // don't forget this one
-          free(obj.as.array);
-          return VM_ERR_OUT_OF_MEMORY;
-        }
         if (r != VM_OK) return r;
         break;
       }
@@ -561,10 +457,6 @@ VM_RESULT vm_run(VM *vm) {
         if (r != VM_OK) return r;
         vm->sp = vm->sp - num_hashes;
         r = vm_push(vm, obj);
-        if (vm_track_allocated_hash(vm, obj.as.hash) != 0) {
-          free_hash(obj.as.hash);
-          return VM_ERR_OUT_OF_MEMORY;
-        }
         if (r != VM_OK) return r;
         break;
       }
@@ -595,20 +487,7 @@ VM_RESULT vm_run(VM *vm) {
         } else if (callee.type == MBUILTIN) {
           // args sit on the stack: stack[sp - num_args] .. stack[sp - 1]
           MObject *args = &vm->stack[vm->sp - num_args];
-          MObject result = callee.as.builtin(args, num_args);
-          // Track any heap allocations the builtin made
-          if (result.type == MARRAY) {
-            if (vm_track_allocated_array(vm, result.as.array) != 0) {
-              free(result.as.array->elements);
-              free(result.as.array);
-              return VM_ERR_OUT_OF_MEMORY;
-            }
-          } else if (result.type == MSTRING) {
-            if (vm_track_allocated_string(vm, result.as.string) != 0) {
-              free(result.as.string);
-              return VM_ERR_OUT_OF_MEMORY;
-            }
-          }
+          MObject result = callee.as.builtin(args, num_args, &vm->arena);
           // pop callee + args, push result
           vm->sp = vm->sp - 1 - num_args;
           VM_RESULT r = vm_push(vm, result);

@@ -462,6 +462,20 @@ static void test_builtin_functions(void) {
        expected_array((int64_t[]){1}, 1)},
       {"src/test/fixtures/builtin_push_int.mkc",
        expected_error("argument to `push` must be MARRAY")},
+      // double-free regression: first/last return already-tracked objects
+      {"src/test/fixtures/builtin_first_string_in_array.mkc",
+       expected_string("hello")},
+      {"src/test/fixtures/builtin_last_string_in_array.mkc",
+       expected_string("hello")},
+      {"src/test/fixtures/builtin_first_nested_array.mkc",
+       expected_array((int64_t[]){1}, 1)},
+      {"src/test/fixtures/builtin_last_nested_array.mkc",
+       expected_array((int64_t[]){1}, 1)},
+      {"src/test/fixtures/builtin_first_concat_in_array.mkc",
+       expected_string("ab")},
+      // malloc(0) regression: rest of single-element array
+      {"src/test/fixtures/builtin_rest_single.mkc",
+       expected_array((int64_t[]){}, 0)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }

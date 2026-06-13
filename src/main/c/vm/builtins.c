@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static MObject builtin_len(MObject *args, size_t num_args) {
+static MObject builtin_len(MObject *args, size_t num_args, Arena *arena) {
+  (void)arena;  // unused
   if (num_args != 1) {
     return (MObject){.type = MERROR,
                      .as.error = "wrong number of arguments. want=1"};
@@ -20,7 +21,8 @@ static MObject builtin_len(MObject *args, size_t num_args) {
                    .as.error = "argument to `len` not supported"};
 }
 
-static MObject builtin_first(MObject *args, size_t num_args) {
+static MObject builtin_first(MObject *args, size_t num_args, Arena *arena) {
+  (void)arena;  // unused
   if (num_args != 1) {
     return (MObject){.type = MERROR,
                      .as.error = "wrong number of arguments. want=1"};
@@ -36,7 +38,8 @@ static MObject builtin_first(MObject *args, size_t num_args) {
   return arr->elements[0];
 }
 
-static MObject builtin_last(MObject *args, size_t num_args) {
+static MObject builtin_last(MObject *args, size_t num_args, Arena *arena) {
+  (void)arena;  // unused
   if (num_args != 1) {
     return (MObject){.type = MERROR,
                      .as.error = "wrong number of arguments. want=1"};
@@ -52,7 +55,8 @@ static MObject builtin_last(MObject *args, size_t num_args) {
   return arr->elements[arr->len - 1];
 }
 
-static MObject builtin_puts(MObject *args, size_t num_args) {
+static MObject builtin_puts(MObject *args, size_t num_args, Arena *arena) {
+  (void)arena;  // unused
   for (size_t i = 0; i < num_args; i++) {
     switch (args[i].type) {
       case MINTEGER:
@@ -75,7 +79,7 @@ static MObject builtin_puts(MObject *args, size_t num_args) {
   return (MObject){.type = MNULL};
 }
 
-static MObject builtin_rest(MObject *args, size_t num_args) {
+static MObject builtin_rest(MObject *args, size_t num_args, Arena *arena) {
   if (num_args != 1) {
     return (MObject){.type = MERROR,
                      .as.error = "wrong number of arguments. want=1"};
@@ -85,18 +89,26 @@ static MObject builtin_rest(MObject *args, size_t num_args) {
                      .as.error = "argument to `rest` must be MARRAY"};
   }
   MArray *arr = args[0].as.array;
+  if (!arr) {
+    fprintf(stderr, "out of memory(MArray)\n");
+    abort();
+  }
   if (arr->len == 0) {
     return (MObject){.type = MNULL};
   }
   size_t new_len = arr->len - 1;
-  MObject *new_elems = malloc(new_len * sizeof(MObject));
-  memcpy(new_elems, &arr->elements[1], new_len * sizeof(MObject));
-  MArray *new_arr = malloc(sizeof(MArray));
+  MObject *new_elems = arena_alloc(arena, new_len * sizeof(MObject));
+  if (new_len > 0 && !new_elems)
+    return (MObject){.type = MERROR, .as.error = "out of memory"};
+  if (new_len > 0)
+    memcpy(new_elems, &arr->elements[1], new_len * sizeof(MObject));
+  MArray *new_arr = arena_alloc(arena, sizeof(MArray));
+  if (!new_elems) return (MObject){.type = MERROR, .as.error = "out of memory"};
   *new_arr = (MArray){.elements = new_elems, .len = new_len};
   return (MObject){.type = MARRAY, .as.array = new_arr};
 }
 
-static MObject builtin_push(MObject *args, size_t num_args) {
+static MObject builtin_push(MObject *args, size_t num_args, Arena *arena) {
   if (num_args != 2) {
     return (MObject){.type = MERROR,
                      .as.error = "wrong number of arguments. want=2"};
@@ -107,10 +119,12 @@ static MObject builtin_push(MObject *args, size_t num_args) {
   }
   MArray *arr = args[0].as.array;
   size_t new_len = arr->len + 1;
-  MObject *new_elems = malloc(new_len * sizeof(MObject));
+  MObject *new_elems = arena_alloc(arena, new_len * sizeof(MObject));
+  if (!new_elems) return (MObject){.type = MERROR, .as.error = "out of memory"};
   memcpy(new_elems, arr->elements, arr->len * sizeof(MObject));
   new_elems[arr->len] = args[1];
-  MArray *new_arr = malloc(sizeof(MArray));
+  MArray *new_arr = arena_alloc(arena, sizeof(MArray));
+  if (!new_arr) return (MObject){.type = MERROR, .as.error = "out of memory"};
   *new_arr = (MArray){.elements = new_elems, .len = new_len};
   return (MObject){.type = MARRAY, .as.array = new_arr};
 }
@@ -119,4 +133,3 @@ BuiltinFn builtin_fns[] = {
     builtin_len,  builtin_puts, builtin_first,
     builtin_last, builtin_rest, builtin_push,
 };
-#define NUM_BUILTINS (sizeof(builtin_fns) / sizeof(builtin_fns[0]))

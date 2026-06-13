@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "arena.h"
 #include "bytecode.h"
 #include "frame.h"
 #include "object.h"
@@ -24,17 +25,7 @@ typedef struct {
   Frame frames[MAX_FRAME_SIZE];
   uint32_t frames_index;
 
-  char **allocated_strings;
-  size_t allocated_string_count;
-  size_t allocated_string_capacity;
-
-  MArray **allocated_arrays;
-  size_t allocated_array_count;
-  size_t allocated_array_capacity;
-
-  MHash **allocated_hashes;
-  size_t allocated_hash_count;
-  size_t allocated_hash_capacity;
+  Arena arena;
 } VM;
 
 typedef enum {

@@ -243,6 +243,13 @@ fun main() {
         "src/test/fixtures/builtin_rest_empty.mkc" to "rest([])",
         "src/test/fixtures/builtin_push_empty.mkc" to "push([], 1)",
         "src/test/fixtures/builtin_push_int.mkc" to "push(1, 1)",
+        // builtin functions (cover double free issues)
+        "src/test/fixtures/builtin_first_string_in_array.mkc" to """first(["hello"])""",
+        "src/test/fixtures/builtin_last_string_in_array.mkc" to """last(["hello"])""",
+        "src/test/fixtures/builtin_first_nested_array.mkc" to "first([[1]])",
+        "src/test/fixtures/builtin_last_nested_array.mkc" to "last([[1]])",
+        "src/test/fixtures/builtin_first_concat_in_array.mkc" to """first(["a" + "b"])""",
+        "src/test/fixtures/builtin_rest_single.mkc" to "rest([42])",
     )
 
     for ((path, source) in cases) {

@@ -1,6 +1,7 @@
 #ifndef HASH_TABLE_H
 #define HASH_TABLE_H
 
+#include "arena.h"
 #include "object.h"
 
 #define INITIAL_BUCKET_COUNT 16
@@ -32,9 +33,8 @@ struct MHash {
   size_t count;
 };
 
-MHash *new_hash(int capacity);
-void free_hash(MHash *table);
-bool hash_set(MHash *table, HashKey key, HashPair pair);
+MHash *new_hash(int capacity, Arena *arena);
+bool hash_set(MHash *table, HashKey key, HashPair pair, Arena *arena);
 bool hash_get(MHash *table, HashKey key, HashPair *out_pair);
 bool hashkey_equal(HashKey first, HashKey second);
 bool hashkey_from_mobject(const MObject *obj, HashKey *out);

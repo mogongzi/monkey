@@ -41,14 +41,15 @@ static uint64_t compute_hash(HashKey key) {
   return hash;
 }
 
-static bool resize(MHash *table) {
+static bool resize(MHash *table, Arena *arena) {
   // 1. create a new array of buckets which size is twice of the current one.
   size_t new_capacity = table->capacity * 2;
-  HashEntry **new_bucket = calloc(new_capacity, sizeof(HashEntry *));
+  HashEntry **new_bucket = arena_alloc(arena, sizeof(HashEntry *));
   if (!new_bucket) {
     fprintf(stderr, "out of memory (Hash)\n");
     return false;
   }
+  memset(new_bucket, 0, new_capacity * sizeof(HashEntry *));
 
   // 2. iterate over the old array and recalculate the hash key and insert it
   // into new one.
@@ -65,8 +66,7 @@ static bool resize(MHash *table) {
     }
   }
 
-  // 3. free old bucket. change the pointer to the new one.
-  free(table->buckets);
+  // 3. change the pointer to the new one.
   table->buckets = new_bucket;
   table->capacity = new_capacity;
   return true;
@@ -104,47 +104,30 @@ bool hashkey_from_mobject(const MObject *obj, HashKey *out) {
   }
 }
 
-MHash *new_hash(int capacity) {
+MHash *new_hash(int capacity, Arena *arena) {
   if (capacity == 0) {
     capacity = INITIAL_BUCKET_COUNT;
   }
-  MHash *table = malloc(sizeof(MHash));
+  MHash *table = arena_alloc(arena, sizeof(MHash));
   if (!table) {
     fprintf(stderr, "out of memory (Hash)\n");
     return NULL;
   }
   table->capacity = capacity;
   table->count = 0;
-  table->buckets = calloc(capacity, sizeof(HashEntry *));
+  table->buckets = arena_alloc(arena, capacity * sizeof(HashEntry *));
   if (!table->buckets) {
-    free(table);
     fprintf(stderr, "out of memory (Entries in Hash)\n");
     return NULL;
   }
+  memset(table->buckets, 0, capacity * sizeof(HashEntry *));
   return table;
 }
 
-void free_hash(MHash *table) {
-  if (table == NULL) return;
-  for (size_t i = 0; i < table->capacity; i++) {
-    HashEntry *entry = table->buckets[i];
-    while (entry) {
-      HashEntry *next = entry->next;
-      free(entry);
-      entry = next;
-    }
-  }
-  free(table->buckets);
-  table->buckets = NULL;
-  table->capacity = 0;
-  table->count = 0;
-  free(table);
-}
-
-bool hash_set(MHash *table, HashKey key, HashPair pair) {
+bool hash_set(MHash *table, HashKey key, HashPair pair, Arena *arena) {
   if (table->count * 4 >=
       table->capacity * 3) {  // equivalent to count >= capacity * 0.75
-    if (!resize(table)) return false;
+    if (!resize(table, arena)) return false;
   }
   size_t index = compute_hash(key) % table->capacity;
   HashEntry *entry = table->buckets[index];
@@ -157,7 +140,7 @@ bool hash_set(MHash *table, HashKey key, HashPair pair) {
     entry = entry->next;  // different key, same bucket, hash collision -> keep
                           // walking
   }
-  entry = malloc(sizeof(HashEntry));
+  entry = arena_alloc(arena, sizeof(HashEntry));
   if (!entry) {
     fprintf(stderr, "out of memory (Hash Entry)\n");
     return false;

@@ -5,13 +5,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "arena.h"
+
 // forward declarations - just names, no layout yet for resolving circular type
 // problem in C.
 typedef struct MObject MObject;
 typedef struct MArray MArray;
 typedef struct MHash MHash; /* full layout lives in hash_table.h */
 typedef struct MCompiledFunction MCompiledFunction;
-typedef MObject (*BuiltinFn)(MObject *params, size_t num_params);
+typedef MObject (*BuiltinFn)(MObject *params, size_t num_params, Arena *arena);
 
 typedef enum {
   MINTEGER,
@@ -47,7 +49,7 @@ struct MObject {
     MHash *hash;
     MCompiledFunction *function;
     BuiltinFn builtin;
-    char *error;
+    const char *error;
   } as;
 };
 
