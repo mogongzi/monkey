@@ -187,6 +187,8 @@ static const char *vm_err_name(VM_RESULT r) {
       return "VM_ERR_UNSUPPORTED_TYPE_FOR_COMPARISION";
     case VM_ERR_INTEGER_OVERFLOW:
       return "VM_ERR_INTEGER_OVERFLOW";
+    case VM_ERR_INVALID_BUILTIN:
+      return "VM_ERR_INVALID_BUILTIN";
     default:
       return "VM_ERR_???";
   }

@@ -44,7 +44,8 @@ static uint64_t compute_hash(HashKey key) {
 static bool resize(MHash *table, Arena *arena) {
   // 1. create a new array of buckets which size is twice of the current one.
   size_t new_capacity = table->capacity * 2;
-  HashEntry **new_bucket = arena_alloc(arena, sizeof(HashEntry *));
+  HashEntry **new_bucket =
+      arena_alloc(arena, new_capacity * sizeof(HashEntry *));
   if (!new_bucket) {
     fprintf(stderr, "out of memory (Hash)\n");
     return false;

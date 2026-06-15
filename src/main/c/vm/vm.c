@@ -468,6 +468,10 @@ VM_RESULT vm_run(VM *vm) {
       case OP_GET_BUILTIN: {
         uint8_t idx = read_u8(&instructions[frame->ip]);
         frame->ip += 1;
+        if (idx >= NUM_BUILTINS) {
+          fprintf(stderr, "invalid builtin index: %u\n", idx);
+          return VM_ERR_INVALID_BUILTIN;  // or better: add VM_ERR_INVALID_BUILTIN
+        }
         MObject obj = {.type = MBUILTIN, .as.builtin = builtin_fns[idx]};
         VM_RESULT r = vm_push(vm, obj);
         if (r != VM_OK) return r;

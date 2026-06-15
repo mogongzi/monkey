@@ -17,15 +17,16 @@ Arena arena_new(size_t block_size) {
 
 void *arena_alloc(Arena *a, size_t size) {
   size = (size + 7) & ~(size_t)7;
+  // current block has room?
   if (a->current && a->current->offset + size <= a->current->capacity) {
     void *ptr = a->current->data + a->current->offset;
     a->current->offset += size;
     return ptr;
   }
 
+  // need a new block - at least block_size, but bigger if the single allocation is larger than a whole block
   size_t capacity = a->block_size;
-  if (size > capacity)
-    capacity = size;  // if single allocation exceeds a whole block;
+  if (size > capacity) capacity = size;
 
   Block *b = block_new(capacity);
   if (!b) return NULL;

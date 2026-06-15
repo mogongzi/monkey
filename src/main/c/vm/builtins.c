@@ -89,21 +89,18 @@ static MObject builtin_rest(MObject *args, size_t num_args, Arena *arena) {
                      .as.error = "argument to `rest` must be MARRAY"};
   }
   MArray *arr = args[0].as.array;
-  if (!arr) {
-    fprintf(stderr, "out of memory(MArray)\n");
-    abort();
-  }
   if (arr->len == 0) {
     return (MObject){.type = MNULL};
   }
   size_t new_len = arr->len - 1;
-  MObject *new_elems = arena_alloc(arena, new_len * sizeof(MObject));
+  MObject *new_elems =
+      new_len > 0 ? arena_alloc(arena, new_len * sizeof(MObject)) : NULL;
   if (new_len > 0 && !new_elems)
     return (MObject){.type = MERROR, .as.error = "out of memory"};
   if (new_len > 0)
     memcpy(new_elems, &arr->elements[1], new_len * sizeof(MObject));
   MArray *new_arr = arena_alloc(arena, sizeof(MArray));
-  if (!new_elems) return (MObject){.type = MERROR, .as.error = "out of memory"};
+  if (!new_arr) return (MObject){.type = MERROR, .as.error = "out of memory"};
   *new_arr = (MArray){.elements = new_elems, .len = new_len};
   return (MObject){.type = MARRAY, .as.array = new_arr};
 }
@@ -129,7 +126,7 @@ static MObject builtin_push(MObject *args, size_t num_args, Arena *arena) {
   return (MObject){.type = MARRAY, .as.array = new_arr};
 }
 
-BuiltinFn builtin_fns[] = {
+BuiltinFn builtin_fns[NUM_BUILTINS] = {
     builtin_len,  builtin_puts, builtin_first,
     builtin_last, builtin_rest, builtin_push,
 };
