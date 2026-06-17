@@ -137,7 +137,7 @@ class Compiler() {
                 val numLocals = symbolTable.numDefinitions
                 val instructions = leaveScope()
                 val compiledFn = MCompiledFunction(instructions, numLocals, node.parameters.size)
-                emit(OpConstant, addConstant(compiledFn))
+                emit(OpClosure, addConstant(compiledFn), 0)
             }
 
             is IfExpression -> {

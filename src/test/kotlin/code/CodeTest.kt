@@ -28,7 +28,12 @@ class CodeTest {
                 OpGetLocal,
                 intArrayOf(255),
                 ubyteArrayOf(OpGetLocal, 255u)
-            )
+            ),
+            TestCase(
+                OpClosure,
+                intArrayOf(65534, 255),
+                ubyteArrayOf(OpClosure, 255u, 254u, 255u)
+            ),
         )
 
         for (test in tests) {
@@ -55,6 +60,7 @@ class CodeTest {
             make(OpGetLocal, 1),
             make(OpConstant, 2),
             make(OpConstant, 65535),
+            make(OpClosure, 65535, 255),
         )
 
         val expected = """
@@ -62,6 +68,7 @@ class CodeTest {
             0001 OpGetLocal 1
             0003 OpConstant 2
             0006 OpConstant 65535
+            0009 OpClosure 65535 255
         """.trimIndent()
 
         val concatted = instructions.reduce { acc, ins -> acc + ins }
@@ -75,6 +82,7 @@ class CodeTest {
         val tests = listOf(
             Triple(OpConstant, intArrayOf(65535), 2),
             Triple(OpGetLocal, intArrayOf(255), 1),
+            Triple(OpClosure, intArrayOf(65535, 255), 3),
         )
 
         for ((op, operands, bytesRead) in tests) {

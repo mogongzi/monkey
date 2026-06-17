@@ -24,7 +24,9 @@ VM *vm_init(const ByteCode *bc) {
 
   vm->main_fn.instructions = bc->instructions;
   vm->main_fn.num_instructions = bc->num_instructions;
-  vm->frames[0] = (Frame){.fn = &vm->main_fn, .ip = 0, .bp = 0};
+  vm->main_cl =
+      (MClosure){.fn = &vm->main_fn, .free_variables = NULL, .num_free = 0};
+  vm->frames[0] = (Frame){.closure = &vm->main_cl, .ip = 0, .bp = 0};
   vm->frames_index = 1;
   if (bc->num_constants > 0) {
     vm->constants = bc->constants;
@@ -48,6 +50,23 @@ static void push_frame(VM *vm, Frame frame) {
 }
 
 static Frame *pop_frame(VM *vm) { return &vm->frames[--vm->frames_index]; }
+
+static VM_RESULT push_closure(VM *vm, uint16_t constant_index,
+                              uint8_t num_free) {
+  MCompiledFunction *fn = vm->constants[constant_index].as.function;
+
+  MClosure *closure = arena_alloc(&vm->arena, sizeof(*closure));
+  if (!closure) return VM_ERR_OUT_OF_MEMORY;
+
+  closure->fn = fn;
+  closure->free_variables = NULL;
+  closure->num_free = num_free;
+
+  return vm_push(vm, (MObject){
+                         .type = MCLOSURE,
+                         .as.closure = closure,
+                     });
+}
 
 void vm_free(VM *vm) {
   if (!vm) return;
@@ -324,10 +343,40 @@ static VM_RESULT build_hash(VM *vm, uint32_t start, uint32_t end,
   return VM_OK;
 }
 
+static VM_RESULT call_closure(VM *vm, MClosure *closure, uint8_t num_args) {
+  if (num_args != closure->fn->num_params)
+    return VM_ERR_WRONG_NUMBER_OF_ARGUMENTS;
+  uint32_t bp = vm->sp - num_args;
+  push_frame(vm, (Frame){.closure = closure, .ip = 0, .bp = bp});
+  vm->sp = bp + closure->fn->num_locals;
+  return VM_OK;
+}
+
+static VM_RESULT call_builtin(VM *vm, BuiltinFn builtinFn, uint8_t num_args) {
+  MObject *args = &vm->stack[vm->sp - num_args];
+  MObject result = builtinFn(args, num_args, &vm->arena);
+  // pop callee + args, push result
+  vm->sp = vm->sp - 1 - num_args;
+  return vm_push(vm, result);
+}
+
+static VM_RESULT execute_call(VM *vm, uint8_t num_args) {
+  MObject callee = vm->stack[vm->sp - 1 - num_args];
+  switch (callee.type) {
+    case MCLOSURE:
+      return call_closure(vm, callee.as.closure, num_args);
+    case MBUILTIN:
+      return call_builtin(vm, callee.as.builtin, num_args);
+    default:
+      return VM_ERR_NON_FUNCTION_CALL;
+  }
+}
+
 VM_RESULT vm_run(VM *vm) {
-  while (current_frame(vm)->ip < current_frame(vm)->fn->num_instructions) {
+  while (current_frame(vm)->ip <
+         current_frame(vm)->closure->fn->num_instructions) {
     Frame *frame = current_frame(vm);  // refresh frame every iteration
-    const uint8_t *instructions = frame->fn->instructions;
+    const uint8_t *instructions = frame->closure->fn->instructions;
     uint8_t opcode = instructions[frame->ip];
     frame->ip++;
     switch (opcode) {
@@ -480,25 +529,17 @@ VM_RESULT vm_run(VM *vm) {
       case OP_CALL: {
         uint8_t num_args = read_u8(&instructions[frame->ip]);
         frame->ip += 1;
-        MObject callee = vm->stack[vm->sp - 1 - num_args];
-        if (callee.type == MCOMPILED_FUNCTION) {
-          MCompiledFunction *fn = callee.as.function;
-          if (num_args != fn->num_params)
-            return VM_ERR_WRONG_NUMBER_OF_ARGUMENTS;
-          uint32_t bp = vm->sp - num_args;
-          push_frame(vm, (Frame){.fn = fn, .ip = 0, .bp = bp});
-          vm->sp = bp + fn->num_locals;
-        } else if (callee.type == MBUILTIN) {
-          // args sit on the stack: stack[sp - num_args] .. stack[sp - 1]
-          MObject *args = &vm->stack[vm->sp - num_args];
-          MObject result = callee.as.builtin(args, num_args, &vm->arena);
-          // pop callee + args, push result
-          vm->sp = vm->sp - 1 - num_args;
-          VM_RESULT r = vm_push(vm, result);
-          if (r != VM_OK) return r;
-        } else {
-          return VM_ERR_NON_FUNCTION_CALL;
-        }
+        VM_RESULT r = execute_call(vm, num_args);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_CLOSURE: {
+        uint16_t constant_index = read_u16(&instructions[frame->ip]);
+        uint8_t num_free = read_u8(&instructions[frame->ip + 2]);
+        frame->ip += 3;
+
+        VM_RESULT r = push_closure(vm, constant_index, num_free);
+        if (r != VM_OK) return r;
         break;
       }
       case OP_RETURN_VALUE: {

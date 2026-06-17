@@ -31,6 +31,8 @@ const val OpReturn: Opcode = 0x17u
 const val OpGetLocal: Opcode = 0x18u
 const val OpSetLocal: Opcode = 0x19u
 const val OpGetBuiltin: Opcode = 0x1Au
+const val OpClosure: Opcode = 0x1Bu
+const val OpGetFree: Opcode = 0x1Cu
 
 
 data class Definition(val name: String, val operandWidths: List<Int>)
@@ -64,6 +66,8 @@ val definitions = mapOf(
     OpGetLocal to Definition("OpGetLocal", listOf(1)),
     OpSetLocal to Definition("OpSetLocal", listOf(1)),
     OpGetBuiltin to Definition("OpGetBuiltin", listOf(1)),
+    OpClosure to Definition("OpClosure", listOf(2, 1)),
+    OpGetFree to Definition("OpGetFree", listOf(1)),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]
@@ -120,6 +124,7 @@ fun fmtInstruction(def: Definition, operands: IntArray): String {
     return when (operandCount) {
         0 -> def.name
         1 -> "${def.name} ${operands[0]}"
+        2 -> "${def.name} ${operands[0]} ${operands[1]}"
         else -> "ERROR: unhandled operandCount for ${def.name}\n"
     }
 }

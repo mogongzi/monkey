@@ -1,7 +1,8 @@
-#include "builtins.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "builtins.h"
 
 static MObject builtin_len(MObject *args, size_t num_args, Arena *arena) {
   (void)arena;  // unused

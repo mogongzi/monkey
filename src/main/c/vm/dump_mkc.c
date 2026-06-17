@@ -123,6 +123,28 @@ static void dump_instructions(const uint8_t *instructions,
         ip += 3;
         break;
       }
+      case OP_GET_LOCAL: {
+        if (ip + 2 >= num_instructions) {
+          printf("%s%04u OpGetLocal <truncated>\n", indent, ip);
+          return;
+        }
+
+        uint16_t index = read_u16(&instructions[ip + 1]);
+        printf("%s%04u OpGetLocal %u\n", indent, ip, index);
+        ip += 3;
+        break;
+      }
+      case OP_SET_LOCAL: {
+        if (ip + 2 >= num_instructions) {
+          printf("%s%04u OpSetLocal <truncated>\n", indent, ip);
+          return;
+        }
+
+        uint16_t index = read_u16(&instructions[ip + 1]);
+        printf("%s%04u OpSetLocal %u\n", indent, ip, index);
+        ip += 3;
+        break;
+      }
       case OP_ARRAY: {
         if (ip + 2 >= num_instructions) {
           printf("%s%04u OpArray <truncated>\n", indent, ip);
@@ -159,6 +181,31 @@ static void dump_instructions(const uint8_t *instructions,
         printf("%s%04u OpReturn\n", indent, ip);
         ip += 1;
         break;
+      case OP_GET_BUILTIN: {
+        if (ip + 1 >= num_instructions) {
+          printf("%s%04u OpGetBuiltin <truncated>\n", indent, ip);
+          return;
+        }
+
+        uint8_t index = read_u8(&instructions[ip + 1]);
+        printf("%s%04u OpGetBuiltin %u\n", indent, ip, index);
+        ip += 2;
+        break;
+      }
+      case OP_CLOSURE: {
+        if (ip + 3 >= num_instructions) {
+          printf("%s%04u OpClosure <truncated>\n", indent, ip);
+          return;
+        }
+
+        uint16_t constant_index = read_u16(&instructions[ip + 1]);
+        uint8_t num_free = read_u8(&instructions[ip + 3]);
+
+        printf("%s%04u OpClosure %u %u\n", indent, ip, constant_index,
+               num_free);
+        ip += 4;
+        break;
+      }
       default:
         printf("%s%04u UNKNOWN opcode=0x%02x\n", indent, ip, op);
         ip += 1;

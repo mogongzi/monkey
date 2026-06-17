@@ -296,7 +296,7 @@ class CompilerTest {
                 expectedInstructions = listOf(
                     make(OpConstant, 0),
                     make(OpSetGlobal, 0),
-                    make(OpConstant, 1),
+                    make(OpClosure, 1, 0),
                     make(OpPop),
                 )
             ),
@@ -319,7 +319,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 1),
+                    make(OpClosure, 1, 0),
                     make(OpPop),
                 )
             ),
@@ -348,7 +348,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 2),
+                    make(OpClosure, 2, 0),
                     make(OpPop),
                 )
             ),
@@ -511,7 +511,7 @@ class CompilerTest {
     }
 
     @Test
-    fun testFunctionLiterals() {
+    fun testFunctions() {
         val tests = listOf(
             CompilerTestCase(
                 input = "fn() { return 5 + 10 }",
@@ -527,7 +527,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 2),
+                    make(OpClosure, 2, 0),
                     make(OpPop),
                 )
             ),
@@ -545,7 +545,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 2),
+                    make(OpClosure, 2, 0),
                     make(OpPop),
                 )
             ),
@@ -563,7 +563,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 2),
+                    make(OpClosure, 2, 0),
                     make(OpPop),
                 )
             ),
@@ -618,7 +618,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 0),
+                    make(OpClosure, 0, 0),
                     make(OpPop),
                 )
             ),
@@ -642,7 +642,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 1),
+                    make(OpClosure, 1, 0),
                     make(OpCall, 0),
                     make(OpPop),
                 )
@@ -662,7 +662,7 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 1),
+                    make(OpClosure, 1, 0),
                     make(OpSetGlobal, 0),
                     make(OpGetGlobal, 0),
                     make(OpCall, 0),
@@ -684,7 +684,7 @@ class CompilerTest {
                     24,
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 0),
+                    make(OpClosure, 0, 0),
                     make(OpSetGlobal, 0),
                     make(OpGetGlobal, 0),
                     make(OpConstant, 1),
@@ -713,7 +713,7 @@ class CompilerTest {
                     26,
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 0),
+                    make(OpClosure, 0, 0),
                     make(OpSetGlobal, 0),
                     make(OpGetGlobal, 0),
                     make(OpConstant, 1),
@@ -762,10 +762,88 @@ class CompilerTest {
                     )
                 ),
                 expectedInstructions = listOf(
-                    make(OpConstant, 0),
+                    make(OpClosure, 0, 0),
                     make(OpPop),
                 )
             ),
+        )
+
+        runCompilerTests(tests)
+    }
+
+    @Test
+    fun testClosures() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = """
+                    fn(a) {
+                      fn(b) {
+                        a + b
+                      }
+                    }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetFree, 0),
+                            make(OpGetLocal, 0),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    ), FunctionInstructions(
+                        listOf(
+                            make(OpGetLocal, 0),
+                            make(OpClosure, 0, 1),
+                            make(OpReturnValue),
+                        ),
+                    ),
+                ),
+                expectedInstructions = listOf(
+                    make(OpClosure, 1, 0),
+                    make(OpPop),
+                )
+            ),
+            CompilerTestCase(
+                input = """
+                    fn(a) {
+                      fn(b) {
+                        fn(c) {
+                          a + b + c
+                        }
+                      }
+                    }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetFree, 0),
+                            make(OpGetFree, 1),
+                            make(OpAdd),
+                            make(OpGetLocal, 0),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    FunctionInstructions(
+                        listOf(
+                            make(OpGetFree, 0),
+                            make(OpGetLocal, 0),
+                            make(OpClosure, 0, 2),
+                            make(OpReturnValue),
+                        )
+                    ), FunctionInstructions(
+                        listOf(
+                            make(OpGetLocal, 0),
+                            make(OpClosure, 1, 1),
+                            make(OpReturnValue),
+                        ),
+                    ),
+                ),
+                expectedInstructions = listOf(
+                    make(OpClosure, 2, 0),
+                    make(OpPop),
+                )
+            )
         )
 
         runCompilerTests(tests)

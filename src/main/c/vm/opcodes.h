@@ -30,5 +30,6 @@
 #define OP_GET_LOCAL 0x18
 #define OP_SET_LOCAL 0x19
 #define OP_GET_BUILTIN 0x1A
+#define OP_CLOSURE 0x1B
 
 #endif

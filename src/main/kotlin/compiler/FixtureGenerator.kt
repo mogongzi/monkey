@@ -82,6 +82,12 @@ fun main() {
         "src/test/fixtures/hash_empty.mkc" to "{}",
         "src/test/fixtures/hash_one_two.mkc" to "{1 : 2, 2 : 3}",
         "src/test/fixtures/hash_with_arithmetic.mkc" to "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+        "src/test/fixtures/hash_resize.mkc" to """
+           {
+             1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90, 10: 100, 11: 110, 12: 120, 
+             13: 130, 14: 140, 15: 150, 16: 160, 17: 170, 18: 180, 19: 190, 20: 200
+           }
+        """.trimIndent(),
         // index expressions
         "src/test/fixtures/index_array_simple.mkc" to "[1, 2, 3][1]",
         "src/test/fixtures/index_array_expr.mkc" to "[1, 2, 3][0 + 2]",
@@ -137,21 +143,21 @@ fun main() {
             let one = fn() { let one = 1; one };
             one();
         """.trimIndent(),
-                "src/test/fixtures/function_local_bindings_sum.mkc" to """
+        "src/test/fixtures/function_local_bindings_sum.mkc" to """
             let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
             oneAndTwo();
         """.trimIndent(),
-                "src/test/fixtures/function_multiple_with_locals.mkc" to """
+        "src/test/fixtures/function_multiple_with_locals.mkc" to """
             let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
             let threeAndFour = fn() { let three = 3; let four = 4; three + four; };
             oneAndTwo() + threeAndFour();
         """.trimIndent(),
-                "src/test/fixtures/function_same_local_name.mkc" to """
+        "src/test/fixtures/function_same_local_name.mkc" to """
             let firstFoobar = fn() { let foobar = 50; foobar; };
             let secondFoobar = fn() { let foobar = 100; foobar; };
             firstFoobar() + secondFoobar();
         """.trimIndent(),
-                "src/test/fixtures/function_global_and_local.mkc" to """
+        "src/test/fixtures/function_global_and_local.mkc" to """
             let globalSeed = 50;
             let minusOne = fn() {
                 let num = 1;
@@ -175,7 +181,7 @@ fun main() {
             let identity = fn(a) { a; };
             identity(4);
         """.trimIndent(),
-                "src/test/fixtures/function_arg_sum.mkc" to """
+        "src/test/fixtures/function_arg_sum.mkc" to """
             let sum = fn(a, b) { a + b; };
             sum(1, 2);
         """.trimIndent(),
@@ -186,14 +192,14 @@ fun main() {
             };
             sum(1, 2);
         """.trimIndent(),
-                "src/test/fixtures/function_arg_sum_twice.mkc" to """
+        "src/test/fixtures/function_arg_sum_twice.mkc" to """
             let sum = fn(a, b) {
                 let c = a + b;
                 c;
             };
             sum(1, 2) + sum(3, 4);
         """.trimIndent(),
-                "src/test/fixtures/function_arg_outer.mkc" to """
+        "src/test/fixtures/function_arg_outer.mkc" to """
             let sum = fn(a, b) {
                 let c = a + b;
                 c;
@@ -218,10 +224,10 @@ fun main() {
         "src/test/fixtures/function_wrong_args_0_1.mkc" to """
             fn() { 1; }(1);
         """.trimIndent(),
-                "src/test/fixtures/function_wrong_args_1_0.mkc" to """
+        "src/test/fixtures/function_wrong_args_1_0.mkc" to """
             fn(a) { a; }();
         """.trimIndent(),
-                "src/test/fixtures/function_wrong_args_2_1.mkc" to """
+        "src/test/fixtures/function_wrong_args_2_1.mkc" to """
             fn(a, b) { a + b; }(1);
         """.trimIndent(),
         // builtin functions

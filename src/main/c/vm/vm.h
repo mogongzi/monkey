@@ -17,6 +17,7 @@
 typedef struct {
   const ByteCode *bc;
   MCompiledFunction main_fn;
+  MClosure main_cl;
   const MObject *constants;
   MObject stack[STACK_SIZE];
   MObject globals[GLOBALS_SIZE];

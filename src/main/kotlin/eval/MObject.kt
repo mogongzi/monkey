@@ -89,6 +89,10 @@ class MBuiltinFunction(val function: (List<MObject>) -> MObject) : MObject {
     override fun inspect(): String = "builtin function"
 }
 
+class MClosure(val fn: MCompiledFunction, val freeVariables: List<MObject>) : MObject {
+    override fun inspect(): String = "Closure[${System.identityHashCode(this).toString(16)}]"
+}
+
 // Wraps a Monkey array value. Uses `List` (immutable view) so structural equality is safe.
 data class MArray(val elements: List<MObject> = emptyList()) : MObject {
     override fun inspect(): String = buildString {

@@ -355,11 +355,35 @@ static void test_hash_literals(void) {
       {.key = (HashKey){.type = MINTEGER, .as.integer = 6}, .value = 16},
   };
 
+  static const ExpectedHashPair resize[] = {
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 1}, .value = 10},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 2}, .value = 20},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 3}, .value = 30},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 4}, .value = 40},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 5}, .value = 50},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 6}, .value = 60},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 7}, .value = 70},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 8}, .value = 80},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 9}, .value = 90},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 10}, .value = 100},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 11}, .value = 110},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 12}, .value = 120},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 13}, .value = 130},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 14}, .value = 140},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 15}, .value = 150},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 16}, .value = 160},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 17}, .value = 170},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 18}, .value = 180},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 19}, .value = 190},
+      {.key = (HashKey){.type = MINTEGER, .as.integer = 20}, .value = 200},
+  };
+
   VmTestCase tests[] = {
       {"src/test/fixtures/hash_empty.mkc", expected_hash(NULL, 0)},
       {"src/test/fixtures/hash_one_two.mkc", expected_hash(one_two, 2)},
       {"src/test/fixtures/hash_with_arithmetic.mkc",
        expected_hash(arithmetic, 2)},
+      {"src/test/fixtures/hash_resize.mkc", expected_hash(resize, 20)},
   };
 
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
