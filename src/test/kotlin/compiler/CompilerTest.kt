@@ -843,7 +843,64 @@ class CompilerTest {
                     make(OpClosure, 2, 0),
                     make(OpPop),
                 )
-            )
+            ),
+            CompilerTestCase(
+                input = """
+                    let global = 55;
+                    fn() {
+                      let a = 66;
+                      fn() {
+                        let b = 77;
+                        fn() {
+                          let c = 88;
+                          global + a + b + c;
+                        }
+                      }
+                    }
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    55, 66, 77, 88,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 3),
+                            make(OpSetLocal, 0),
+                            make(OpGetGlobal, 0),
+                            make(OpGetFree, 0),
+                            make(OpAdd),
+                            make(OpGetFree, 1),
+                            make(OpAdd),
+                            make(OpGetLocal, 0),
+                            make(OpAdd),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 2),
+                            make(OpSetLocal, 0),
+                            make(OpGetFree, 0),
+                            make(OpGetLocal, 0),
+                            make(OpClosure, 4, 2),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    FunctionInstructions(
+                        listOf(
+                            make(OpConstant, 1),
+                            make(OpSetLocal, 0),
+                            make(OpGetLocal, 0),
+                            make(OpClosure, 5, 1),
+                            make(OpReturnValue),
+                        )
+                    ),
+                ),
+                expectedInstructions = listOf(
+                    make(OpConstant, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpClosure, 6, 0),
+                    make(OpPop),
+                )
+            ),
         )
 
         runCompilerTests(tests)

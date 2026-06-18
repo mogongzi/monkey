@@ -31,5 +31,6 @@
 #define OP_SET_LOCAL 0x19
 #define OP_GET_BUILTIN 0x1A
 #define OP_CLOSURE 0x1B
+#define OP_GET_FREE 0x1C
 
 #endif

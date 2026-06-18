@@ -134,10 +134,12 @@ class Compiler() {
                 if (!lastInstructionIs(OpReturnValue)) {
                     emit(OpReturn)
                 }
+                val freeSymbols = symbolTable.freeSymbols
                 val numLocals = symbolTable.numDefinitions
                 val instructions = leaveScope()
+                freeSymbols.forEach(::loadSymbol)
                 val compiledFn = MCompiledFunction(instructions, numLocals, node.parameters.size)
-                emit(OpClosure, addConstant(compiledFn), 0)
+                emit(OpClosure, addConstant(compiledFn), freeSymbols.size)
             }
 
             is IfExpression -> {
@@ -195,12 +197,17 @@ class Compiler() {
             is Identifier -> {
                 val symbol = symbolTable.resolve(node.value)
                     ?: error("undefined variable ${node.value}")
-                when (symbol.scope) {
-                    SymbolScope.GLOBAL -> emit(OpGetGlobal, symbol.index)
-                    SymbolScope.LOCAL -> emit(OpGetLocal, symbol.index)
-                    SymbolScope.BUILTIN -> emit(OpGetBuiltin, symbol.index)
-                }
+                loadSymbol(symbol)
             }
+        }
+    }
+
+    fun loadSymbol(sym: Symbol) {
+        when (sym.scope) {
+            SymbolScope.GLOBAL -> emit(OpGetGlobal, sym.index)
+            SymbolScope.LOCAL -> emit(OpGetLocal, sym.index)
+            SymbolScope.BUILTIN -> emit(OpGetBuiltin, sym.index)
+            SymbolScope.FREE -> emit(OpGetFree, sym.index)
         }
     }
 

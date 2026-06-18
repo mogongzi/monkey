@@ -124,25 +124,25 @@ static void dump_instructions(const uint8_t *instructions,
         break;
       }
       case OP_GET_LOCAL: {
-        if (ip + 2 >= num_instructions) {
+        if (ip + 1 >= num_instructions) {
           printf("%s%04u OpGetLocal <truncated>\n", indent, ip);
           return;
         }
 
-        uint16_t index = read_u16(&instructions[ip + 1]);
+        uint8_t index = read_u8(&instructions[ip + 1]);
         printf("%s%04u OpGetLocal %u\n", indent, ip, index);
-        ip += 3;
+        ip += 2;
         break;
       }
       case OP_SET_LOCAL: {
-        if (ip + 2 >= num_instructions) {
+        if (ip + 1 >= num_instructions) {
           printf("%s%04u OpSetLocal <truncated>\n", indent, ip);
           return;
         }
 
-        uint16_t index = read_u16(&instructions[ip + 1]);
+        uint8_t index = read_u8(&instructions[ip + 1]);
         printf("%s%04u OpSetLocal %u\n", indent, ip, index);
-        ip += 3;
+        ip += 2;
         break;
       }
       case OP_ARRAY: {
@@ -169,10 +169,16 @@ static void dump_instructions(const uint8_t *instructions,
         printf("%s%04u OpIndex\n", indent, ip);
         ip += 1;
         break;
-      case OP_CALL:
-        printf("%s%04u OpCall\n", indent, ip);
+      case OP_CALL: {
+        if (ip + 1 >= num_instructions) {
+          printf("%s%04u OpCall <truncated>\n", indent, ip);
+          return;
+        }
+        uint8_t n = read_u8(&instructions[ip + 1]);
+        printf("%s%04u OpCall %u\n", indent, ip, n);
         ip += 2;
         break;
+      }
       case OP_RETURN_VALUE:
         printf("%s%04u OpReturnValue\n", indent, ip);
         ip += 1;
@@ -204,6 +210,16 @@ static void dump_instructions(const uint8_t *instructions,
         printf("%s%04u OpClosure %u %u\n", indent, ip, constant_index,
                num_free);
         ip += 4;
+        break;
+      }
+      case OP_GET_FREE: {
+        if (ip + 1 >= num_instructions) {
+          printf("%s%04u OpGetFree <truncated>\n", indent, ip);
+          return;
+        }
+        uint8_t index = read_u8(&instructions[ip + 1]);
+        printf("%s%04u OpGetFree %u\n", indent, ip, index);
+        ip += 2;
         break;
       }
       default:

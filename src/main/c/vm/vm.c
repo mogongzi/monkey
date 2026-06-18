@@ -54,12 +54,16 @@ static Frame *pop_frame(VM *vm) { return &vm->frames[--vm->frames_index]; }
 static VM_RESULT push_closure(VM *vm, uint16_t constant_index,
                               uint8_t num_free) {
   MCompiledFunction *fn = vm->constants[constant_index].as.function;
-
-  MClosure *closure = arena_alloc(&vm->arena, sizeof(*closure));
+  MObject *free_variables = arena_alloc(&vm->arena, sizeof(MObject) * num_free);
+  for (int i = 0; i < num_free; i++) {
+    free_variables[i] = vm->stack[vm->sp - num_free + i];
+  }
+  vm->sp -= num_free;
+  MClosure *closure = arena_alloc(&vm->arena, sizeof(MClosure));
   if (!closure) return VM_ERR_OUT_OF_MEMORY;
 
   closure->fn = fn;
-  closure->free_variables = NULL;
+  closure->free_variables = free_variables;
   closure->num_free = num_free;
 
   return vm_push(vm, (MObject){
@@ -484,6 +488,14 @@ VM_RESULT vm_run(VM *vm) {
         uint8_t local_operand_idx = read_u8(&instructions[frame->ip]);
         frame->ip += 1;
         VM_RESULT r = vm_push(vm, vm->stack[frame->bp + local_operand_idx]);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_GET_FREE: {
+        uint8_t free_operand_idx = read_u8(&instructions[frame->ip]);
+        frame->ip += 1;
+        MObject val = frame->closure->free_variables[free_operand_idx];
+        VM_RESULT r = vm_push(vm, val);
         if (r != VM_OK) return r;
         break;
       }

@@ -256,6 +256,53 @@ fun main() {
         "src/test/fixtures/builtin_last_nested_array.mkc" to "last([[1]])",
         "src/test/fixtures/builtin_first_concat_in_array.mkc" to """first(["a" + "b"])""",
         "src/test/fixtures/builtin_rest_single.mkc" to "rest([42])",
+        // closures
+        "src/test/fixtures/closures.mkc" to """
+            let newClosure = fn(a) {
+                fn() { a; };
+            };
+            let closure = newClosure(99);
+            closure();
+        """.trimIndent(),
+        "src/test/fixtures/closures_with_args.mkc" to """
+                let newAdder = fn(a, b) {
+                    fn(c) { a + b + c };
+                };
+                let adder = newAdder(1, 2);
+                adder(8);
+            """.trimIndent(),
+        "src/test/fixtures/closures_with_locals.mkc" to """
+                let newAdder = fn(a, b) {
+                    let c = a + b;
+                    fn(d) { c + d };
+                };
+                let adder = newAdder(1, 2);
+                adder(8);
+            """.trimIndent(),
+        // recursion (currently fails to compile — see SymbolTable.resolve;
+//        "src/test/fixtures/function_recursion_global.mkc" to """
+//              let countDown = fn(x) {
+//                  if (x == 0) {
+//                      return 0;
+//                  } else {
+//                      countDown(x - 1);
+//                  }
+//              };
+//              countDown(1);
+//        """.trimIndent(),
+//        "src/test/fixtures/function_recursion_local.mkc" to """
+//              let wrapper = fn() {
+//                  let countDown = fn(x) {
+//                      if (x == 0) {
+//                          return 0;
+//                      } else {
+//                          countDown(x - 1);
+//                      }
+//                  };
+//                  countDown(1);
+//              };
+//              wrapper();
+//        """.trimIndent(),
     )
 
     for ((path, source) in cases) {

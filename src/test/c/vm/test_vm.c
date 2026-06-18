@@ -506,6 +506,15 @@ static void test_builtin_functions(void) {
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
 
+static void test_closures(void) {
+  VmTestCase tests[] = {
+      {"src/test/fixtures/closures.mkc", expected_integer(99)},
+      {"src/test/fixtures/closures_with_args.mkc", expected_integer(11)},
+      {"src/test/fixtures/closures_with_locals.mkc", expected_integer(11)},
+  };
+  run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
+}
+
 static void test_stack_underflow(void) {
   uint8_t instructions[] = {
       OP_POP,
@@ -539,5 +548,6 @@ int main(void) {
   test_calling_functions_with_arguments_and_bindings();
   test_calling_functions_with_wrong_arguments();
   test_builtin_functions();
+  test_closures();
   return 0;
 }
