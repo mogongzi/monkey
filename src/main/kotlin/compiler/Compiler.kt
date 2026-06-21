@@ -180,8 +180,8 @@ class Compiler() {
             }
 
             is LetStatement -> {
-                compile(node.value)
                 val symbol = symbolTable.define(node.name.value)
+                compile(node.value)
                 if (symbol.scope == SymbolScope.GLOBAL) {
                     emit(OpSetGlobal, symbol.index)
                 } else {

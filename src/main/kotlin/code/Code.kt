@@ -33,6 +33,7 @@ const val OpSetLocal: Opcode = 0x19u
 const val OpGetBuiltin: Opcode = 0x1Au
 const val OpClosure: Opcode = 0x1Bu
 const val OpGetFree: Opcode = 0x1Cu
+const val OpCurrentClosure: Opcode = 0x1Du
 
 
 data class Definition(val name: String, val operandWidths: List<Int>)
@@ -68,6 +69,7 @@ val definitions = mapOf(
     OpGetBuiltin to Definition("OpGetBuiltin", listOf(1)),
     OpClosure to Definition("OpClosure", listOf(2, 1)),
     OpGetFree to Definition("OpGetFree", listOf(1)),
+    OpCurrentClosure to Definition("OpCurrentClosure", emptyList()),
 )
 
 fun lookup(op: Opcode): Definition? = definitions[op]

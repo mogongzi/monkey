@@ -259,50 +259,103 @@ fun main() {
         // closures
         "src/test/fixtures/closures.mkc" to """
             let newClosure = fn(a) {
-                fn() { a; };
+              fn() { a; };
             };
             let closure = newClosure(99);
             closure();
         """.trimIndent(),
         "src/test/fixtures/closures_with_args.mkc" to """
-                let newAdder = fn(a, b) {
-                    fn(c) { a + b + c };
-                };
-                let adder = newAdder(1, 2);
-                adder(8);
-            """.trimIndent(),
+            let newAdder = fn(a, b) {
+              fn(c) { a + b + c };
+            };
+            let adder = newAdder(1, 2);
+            adder(8);
+        """.trimIndent(),
         "src/test/fixtures/closures_with_locals.mkc" to """
-                let newAdder = fn(a, b) {
-                    let c = a + b;
-                    fn(d) { c + d };
-                };
-                let adder = newAdder(1, 2);
-                adder(8);
-            """.trimIndent(),
+            let newAdder = fn(a, b) {
+              let c = a + b;
+              fn(d) { c + d };
+            };
+            let adder = newAdder(1, 2);
+            adder(8);
+        """.trimIndent(),
+        "src/test/fixtures/closures_nested_adder.mkc" to """
+          let newAdderOuter = fn(a, b) {
+            let c = a + b;
+            fn(d) {
+              let e = d + c;
+              fn(f) { e + f; };
+            };
+          };
+          let newAdderInner = newAdderOuter(1, 2);
+          let adder = newAdderInner(3);
+          adder(8);
+        """.trimIndent(),
+        "src/test/fixtures/closures_nested_with_global.mkc" to """
+          let a = 1;
+          let newAdderOuter = fn(b) {
+            fn(c) {
+              fn(d) { a + b + c + d };
+            };
+          };
+          let newAdderInner = newAdderOuter(2);
+          let adder = newAdderInner(3);
+          adder(8);
+        """.trimIndent(),
+        "src/test/fixtures/closures_sibling_closures.mkc" to """
+          let newClosure = fn(a, b) {
+            let one = fn() { a; };
+            let two = fn() { b; };
+            fn() { one() + two(); };
+          };
+          let closure = newClosure(9, 90);
+          closure();
+        """.trimIndent(),
         // recursion (currently fails to compile — see SymbolTable.resolve;
-//        "src/test/fixtures/function_recursion_global.mkc" to """
-//              let countDown = fn(x) {
-//                  if (x == 0) {
-//                      return 0;
-//                  } else {
-//                      countDown(x - 1);
-//                  }
-//              };
-//              countDown(1);
-//        """.trimIndent(),
-//        "src/test/fixtures/function_recursion_local.mkc" to """
-//              let wrapper = fn() {
-//                  let countDown = fn(x) {
-//                      if (x == 0) {
-//                          return 0;
-//                      } else {
-//                          countDown(x - 1);
-//                      }
-//                  };
-//                  countDown(1);
-//              };
-//              wrapper();
-//        """.trimIndent(),
+        "src/test/fixtures/function_recursion.mkc" to """
+          let countDown = fn(x) {
+            if (x == 0) {
+              return 0;
+            } else {
+              countDown(x - 1);
+            }
+          };
+          countDown(1);
+        """.trimIndent(),
+        "src/test/fixtures/function_recursion_closure.mkc" to """
+          let countDown = fn(x) {
+            if (x == 0) {
+              return 0;
+            } else {
+              countDown(x - 1);
+            }
+          };
+          let wrapper = fn() {
+            countDown(1);
+          }
+          wrapper();
+        """.trimIndent(),
+        "src/test/fixtures/function_recursion_wrapper.mkc" to """
+          let wrapper = fn() {
+            let countDown = fn(x) {
+              if (x == 0) {
+                return 0;
+              } else {
+                countDown(x - 1);
+              }
+            };
+            countDown(1);
+          };
+          wrapper();
+        """.trimIndent(),
+        "src/test/fixtures/closures_factory_independent.mkc" to """
+          let newMultiplier = fn(factor) {
+            fn(x) { x * factor; };
+          };
+          let double = newMultiplier(2);
+          let triple = newMultiplier(3);
+          double(5) + triple(3);
+        """.trimIndent(),
     )
 
     for ((path, source) in cases) {

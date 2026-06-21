@@ -906,6 +906,71 @@ class CompilerTest {
         runCompilerTests(tests)
     }
 
+    @Test
+    fun testRecursiveFunctions() {
+        val tests = listOf(
+            CompilerTestCase(
+                input = """
+                    let countDown = fn(x) { countDown(x - 1); };
+                    countDown(1);
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    1,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpCurrentClosure),
+                            make(OpGetLocal, 0),
+                            make(OpConstant, 0),
+                            make(OpSub),
+                            make(OpCall, 1),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    1,
+                ),
+                expectedInstructions = listOf(
+                    make(OpClosure, 1, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpConstant, 2),
+                    make(OpCall, 1),
+                    make(OpPop),
+                ),
+            ),
+            CompilerTestCase(
+                input = """
+                    let wrapper = fn() {
+                      let countDown = fn(x) { countDown(x - 1); };
+                      countDown(1);
+                    };
+                    wrapper();
+                """.trimIndent(),
+                expectedConstants = listOf(
+                    1,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpCurrentClosure),
+                            make(OpGetLocal, 0),
+                            make(OpConstant, 0),
+                            make(OpSub),
+                            make(OpCall, 1),
+                            make(OpReturnValue),
+                        )
+                    ),
+                    1,
+                    FunctionInstructions(
+                        listOf(
+                            make(OpClosure, 1, 0),
+                            make(OpSetLocal, 0)
+                        )
+                    )
+                )
+            )
+        )
+
+        runCompilerTests(tests);
+    }
+
     private fun runCompilerTests(tests: List<CompilerTestCase>) {
         for (test in tests) {
             val program = parse(test.input)

@@ -511,6 +511,15 @@ static void test_closures(void) {
       {"src/test/fixtures/closures.mkc", expected_integer(99)},
       {"src/test/fixtures/closures_with_args.mkc", expected_integer(11)},
       {"src/test/fixtures/closures_with_locals.mkc", expected_integer(11)},
+      {"src/test/fixtures/closures_nested_adder.mkc", expected_integer(14)},
+      {"src/test/fixtures/closures_nested_with_global.mkc",
+       expected_integer(14)},
+      {"src/test/fixtures/closures_sibling_closures.mkc", expected_integer(99)},
+      {"src/test/fixtures/function_recursion.mkc", expected_integer(0)},
+      {"src/test/fixtures/function_recursion_closure.mkc", expected_integer(0)},
+      {"src/test/fixtures/function_recursion_wrapper.mkc", expected_integer(0)},
+      {"src/test/fixtures/closures_factory_independent.mkc",
+       expected_integer(19)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
