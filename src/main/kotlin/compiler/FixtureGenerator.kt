@@ -356,6 +356,20 @@ fun main() {
           let triple = newMultiplier(3);
           double(5) + triple(3);
         """.trimIndent(),
+        "src/test/fixtures/function_recursion_fibonacci.mkc" to """
+          let fibonacci = fn(x) {
+            if (x == 0) {
+              return 0;
+            } else {
+              if (x == 1) {
+                return 1;
+              } else {
+                fibonacci(x - 1) + fibonacci(x - 2);
+              }
+            }
+          };
+          fibonacci(15);
+        """.trimIndent(),
     )
 
     for ((path, source) in cases) {

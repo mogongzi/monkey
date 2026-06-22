@@ -520,6 +520,8 @@ static void test_closures(void) {
       {"src/test/fixtures/function_recursion_wrapper.mkc", expected_integer(0)},
       {"src/test/fixtures/closures_factory_independent.mkc",
        expected_integer(19)},
+      {"src/test/fixtures/function_recursion_fibonacci.mkc",
+       expected_integer(610)},
   };
   run_vm_tests(tests, sizeof(tests) / sizeof(tests[0]));
 }
