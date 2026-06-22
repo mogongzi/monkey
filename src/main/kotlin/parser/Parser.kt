@@ -140,10 +140,13 @@ class Parser(private val lexer: Lexer) {
         // Grammar (simplified): let <ident> = <expression> ;
         val token = curToken
         if (!expectPeek(IDENT)) return null
-        val name = Identifier(curToken, curToken.literal)
+        var name = Identifier(curToken, curToken.literal)
         if (!expectPeek(ASSIGN)) return null
         nextToken()
         val value = parseExpression(Precedence.LOWEST) ?: return null
+        if (value is FunctionLiteral) {
+            value.name = name.value
+        }
         if (peekTokenIs(SEMICOLON)) {
             nextToken()
         }
@@ -440,7 +443,7 @@ class Parser(private val lexer: Lexer) {
         val parameters = parseFunctionParameters() ?: return null
         if (!expectPeek(LBRACE)) return null
         val body = parseBlockStatment()
-        return FunctionLiteral(token, parameters, body)
+        return FunctionLiteral(token, "", parameters, body)
     }
 
     fun parseFunctionParameters(): List<Identifier>? {

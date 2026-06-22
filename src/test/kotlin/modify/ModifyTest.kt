@@ -82,11 +82,13 @@ class ModifyTest {
             TestCase(
                 input = FunctionLiteral(
                     token,
+                    "",
                     emptyList(),
                     BlockStatement(token, mutableListOf(ExpressionStatement(token, one())))
                 ),
                 expected = FunctionLiteral(
                     token,
+                    "",
                     emptyList(),
                     BlockStatement(token, mutableListOf(ExpressionStatement(token, two())))
                 )

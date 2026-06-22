@@ -245,4 +245,27 @@ class SymbolTableTest {
             assertNotNull(tmp, "name $name resolved, but was expected not to")
         }
     }
+
+    @Test
+    fun testDefineAndResolveFunctionName() {
+        val global = SymbolTable()
+        global.defineFunctionName("a")
+
+        val expected = Symbol("a", SymbolScope.FUNCTION, 0)
+        val result = global.resolve(expected.name)
+        assertNotNull(result, "function name ${expected.name} not resolvable")
+        assertEquals(expected, result, "expected ${expected.name} to resolve to $expected, got=$result")
+    }
+
+    @Test
+    fun testShadowingFunctionName() {
+        val global = SymbolTable()
+        global.defineFunctionName("a")
+        global.define("a")
+
+        val expected = Symbol("a", SymbolScope.GLOBAL, 0)
+        val result = global.resolve(expected.name)
+        assertNotNull(result, "function name ${expected.name} not resolvable")
+        assertEquals(expected, result, "expected ${expected.name} to resolve to $expected, got=$result")
+    }
 }

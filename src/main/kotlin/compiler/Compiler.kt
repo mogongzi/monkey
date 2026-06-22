@@ -123,6 +123,9 @@ class Compiler() {
 
             is FunctionLiteral -> {
                 enterScope()
+                if (node.name.isNotEmpty()) {
+                    symbolTable.defineFunctionName(node.name)
+                }
                 for (identifier in node.parameters) {
                     symbolTable.define(identifier.value)
                 }
@@ -208,6 +211,7 @@ class Compiler() {
             SymbolScope.LOCAL -> emit(OpGetLocal, sym.index)
             SymbolScope.BUILTIN -> emit(OpGetBuiltin, sym.index)
             SymbolScope.FREE -> emit(OpGetFree, sym.index)
+            SymbolScope.FUNCTION -> emit(OpCurrentClosure)
         }
     }
 

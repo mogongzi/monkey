@@ -65,7 +65,7 @@ fun modify(node: Node, modifier: ModifierFunc): Node {
         is FunctionLiteral -> {
             val newParams = node.parameters.map { modify(it, modifier) as Identifier }.toMutableList()
             val newBody = modify(node.body, modifier) as BlockStatement
-            FunctionLiteral(node.token, newParams, newBody)
+            FunctionLiteral(node.token, node.name, newParams, newBody)
         }
 
         is ArrayLiteral -> {

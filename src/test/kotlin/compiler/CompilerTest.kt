@@ -961,9 +961,20 @@ class CompilerTest {
                     FunctionInstructions(
                         listOf(
                             make(OpClosure, 1, 0),
-                            make(OpSetLocal, 0)
+                            make(OpSetLocal, 0),
+                            make(OpGetLocal, 0),
+                            make(OpConstant, 2),
+                            make(OpCall, 1),
+                            make(OpReturnValue),
                         )
                     )
+                ),
+                expectedInstructions = listOf(
+                    make(OpClosure, 3, 0),
+                    make(OpSetGlobal, 0),
+                    make(OpGetGlobal, 0),
+                    make(OpCall, 0),
+                    make(OpPop)
                 )
             )
         )

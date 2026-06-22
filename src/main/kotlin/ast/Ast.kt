@@ -162,10 +162,13 @@ class IfExpression(
     }
 }
 
-class FunctionLiteral(val token: Token, val parameters: List<Identifier>, val body: BlockStatement) : Expression {
+class FunctionLiteral(val token: Token, var name: String, val parameters: List<Identifier>, val body: BlockStatement) : Expression {
     override fun tokenLiteral(): String = token.literal
     override fun string(): String = buildString {
         append(tokenLiteral())
+        if (name.isNotEmpty()) {
+            append("<$name>")
+        }
         append("(")
         append(parameters.joinToString(",") { it.string() })
         append(")")

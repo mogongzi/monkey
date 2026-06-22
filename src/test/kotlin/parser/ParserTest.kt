@@ -541,6 +541,39 @@ class ParserTest {
     }
 
     @Test
+    fun testFunctionLiteralWithName() {
+        val input = "let myFunction = fn() {};"
+        val lexer = Lexer(input)
+        val parser = Parser(lexer)
+        val program = parser.parseProgram()
+        checkParserErrors(parser)
+
+        assertEquals(
+            1,
+            program.statements.size,
+            "program.body does not contain 1 statement. got=${program.statements.size}"
+        )
+
+        val stmt = assertInstanceOf(
+            LetStatement::class.java,
+            program.statements[0],
+            "statements[0] is a not LetStatement. got=${program.statements[0]::class}"
+        )
+
+        val function = assertInstanceOf(
+            FunctionLiteral::class.java,
+            stmt.value,
+            "stmt.value is not FunctionLiteral. got=${stmt.value::class}"
+        )
+
+        assertEquals(
+            "myFunction",
+            function.name,
+            "function literal name wrong. want 'myFunction'. got=${function.name}"
+        )
+    }
+
+    @Test
     fun testCallExpressionParsing() {
         val input = "add(1, 2 * 3, 4 + 5)"
         val lexer = Lexer(input)
