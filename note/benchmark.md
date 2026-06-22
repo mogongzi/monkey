@@ -2,332 +2,282 @@
 
 ## Goal
 
-Compare the tree-walking interpreter against the compiled bytecode path using `fib(35)`,
-matching the book's measurement story but adapted to this project's split architecture.
+Compare three paths for the same Monkey program, `fib(35)`:
 
-## Measurement Story
+1. Kotlin tree-walking interpreter
+2. Kotlin compiler / bytecode emitter
+3. C bytecode VM
 
-| Path | What's timed | What's excluded |
-|------|-------------|-----------------|
-| **Interpreter** | `parse + eval` | macro expansion, JVM warm-up (native image) |
-| **Compiled** | `parse + compile` (Kotlin) + `vm_run()` (C) | BytecodeWriter, mkc_read (serialization bridge) |
-
-Both sides are **AOT-compiled** (GraalVM native image for Kotlin, `-O2` for C) — no JIT warm-up,
-fair comparison, same spirit as Go in the book.
+This follows the benchmarking story from *Writing A Compiler In Go*, but adapted to this
+project's split architecture: Kotlin owns compile-time work, while the C VM owns runtime
+bytecode execution.
 
 ---
 
-## Fibonacci Source (the benchmark input)
+## Benchmark Input
+
+The benchmark source should match the book's Fibonacci shape:
 
 ```monkey
 let fibonacci = fn(x) {
-  if (x == 0) { return 0; }
-  if (x == 1) { return 1; }
-  fibonacci(x - 1) + fibonacci(x - 2);
+  if (x == 0) {
+    0
+  } else {
+    if (x == 1) {
+      return 1;
+    } else {
+      fibonacci(x - 1) + fibonacci(x - 2);
+    }
+  }
 };
 fibonacci(35);
 ```
 
-Expected result: `9227465`
+Expected result:
+
+```text
+9227465
+```
 
 ---
 
-## Files to Create / Modify
+## What Is Timed
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/main/kotlin/benchmark/Benchmark.kt` | Create | Kotlin benchmark main |
-| `build.gradle.kts` | Modify | Add benchmark tasks + native-image target |
-| `src/main/c/vm/benchmark_vm.c` | Create | C VM benchmark binary |
-| `src/main/c/vm/Makefile` | Modify | Add `benchmark_vm` target |
+| Path | Current timing scope | Excluded |
+|------|----------------------|----------|
+| Kotlin interpreter | `Evaluator.eval(program, env)` | lexer/parser, macro expansion, `.mkc` writing |
+| Kotlin compiler | `Compiler.compile(program)` | lexer/parser, `.mkc` writing |
+| C VM | `vm_run(vm)` | `.mkc` loading via `mkc_read()` |
 
----
+The current Kotlin benchmark parses the program once before timing. That means the interpreter
+number is **eval-only**, not `parse + eval`. This is different from the book's exact benchmark,
+which times `parse + eval` and `parse + compile`.
 
-## Step 1: Kotlin Benchmark (`Benchmark.kt`)
+Both native executables are AOT-style builds:
 
-Create `src/main/kotlin/benchmark/Benchmark.kt` with a standalone `main()`.
-
-### Requirements
-
-- **No JLine dependency** — pure computation, no terminal UI
-- **No macro expansion** — call `eval()` directly on the parsed program
-- **Multiple iterations** — run N times (e.g., 5), discard the first, report min/avg/max
-- **Write `.mkc`** — emit `build/benchmark_fib35.mkc` for the C benchmark to consume
-
-### Pseudocode
-
-```kotlin
-package me.ryan.interpreter.benchmark
-
-fun main() {
-    val input = """
-        let fibonacci = fn(x) { ... };
-        fibonacci(35);
-    """
-
-    val program = Parser(Lexer(input)).parseProgram()
-
-    // --- Interpreter benchmark ---
-    val N = 5
-    val evalTimes = mutableListOf<Long>()
-    for (i in 0 until N) {
-        val env = Environment()
-        val start = System.nanoTime()
-        val result = Evaluator.eval(program, env)
-        val elapsed = System.nanoTime() - start
-        evalTimes.add(elapsed)
-        if (i == 0) println("result=$result") // verify correctness on first run
-    }
-    // Discard first (cold run), report stats on rest
-    reportStats("interpreter", evalTimes.drop(1))
-
-    // --- Compiler benchmark ---
-    val compileTimes = mutableListOf<Long>()
-    var bytecode: Bytecode? = null
-    for (i in 0 until N) {
-        val compiler = Compiler()
-        val start = System.nanoTime()
-        compiler.compile(program)
-        val elapsed = System.nanoTime() - start
-        compileTimes.add(elapsed)
-        if (i == 0) bytecode = compiler.bytecode()
-    }
-    reportStats("compiler", compileTimes.drop(1))
-
-    // --- Write .mkc for C VM benchmark ---
-    val outPath = "build/benchmark_fib35.mkc"
-    BytecodeWriter.write(bytecode!!, FileOutputStream(outPath))
-    println("wrote $outPath")
-}
-
-fun reportStats(label: String, times: List<Long>) {
-    val min = times.min() / 1_000_000.0  // ms
-    val max = times.max() / 1_000_000.0
-    val avg = times.average() / 1_000_000.0
-    println("engine=$label, min=${min}ms, avg=${avg}ms, max=${max}ms")
-}
-```
-
-### Key points
-
-- `Evaluator.eval()` needs a fresh `Environment` each iteration to avoid state leakage
-- `Compiler()` is a fresh instance each iteration (it has mutable state)
-- The parse step is intentionally **inside** the timing if you want to match the book exactly
-  (Thorsten times `parse + eval` and `parse + compile`). Decide which you prefer:
-  - **Option A**: time `parse + eval` / `parse + compile` (book-faithful)
-  - **Option B**: parse once, time only `eval` / `compile` (isolates engine speed)
-  - Recommendation: Option A for the "official" comparison, maybe print both
+- Kotlin benchmark: GraalVM native image
+- C VM benchmark: `cc -O2`, without AddressSanitizer
 
 ---
 
-## Step 2: Gradle Changes (`build.gradle.kts`)
+## Files Involved
 
-### Add a JavaExec task (for JVM sanity checks)
+| File | Purpose |
+|------|---------|
+| `src/main/kotlin/benchmark/Benchmark.kt` | Runs Kotlin interpreter/compiler benchmark and writes `build/benchmark_fib35.mkc` |
+| `build.gradle.kts` | Defines JVM benchmark task, GraalVM benchmark image, and optional native binary collection task |
+| `src/test/c/vm/benchmark.c` | Runs the C VM benchmark against a `.mkc` file |
+| `src/main/c/vm/Makefile` | Builds the optimized C benchmark binary as `build/benchmark` |
 
-```kotlin
-tasks.register<JavaExec>("benchmark") {
-    mainClass.set("me.ryan.interpreter.benchmark.BenchmarkKt")
-    classpath = sourceSets["main"].runtimeClasspath
-}
-```
+---
 
-### Add a second native-image target
+## Kotlin Benchmark
 
-```kotlin
-graalvmNative {
-    binaries {
-        named("main") {
-            mainClass.set("me.ryan.interpreter.repl.ReplKt")
-            imageName.set("monkey")
-        }
-        register("benchmark") {
-            mainClass.set("me.ryan.interpreter.benchmark.BenchmarkKt")
-            imageName.set("monkey-benchmark")
-        }
-    }
-}
-```
+The Kotlin benchmark should:
 
-The benchmark native image is built with:
+- parse the Monkey source once
+- run the interpreter multiple times with a fresh `Environment` each run
+- run the compiler multiple times with a fresh `Compiler` each run
+- discard the first run when reporting min/avg/max
+- write `build/benchmark_fib35.mkc` for the C VM benchmark
+
+Key details:
+
+- The interpreter result prints as `MInteger(value=9227465)`.
+- The compiler timing is only bytecode generation. It is **not** VM execution time.
+- The `.mkc` write is intentionally outside the compiler timing.
+
+---
+
+## Gradle Tasks
+
+Useful tasks:
+
 ```bash
+./gradlew benchmark
 ./gradlew nativeBenchmarkCompile
+./gradlew nativeBin
 ```
 
-(The GraalVM plugin generates a task named `native<BinaryName>Compile` for each registered binary.)
+The GraalVM plugin derives task names from binary names:
+
+```text
+main       -> nativeCompile          -> build/native/nativeCompile/monkey
+benchmark  -> nativeBenchmarkCompile -> build/native/nativeBenchmarkCompile/monkey-benchmark
+```
+
+The optional `nativeBin` copy task collects the built native executables into:
+
+```text
+build/native/bin/monkey
+build/native/bin/monkey-benchmark
+```
+
+Because this machine cannot safely use `jenv` for GraalVM, run GraalVM tasks with direct
+environment variables:
+
+```bash
+GRAALVM_HOME=/Users/I503354/jdks/graalvm-jdk-25.0.3+9.1/Contents/Home \
+JAVA_HOME=/Users/I503354/jdks/graalvm-jdk-25.0.3+9.1/Contents/Home \
+./gradlew nativeBin
+```
 
 ---
 
-## Step 3: C VM Benchmark (`benchmark_vm.c`)
+## C VM Benchmark
 
-Create `src/main/c/vm/benchmark_vm.c` (or in `src/test/c/vm/` alongside test_vm.c).
+The C benchmark should:
 
-### Requirements
+- take the `.mkc` path as `argv[1]`
+- open the file and call `mkc_read(FILE *, ByteCode *)`
+- load bytecode outside the timed region
+- create a fresh `VM` for each run with `vm_init(&bc)`
+- time only `vm_run(vm)`
+- read the final value with `vm_last_popped_stack_elem(vm)`
+- call `vm_free(vm)` after each run
+- call `free_bytecode(&bc)` once, after all runs
 
-- Takes `.mkc` file path as `argv[1]`
-- Loads with `mkc_read()` — **not timed**
-- Runs `vm_run()` N times (e.g., 5), resets VM state each iteration
-- Discards the first run, reports min/avg/max
-- Prints the result from the first run for correctness verification
-- Compiled with `-O2`, **no** `-fsanitize=address`
+Important pitfalls:
 
-### Pseudocode
+1. Do **not** read the result with `vm->stack[vm->sp - 1]` for top-level expression programs.
+   The compiler emits a final `OpPop`, so after execution `sp` is usually `0`. The result is
+   stored at `vm_last_popped_stack_elem(vm)`, matching `test_vm.c`.
+
+2. Do **not** define `vm_last_popped_stack_elem()` in `benchmark.c`. It is already declared in
+   `vm.h` and defined in `vm.c`. Defining it again in `benchmark.c` causes a duplicate-symbol
+   linker error.
+
+3. Do **not** call `free_bytecode(&bc)` inside the timing loop. The same `ByteCode` is reused
+   across runs, so freeing it inside the loop makes later runs use freed/zeroed bytecode.
+
+4. In C, use `1000000.0`, not Kotlin/Java-style numeric separators like `1_000_000.0`.
+
+Result access should look like:
 
 ```c
-#include <stdio.h>
-#include <time.h>
-#include "mkc.h"
-#include "vm.h"
-
-#define NUM_RUNS 5
-
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <file.mkc>\n", argv[0]);
-        return 1;
-    }
-
-    // Load bytecode (not timed)
-    ByteCode *bc = mkc_read(argv[1]);
-    if (!bc) {
-        fprintf(stderr, "Failed to read %s\n", argv[1]);
-        return 1;
-    }
-
-    double times_ms[NUM_RUNS];
-
-    for (int i = 0; i < NUM_RUNS; i++) {
-        VM *vm = vm_init(bc);
-
-        struct timespec start, end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
-        VM_RESULT result = vm_run(vm);
-        clock_gettime(CLOCK_MONOTONIC, &end);
-
-        double elapsed_ms = (end.tv_sec - start.tv_sec) * 1000.0
-                          + (end.tv_nsec - start.tv_nsec) / 1_000_000.0;
-        times_ms[i] = elapsed_ms;
-
-        if (i == 0) {
-            // Print result for verification
-            MObject top = vm->stack[vm->sp - 1]; // or however you access the result
-            printf("result=%lld\n", top.integer);
-        }
-
-        // Clean up VM for next iteration
-        // (depends on how vm_init/free works — may need vm_free() or similar)
-    }
-
-    // Stats (skip first run)
-    double min = times_ms[1], max = times_ms[1], sum = 0;
-    for (int i = 1; i < NUM_RUNS; i++) {
-        if (times_ms[i] < min) min = times_ms[i];
-        if (times_ms[i] > max) max = times_ms[i];
-        sum += times_ms[i];
-    }
-    double avg = sum / (NUM_RUNS - 1);
-
-    printf("engine=vm, min=%.2fms, avg=%.2fms, max=%.2fms\n", min, avg, max);
-
-    return 0;
-}
+const MObject *top = vm_last_popped_stack_elem(vm);
+printf("result=%lld\n", top->as.integer);
 ```
-
-### Things to figure out
-
-- **VM reset**: Does `vm_init()` allocate fresh state? Or do you need a `vm_reset()`/`vm_free()`?
-  Check how `test_vm.c` handles this — it likely creates a new VM per test case.
-- **Result access**: How does the VM expose the final result after `vm_run()`?
-  Look at how `test_vm.c` reads the "last popped" element.
-- **Memory**: The arena allocator — do you need to free and recreate it between runs?
 
 ---
 
-## Step 4: Makefile Changes
+## Makefile Target
 
-Add to `src/main/c/vm/Makefile`:
+The current Makefile target is named `benchmark`, not `benchmark_vm`:
 
 ```makefile
 BENCH_CFLAGS = -Wall -Wextra -std=c11 -O2
 
-benchmark_vm:
+benchmark:
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(BENCH_CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/benchmark_vm.c $(LOADER_SRCS) $(RUNTIME_SRCS)
+	$(CC) $(BENCH_CFLAGS) -o $(BUILD_DIR)/$@ $(TEST_DIR)/benchmark.c $(LOADER_SRCS) $(RUNTIME_SRCS)
 ```
 
-**Important**: No `-fsanitize=address`, no `-g` (debug info). Pure optimized build.
+It produces:
 
-Optionally add to the `clean` target:
-```makefile
-clean:
-	rm -f $(BUILD_DIR)/test_mkc $(BUILD_DIR)/test_vm $(BUILD_DIR)/dump_mkc $(BUILD_DIR)/benchmark_vm
+```text
+build/benchmark
 ```
 
----
-
-## Step 5: Run the Benchmark
+Build it from `src/main/c/vm`:
 
 ```bash
-# 1. Build the native benchmark binary
-./gradlew nativeBenchmarkCompile
+make benchmark
+```
 
-# 2. Run it — interpreter timing + compile timing + writes .mkc
-./build/native/nativeCompile/monkey-benchmark
+Run it from the repository root:
 
-# 3. Build C VM benchmark (optimized, no sanitizer)
-cd src/main/c/vm && make benchmark_vm
-
-# 4. Run VM benchmark
-../../../../../../build/benchmark_vm ../../../../../../build/benchmark_fib35.mkc
-# (or use absolute paths / adjust Makefile BUILD_DIR)
-
-# Simpler with absolute path:
-./build/benchmark_vm ./build/benchmark_fib35.mkc
+```bash
+./build/benchmark build/benchmark_fib35.mkc
 ```
 
 ---
 
-## Expected Output
+## Runbook
 
+Build and run the Kotlin/GraalVM benchmark:
+
+```bash
+GRAALVM_HOME=/Users/I503354/jdks/graalvm-jdk-25.0.3+9.1/Contents/Home \
+JAVA_HOME=/Users/I503354/jdks/graalvm-jdk-25.0.3+9.1/Contents/Home \
+./gradlew nativeBin
+
+./build/native/bin/monkey-benchmark
 ```
-=== Monkey Benchmark: fib(35) ===
 
---- Interpreter (parse + eval) ---
-result=9227465
-engine=interpreter, min=XXXX.XXms, avg=XXXX.XXms, max=XXXX.XXms
+Build and run the C VM benchmark:
 
---- Compiler (parse + compile) ---
-engine=compiler, min=X.XXms, avg=X.XXms, max=X.XXms
+```bash
+(cd src/main/c/vm && make benchmark)
+./build/benchmark build/benchmark_fib35.mkc
+```
+
+---
+
+## Verified Results
+
+These numbers are from the current verification run on this machine.
+
+### Kotlin benchmark native image
+
+Command:
+
+```bash
+./build/native/bin/monkey-benchmark
+```
+
+Output:
+
+```text
+result = MInteger(value=9227465)
+engine=interpreter, min=7037.837333ms, avg=7122.498625ms, max=7228.665041ms
+engine=compiler, min=0.002083ms, avg=0.0022705ms, max=0.002666ms
 wrote build/benchmark_fib35.mkc
-
---- VM (dispatch loop) ---
-result=9227465
-engine=vm, min=XXX.XXms, avg=XXX.XXms, max=XXX.XXms
-
---- Total compiled path ---
-compile + vm = X.XX + XXX.XX = XXX.XXms
 ```
 
-The compiled path (compile + VM) should be dramatically faster than the interpreter.
-The compilation step itself should be negligible compared to VM execution for `fib(35)`.
+### C VM benchmark
 
----
+Command:
 
-## Implementation Order
+```bash
+./build/benchmark build/benchmark_fib35.mkc
+```
 
-1. **`Benchmark.kt`** — get it working under JVM first (`./gradlew benchmark`)
-2. **`build.gradle.kts`** — add the tasks
-3. **Test under JVM** — verify fib(35) = 9227465, timing prints correctly
-4. **Native image** — `./gradlew nativeBenchmarkCompile`, run, compare to JVM numbers
-5. **`benchmark_vm.c`** — write it, figure out VM reset between runs
-6. **Makefile** — add target, build with `-O2`
-7. **Run both sides** — combine the numbers, celebrate
+Output:
+
+```text
+result=9227465
+engine=vm, min=1956.03ms, avg=1958.86ms, max=1961.00ms
+```
+
+### Comparison
+
+| Path | Average time |
+|------|--------------|
+| Kotlin interpreter | `7122.498625ms` |
+| Kotlin compiler only | `0.0022705ms` |
+| C VM runtime | `1958.86ms` |
+| Book Go evaluator | `27.204277379s` |
+| Book Go VM | `8.876222455s` |
+
+Derived ratios:
+
+```text
+C VM vs Kotlin interpreter: 7122.498625 / 1958.86 ≈ 3.64x faster
+Kotlin interpreter vs book Go evaluator: 27204.277379 / 7122.498625 ≈ 3.82x faster
+C VM vs book Go VM: 8876.222455 / 1958.86 ≈ 4.53x faster
+C VM vs book Go evaluator: 27204.277379 / 1958.86 ≈ 13.89x faster
+```
+
+The compiler timing is intentionally listed separately because it measures bytecode generation
+only. The full compiled execution story is represented by the C VM runtime number.
 
 ---
 
 ## Notes
 
-- On macOS, `clock_gettime(CLOCK_MONOTONIC)` is available since macOS 10.12
-- GraalVM native-image may need `--no-fallback` flag if it can't resolve something at build time
-- The GraalVM plugin task name might be `nativeBenchmarkCompile` or similar — check with
-  `./gradlew tasks --group=native` after adding the config
-- If fib(35) is too fast on the C VM to measure reliably, consider fib(40) instead
+- On macOS, `clock_gettime(CLOCK_MONOTONIC)` is available since macOS 10.12.
+- AddressSanitizer is useful for debugging the VM, but it should not be enabled for final
+  benchmark numbers.
+- If the C VM becomes too fast for stable measurements, increase the input to `fib(40)` or raise
+  the number of benchmark iterations.

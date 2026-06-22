@@ -36,6 +36,11 @@ graalvmNative {
             mainClass.set("me.ryan.interpreter.repl.ReplKt")
             imageName.set("monkey")
         }
+        register("benchmark") {
+            mainClass.set("me.ryan.interpreter.benchmark.BenchmarkKt")
+            imageName.set("monkey-benchmark")
+            classpath(sourceSets["main"].runtimeClasspath)
+        }
     }
 }
 
@@ -51,4 +56,24 @@ tasks.register<JavaExec>("generateFixtures") {
     mainClass.set("me.ryan.interpreter.compiler.FixtureGeneratorKt")
     classpath = sourceSets["main"].runtimeClasspath
     outputs.dir("src/test/fixtures")
+}
+
+tasks.register<JavaExec>("benchmark") {
+    mainClass.set("me.ryan.interpreter.benchmark.BenchmarkKt")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
+tasks.register<Copy>("nativeBin") {
+    val nativeCompile =
+        tasks.named<org.graalvm.buildtools.gradle.tasks.BuildNativeImageTask>("nativeCompile")
+
+    val nativeBenchmarkCompile =
+        tasks.named<org.graalvm.buildtools.gradle.tasks.BuildNativeImageTask>("nativeBenchmarkCompile")
+
+    dependsOn(nativeCompile, nativeBenchmarkCompile)
+
+    from(nativeCompile.flatMap { it.outputFile })
+    from(nativeBenchmarkCompile.flatMap { it.outputFile })
+
+    into(layout.buildDirectory.dir("native/bin"))
 }

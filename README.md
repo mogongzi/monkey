@@ -104,6 +104,33 @@ let unless = macro(condition, body) {
 unless(false, puts("this runs!"));
 ```
 
+### Closure example
+
+```monkey
+let makeGreeter = fn(greeting) {
+  fn(name) {
+    greeting + ", " + name + "!";
+  };
+};
+
+let sayHello = makeGreeter("Hello");
+sayHello("Monkey"); // "Hello, Monkey!"
+```
+
+### Recursion example
+
+```monkey
+let factorial = fn(n) {
+  if (n == 0) {
+    1
+  } else {
+    n * factorial(n - 1)
+  }
+};
+
+factorial(5); // 120
+```
+
 ## Build and Run
 
 Option 1: Gradle (dev loop)
@@ -149,7 +176,7 @@ Once configured, the flow typically looks like:
 - [x] **AST** — Define node types for expressions and statements
 - [x] **Evaluator** — Execute the AST (tree-walking interpreter)
 - [x] **REPL** — Interactive read-eval-print loop with JLine (syntax highlighting, multi-line input, auto-indentation)
-- [ ] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
+- [x] **Parser Debug Mode** — Print AST as a tree structure in real-time during parsing (`--parser` flag)
 - [x] **Extending the Interpreter** — String, built-in functions, array, and hashmap
 - [x] **Macro System** — Quote/unquote, macro definitions, and AST-level macro expansion
 
@@ -159,10 +186,10 @@ Once configured, the flow typically looks like:
 
 > **Approach:** Reuse the existing Kotlin lexer/parser/AST and write the **compiler** in Kotlin (it's just an AST visitor that emits bytecode). Serialize the bytecode to a binary format. Then write **only the VM** in C — a tight bytecode dispatch loop where C shines. This mirrors how real systems work (e.g., `javac` produces `.class` files, the JVM executes them).
 
-- [ ] **Bytecode format** — Define opcodes, operand encoding, and serialization format (the contract between Kotlin and C)
-- [ ] **Compiler** (Kotlin) — Walk the AST and emit bytecode
-- [ ] **BytecodeWriter** (Kotlin) — Write bytecode to a binary file/stream
-- [ ] **Virtual Machine** (C) — Read and execute bytecode
+- [x] **Bytecode format** — Define opcodes, operand encoding, and serialization format (the contract between Kotlin and C)
+- [x] **Compiler** (Kotlin) — Walk the AST and emit bytecode
+- [x] **BytecodeWriter** (Kotlin) — Write bytecode to a binary file/stream
+- [x] **Virtual Machine** (C) — Read and execute bytecode
 - [ ] **Tail-call optimization (TCO)** — Optimize tail-recursive calls (e.g., `return f(...)`) with a trampoline/loop to avoid JVM stack overflow
 
 ## Language Features (Monkey)
