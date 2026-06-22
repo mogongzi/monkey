@@ -5,7 +5,7 @@
 #include "object.h"
 
 typedef struct {
-  const MClosure *closure;
+  MClosure *closure;
   uint32_t ip;
   uint32_t bp;  // base pointer
 } Frame;

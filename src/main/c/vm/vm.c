@@ -91,7 +91,6 @@ VM_RESULT vm_push(VM *vm, MObject obj) {
   if (vm->sp >= STACK_SIZE) {
     return VM_ERR_STACK_OVERFLOW;
   }
-  printf("PUSH stack[%u].type = %d\n", vm->sp, obj.type);
   vm->stack[vm->sp] = obj;
   vm->sp++;
   return VM_OK;
@@ -101,7 +100,6 @@ static VM_RESULT vm_pop(VM *vm, MObject *out) {
   if (vm->sp == 0) {
     return VM_ERR_STACK_UNDERFLOW;
   }
-  printf("POP stack[%u].type = %d\n", vm->sp - 1, vm->stack[vm->sp - 1].type);
   vm->sp--;
   *out = vm->stack[vm->sp];
   return VM_OK;
@@ -367,21 +365,12 @@ static VM_RESULT call_builtin(VM *vm, BuiltinFn builtinFn, uint8_t num_args) {
 }
 
 static VM_RESULT execute_call(VM *vm, uint8_t num_args) {
-  printf("execute_call: sp=%u, num_args=%u\n", vm->sp, num_args);
-
   if (vm->sp < (uint32_t)num_args + 1) {
-    printf("invalid call stack: not enough objects for callee + args\n");
     return VM_ERR_STACK_UNDERFLOW;
   }
 
   uint32_t callee_index = vm->sp - 1 - num_args;
-  printf("callee_index=%u\n", callee_index);
-
   MObject callee = vm->stack[callee_index];
-
-  printf("callee is null? %s\n", callee.type == MNULL ? "yes" : "no");
-  printf("callee.type = %d / 0x%08x\n", callee.type, (unsigned int)callee.type);
-
   switch (callee.type) {
     case MCLOSURE:
       return call_closure(vm, callee.as.closure, num_args);
@@ -557,11 +546,7 @@ VM_RESULT vm_run(VM *vm) {
       case OP_CALL: {
         uint8_t num_args = read_u8(&instructions[frame->ip]);
         frame->ip += 1;
-        printf("before OP_CALL: sp=%u, num_args=%u\n", vm->sp, num_args);
 
-        for (uint32_t i = 0; i < vm->sp; i++) {
-          printf("  stack[%u].type = %d\n", i, vm->stack[i].type);
-        }
         VM_RESULT r = execute_call(vm, num_args);
         if (r != VM_OK) return r;
         break;
@@ -572,6 +557,12 @@ VM_RESULT vm_run(VM *vm) {
         frame->ip += 3;
 
         VM_RESULT r = push_closure(vm, constant_index, num_free);
+        if (r != VM_OK) return r;
+        break;
+      }
+      case OP_CURRENT_CLOSURE: {
+        VM_RESULT r = vm_push(
+            vm, (MObject){.type = MCLOSURE, .as.closure = frame->closure});
         if (r != VM_OK) return r;
         break;
       }

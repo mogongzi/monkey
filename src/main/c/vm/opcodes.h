@@ -32,5 +32,6 @@
 #define OP_GET_BUILTIN 0x1A
 #define OP_CLOSURE 0x1B
 #define OP_GET_FREE 0x1C
+#define OP_CURRENT_CLOSURE 0x1D
 
 #endif

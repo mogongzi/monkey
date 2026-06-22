@@ -222,6 +222,11 @@ static void dump_instructions(const uint8_t *instructions,
         ip += 2;
         break;
       }
+      case OP_CURRENT_CLOSURE: {
+        printf("%s%04u OpCurrentClosure\n", indent, ip);
+        ip += 1;
+        break;
+      }
       default:
         printf("%s%04u UNKNOWN opcode=0x%02x\n", indent, ip, op);
         ip += 1;
