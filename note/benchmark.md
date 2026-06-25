@@ -216,9 +216,9 @@ Build and run the C VM benchmark:
 
 ## Verified Results
 
-These numbers are from the current verification run on this machine.
+### M1 Max (MacBook Pro, Apple M1 Max)
 
-### Kotlin benchmark native image
+#### Kotlin benchmark native image
 
 Command:
 
@@ -235,7 +235,7 @@ engine=compiler, min=0.002083ms, avg=0.0022705ms, max=0.002666ms
 wrote build/benchmark_fib35.mkc
 ```
 
-### C VM benchmark
+#### C VM benchmark
 
 Command:
 
@@ -250,23 +250,112 @@ result=9227465
 engine=vm, min=1956.03ms, avg=1958.86ms, max=1961.00ms
 ```
 
-### Comparison
+---
 
-| Path | Average time |
-|------|--------------|
-| Kotlin interpreter | `7122.498625ms` |
-| Kotlin compiler only | `0.0022705ms` |
-| C VM runtime | `1958.86ms` |
-| Book Go evaluator | `27.204277379s` |
-| Book Go VM | `8.876222455s` |
+### M4 Pro (MacBook Pro, Apple M4 Pro)
 
-Derived ratios:
+#### Kotlin benchmark native image
+
+Command:
+
+```bash
+./build/native/bin/monkey-benchmark
+```
+
+Output:
 
 ```text
-C VM vs Kotlin interpreter: 7122.498625 / 1958.86 ≈ 3.64x faster
-Kotlin interpreter vs book Go evaluator: 27204.277379 / 7122.498625 ≈ 3.82x faster
-C VM vs book Go VM: 8876.222455 / 1958.86 ≈ 4.53x faster
-C VM vs book Go evaluator: 27204.277379 / 1958.86 ≈ 13.89x faster
+result = MInteger(value=9227465)
+engine=interpreter, min=4831.492333ms, avg=4841.4736665ms, max=4851.723458ms
+engine=compiler, min=0.001459ms, avg=0.00164625ms, max=0.002042ms
+wrote build/benchmark_fib35.mkc
+```
+
+#### Kotlin benchmark JVM mode
+
+Command:
+
+```bash
+./gradlew benchmark
+```
+
+Output:
+
+```text
+result = MInteger(value=9227465)
+engine=interpreter, min=5192.824333ms, avg=5207.667156ms, max=5233.9085ms
+engine=compiler, min=0.063584ms, avg=0.07417725ms, max=0.099167ms
+wrote build/benchmark_fib35.mkc
+```
+
+#### C VM benchmark
+
+Command:
+
+```bash
+./build/benchmark build/benchmark_fib35.mkc
+```
+
+Output:
+
+```text
+result=9227465
+engine=vm, min=1080.12ms, avg=1091.18ms, max=1098.81ms
+```
+
+---
+
+### Comparison
+
+#### Per-machine summary
+
+| Path | M1 Max | M4 Pro (native) | M4 Pro (JVM) |
+|------|--------|-----------------|--------------|
+| Kotlin interpreter | 7122.50ms | 4841.47ms | 5207.67ms |
+| Kotlin compiler only | 0.0023ms | 0.0016ms | 0.074ms |
+| C VM runtime | 1958.86ms | 1091.18ms | — |
+
+#### M1 Max → M4 Pro speedup (native image)
+
+| Path | M1 Max | M4 Pro | Speedup |
+|------|--------|--------|---------|
+| Kotlin interpreter | 7122.50ms | 4841.47ms | **1.47×** |
+| C VM | 1958.86ms | 1091.18ms | **1.80×** |
+
+The C VM benefits more from M4 Pro than the Kotlin interpreter — the tight dispatch loop maps
+well onto M4 Pro's wider pipeline and improved branch prediction.
+
+#### M4 Pro native image vs JVM mode
+
+| Path | Native (AOT) | JVM (JIT) | Difference |
+|------|-------------|-----------|------------|
+| Interpreter | 4841ms | 5208ms | Native ~7% faster |
+| Compiler | 0.0016ms | 0.074ms | Native ~46× faster |
+
+Native image avoids JIT warmup overhead. The compiler microbenchmark is dominated by this
+since the actual work is microsecond-scale.
+
+#### VM vs interpreter ratio
+
+| Machine | Interpreter | C VM | Ratio |
+|---------|-------------|------|-------|
+| M1 Max | 7122.50ms | 1958.86ms | **3.64×** |
+| M4 Pro | 4841.47ms | 1091.18ms | **4.44×** |
+
+#### vs book (Go, from *Writing A Compiler In Go*)
+
+| Path | Book time |
+|------|-----------|
+| Go evaluator | 27204.28ms |
+| Go VM | 8876.22ms |
+
+Derived ratios (using M4 Pro native numbers):
+
+```text
+C VM (M4 Pro) vs Kotlin interpreter (M4 Pro): 4841.47 / 1091.18 ≈ 4.44x faster
+Kotlin interpreter (M4 Pro) vs book Go evaluator: 27204.28 / 4841.47 ≈ 5.62x faster
+C VM (M4 Pro) vs book Go VM: 8876.22 / 1091.18 ≈ 8.13x faster
+C VM (M4 Pro) vs book Go evaluator: 27204.28 / 1091.18 ≈ 24.93x faster
 ```
 
 The compiler timing is intentionally listed separately because it measures bytecode generation

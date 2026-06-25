@@ -5,6 +5,7 @@ import me.ryan.interpreter.compiler.SymbolScope
 import me.ryan.interpreter.compiler.SymbolTable
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 data class TestCase(val table: SymbolTable, val expectedSymbols: List<Symbol>)
@@ -242,7 +243,7 @@ class SymbolTableTest {
         val expectedUnresolvable = arrayOf("b", "d")
         for (name in expectedUnresolvable) {
             val tmp = secondLocal.resolve(name)
-            assertNotNull(tmp, "name $name resolved, but was expected not to")
+            assertNull(tmp, "name $name resolved, but was expected not to")
         }
     }
 
